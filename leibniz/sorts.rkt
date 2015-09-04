@@ -1,18 +1,29 @@
 #lang racket
 
-(provide empty-sort-graph sort-graph?
-         add-sort add-subsort merge-with
-         all-sorts all-subsorts
-         has-sort? is-subsort?
-         kind has-kind? maximal-sorts
-         valid-sort-constraint? conforms-to?
-         constraint->string)
+(provide
+ (contract-out
+  [sort-graph?            (any/c . -> . boolean?)]
+  [empty-sort-graph       (-> sort-graph?)]
+  [add-sort               (sort-graph? symbol? . -> . sort-graph?)]
+  [add-subsort            (sort-graph? symbol? symbol? . -> . sort-graph?)]
+  [merge-with             (sort-graph? sort-graph? . -> . sort-graph?)]
+  [all-sorts              (sort-graph? . -> . set?)]
+  [all-subsorts           (sort-graph? . -> . set?)]
+  [has-sort?              (sort-graph? symbol? . -> . boolean?)]
+  [is-subsort?            (sort-graph? symbol? symbol? . -> . boolean?)]
+  [kind                   (sort-graph? symbol? . -> . set?)]
+  [has-kind?              (sort-graph? set? . -> . boolean?)]
+  [maximal-sorts          (sort-graph? set? . -> . set?)]
+  [sort-constraint?       (any/c . -> . boolean?)]
+  [valid-sort-constraint? (sort-graph? any/c . -> . boolean?)]
+  [conforms-to?           (sort-graph? sort-constraint? sort-constraint?
+                                       . -> . boolean?)]
+  [constraint->string     (sort-graph? sort-constraint? . -> . string?)]))
 
-(require "./lightweight-class.rkt"
-         rackjure/threading)
+(require "./lightweight-class.rkt")
 
 (module+ test
-  (require rackunit racket/function))
+  (require rackunit racket/function rackjure/threading))
 
 (define-class sort-graph
 
@@ -138,6 +149,11 @@
 
 (define (empty-sort-graph)
   (sort-graph (hash) (hash) (hash)))
+
+(define (sort-constraint? x)
+  (or (equal? x #f)
+      (symbol? x)
+      (and (set? x) (not (set-empty? x)))))
 
 (module+ test
   (define an-s-graph
