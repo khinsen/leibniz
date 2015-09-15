@@ -2,23 +2,27 @@
 
 (provide
  (contract-out
-  [sort-graph?            (any/c . -> . boolean?)]
-  [empty-sort-graph       (-> sort-graph?)]
-  [add-sort               (sort-graph? symbol? . -> . sort-graph?)]
-  [add-subsort            (sort-graph? symbol? symbol? . -> . sort-graph?)]
-  [merge-with             (sort-graph? sort-graph? . -> . sort-graph?)]
-  [all-sorts              (sort-graph? . -> . set?)]
-  [all-subsorts           (sort-graph? . -> . set?)]
-  [has-sort?              (sort-graph? symbol? . -> . boolean?)]
-  [is-subsort?            (sort-graph? symbol? symbol? . -> . boolean?)]
-  [kind                   (sort-graph? symbol? . -> . set?)]
-  [has-kind?              (sort-graph? set? . -> . boolean?)]
-  [maximal-sorts          (sort-graph? set? . -> . set?)]
-  [sort-constraint?       (any/c . -> . boolean?)]
-  [valid-sort-constraint? (sort-graph? any/c . -> . boolean?)]
-  [conforms-to?           (sort-graph? sort-constraint? sort-constraint?
-                                       . -> . boolean?)]
-  [constraint->string     (sort-graph? sort-constraint? . -> . string?)]))
+  [sort-graph?              (any/c . -> . boolean?)]
+  [empty-sort-graph         (-> sort-graph?)]
+  [validate-sort            (sort-graph? symbol? . -> . void?)]
+  [add-sort                 (sort-graph? symbol? . -> . sort-graph?)]
+  [add-subsort              (sort-graph? symbol? symbol? . -> . sort-graph?)]
+  [merge-with               (sort-graph? sort-graph? . -> . sort-graph?)]
+  [all-sorts                (sort-graph? . -> . set?)]
+  [all-subsorts             (sort-graph? . -> . set?)]
+  [has-sort?                (sort-graph? symbol? . -> . boolean?)]
+  [is-subsort?              (sort-graph? symbol? symbol? . -> . boolean?)]
+  [kind                     (sort-graph? symbol? . -> . set?)]
+  [has-kind?                (sort-graph? set? . -> . boolean?)]
+  [maximal-sorts            (sort-graph? set? . -> . set?)]
+  [sort-constraint?         (any/c . -> . boolean?)]
+  [valid-sort-constraint?   (sort-graph? any/c . -> . boolean?)]
+  [validate-sort-constraint (sort-graph? sort-constraint? . -> . void?)]
+  [kind-constraint          (sort-graph? sort-constraint?
+                                         . -> . sort-constraint?)]
+  [conforms-to?             (sort-graph? sort-constraint? sort-constraint?
+                                         . -> . boolean?)]
+  [constraint->string       (sort-graph? sort-constraint? . -> . string?)]))
 
 (require "./lightweight-class.rkt")
 
@@ -119,6 +123,13 @@
     (unless (valid-sort-constraint? constraint)
       (error "invalid sort constraint" constraint)))
 
+  (define (kind-constraint constraint)
+    (validate-sort-constraint constraint)
+    (cond
+      [(equal? #f constraint) #f]
+      [(symbol? constraint)   (kind constraint)]
+      [else                   constraint]))
+
   (define (conforms-to? c1 c2)
     (validate-sort-constraint c1)
     (validate-sort-constraint c2)
@@ -215,6 +226,11 @@
   (check-false (has-kind? two-kinds (set)))
   (check-false (has-kind? two-kinds (set 'X)))
   (check-false (has-kind? two-kinds (set 'A)))
+
+  (check-equal? (kind-constraint two-kinds 'A)
+                (kind two-kinds 'A))
+  (check-equal? (kind-constraint two-kinds (kind two-kinds 'A))
+                (kind two-kinds 'A))
 
   (check-true  (conforms-to? two-kinds 'A 'B))
   (check-true  (conforms-to? two-kinds 'W 'W))
