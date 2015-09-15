@@ -11,10 +11,15 @@
 (require (for-syntax racket/syntax
                      syntax/parse
                      syntax/stx)
-         racket/stxparam
-         racket/splicing)
+         racket/splicing
+         racket/generic)
 
-(define-syntax-parameter send #f)
+;; (define-syntax-parameter send #f)
+(define-generics lightweight-object
+  (send-msg lightweight-object method-symbol . args))
+
+(define-syntax-rule (send object method-symbol arg ...)
+  (send-msg object (quote method-symbol) arg ...))
 
 (define-syntax (define-class stx)
   (syntax-parse stx
@@ -38,22 +43,21 @@
                            (apply (case symbol
                                     [(method-name) method-name] ...)
                                   args))])
-           (struct class-name [field-name ...] #:transparent)
+           (struct class-name [field-name ...] #:transparent
+             #:methods gen:lightweight-object
+             [(define (send-msg object symbol . args)
+                (apply (case symbol
+                         [(method-name) method-name] ...)
+                       (list* object args)))])
            (define (method-name obj-arg temp-arg ...)
-             (syntax-parameterize
-                 ([send (λ (stx)
-                          (syntax-parse stx
-                            [(send obj:expr method:id x:expr (... ...))
-                             #'(call-method (quote method)
-                                            (list obj x (... ...)))]))])
-               (let ([this obj-arg]
-                     [field-name (accessor obj-arg)] ...)
-                 (let ([ext-method-name method-name] ...)
-                   (let ([method-name (λ (method-arg ...)
-                                        (method-name obj-arg method-arg ...))]
-                         ...)
-                     (let ([method-arg temp-arg] ...)
-                       body ...))))))
+             (let ([this obj-arg]
+                   [field-name (accessor obj-arg)] ...)
+               (let ([ext-method-name method-name] ...)
+                 (let ([method-name (λ (method-arg ...)
+                                      (method-name obj-arg method-arg ...))]
+                       ...)
+                   (let ([method-arg temp-arg] ...)
+                     body ...)))))
            ...))]))
 
 (module* test #f
@@ -82,6 +86,7 @@
   (check-equal? (baz a-foo) 6)
   (check-eq? (get a-foo) a-foo)
   (check-eq? (get-a a-foo) 2)
+  (check-eq? (send a-foo get-a) 2)
   (check-eq? (id1 a-foo 42) 42)
   (check-eq? (id2 a-foo 42) 42)
   (check-eq? (add-as a-foo another-foo)
