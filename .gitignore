@@ -2,5 +2,6 @@
 *.scrbl~
 compiled/
 doc/
+attic/
 test.rkt
 .projectile
