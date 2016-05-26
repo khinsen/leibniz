@@ -6,7 +6,7 @@
   [empty-sort-graph         (-> sort-graph?)]
   [validate-sort            (sort-graph? symbol? . -> . void?)]
   [add-sort                 (sort-graph? symbol? . -> . sort-graph?)]
-  [add-subsort              (sort-graph? symbol? symbol? . -> . sort-graph?)]
+  [add-subsort-relation     (sort-graph? symbol? symbol? . -> . sort-graph?)]
   [merge-with               (sort-graph? sort-graph? . -> . sort-graph?)]
   [all-sorts                (sort-graph? . -> . set?)]
   [all-subsorts             (sort-graph? . -> . set?)]
@@ -58,7 +58,7 @@
                     (hash-set supersorts new-sort (set))
                     (hash-set subsorts new-sort (set)))))
 
-  (define (add-subsort subsort supersort)
+  (define (add-subsort-relation subsort supersort)
     (validate-sort subsort)
     (validate-sort supersort)
     (when (equal? subsort supersort)
@@ -82,7 +82,7 @@
              (send sg add-sort sort))])
       (for/fold ([sg sg])
                 ([ss-relation (send s-graph all-subsorts)])
-        (send sg add-subsort (car ss-relation) (cdr ss-relation)))))
+        (send sg add-subsort-relation (car ss-relation) (cdr ss-relation)))))
 
   (define (all-sorts)
     (list->set (hash-keys subsorts)))
@@ -171,19 +171,19 @@
     (~> (empty-sort-graph)
         (add-sort 'A) (add-sort 'B)
         (add-sort 'C) (add-sort 'D)
-        (add-subsort 'A 'B) (add-subsort 'B 'C)
-        (add-subsort 'A 'D)))
+        (add-subsort-relation 'A 'B) (add-subsort-relation 'B 'C)
+        (add-subsort-relation 'A 'D)))
   (define another-s-graph
     (~> (empty-sort-graph)
         (add-sort 'A)
         (add-sort 'X) (add-sort 'Y)
-        (add-subsort 'A 'X)
-        (add-subsort 'X 'Y)))
+        (add-subsort-relation 'A 'X)
+        (add-subsort-relation 'X 'Y)))
   (define merged (merge-with an-s-graph another-s-graph))
   (define two-kinds
     (~> an-s-graph
         (add-sort 'V) (add-sort 'W)
-        (add-subsort 'V 'W)))
+        (add-subsort-relation 'V 'W)))
 
   (check-equal? an-s-graph (add-sort an-s-graph 'A))
 
@@ -205,10 +205,10 @@
                 (set '(A . B) '(A . D) '(B . C)))
 
   (check-exn exn:fail? (thunk (add-sort an-s-graph #t)))
-  (check-exn exn:fail? (thunk (add-subsort an-s-graph 'A 'A)))
-  (check-exn exn:fail? (thunk (add-subsort an-s-graph 'A 'X)))
-  (check-exn exn:fail? (thunk (add-subsort an-s-graph 'X 'A)))
-  (check-exn exn:fail? (thunk (add-subsort an-s-graph 'C 'A)))
+  (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'A 'A)))
+  (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'A 'X)))
+  (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'X 'A)))
+  (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'C 'A)))
 
   (check-equal? merged
                 (merge-with another-s-graph an-s-graph))
