@@ -30,11 +30,43 @@
            (is-subsort? sort-graph s1 s2))))
 
   (define (add-rank arity sort)
-    (define-values (before after)
-      (splitf-at ranks
-                 (λ (r) (not (is-subarity? arity (car r))))))
-    (sorted-ranks sort-graph k-rank (append before
-                                            (cons (cons arity sort) after))))
+
+    (define (insert-rank prefix ranks)
+      (define (append-reverse prefix ranks)
+        (if (empty? prefix)
+            ranks
+            (append-reverse (rest prefix) (cons (first prefix) ranks))))
+      (sorted-ranks sort-graph k-rank
+                    (append-reverse prefix (cons (cons arity sort) ranks))))
+
+    (define (add-rank* prefix ranks)
+      (if (empty? ranks)
+          (insert-rank prefix ranks)
+          (match-let* ([(and r (cons a s)) (first ranks)])
+            (cond
+              [(is-subarity? arity a)
+               ; We hit a higher arity, so we must add the new
+               ; one before it. We must also check the sorts
+               ; for monotonicity.
+               (if (is-subsort? sort-graph sort s)
+                   (insert-rank prefix ranks)
+                   (error "operator not monotonic"))
+               ]
+              [(and (is-subarity? a arity)
+                    (not (is-subsort? sort-graph s sort)))
+               ; We hit a sub-arity of the one we want to add,
+               ; but the corresponding sort is not a sub-sort.
+               ; This means the ranks are not monotonic.
+               (error "operator not monotonic")]
+              [else
+               ; We get here in two situations:
+               ; 1) Two unrelated arities.
+               ; 2) The new arity is higher than the current one
+               ;    AND monotonicity has been verified.
+               ; We thus move on to check for potentially higher arities.
+               (add-rank* (cons r prefix) (rest ranks))]))))
+
+    (add-rank* empty ranks))
 
   (define (matching-ranks-for-arity arity)
     (filter (λ (r) (is-subarity? arity (car r))) ranks))
@@ -47,6 +79,8 @@
         (car after)))
 
   (define (monotonic?)
+    ; Monotonicity of the rank lists is guaranteed during construction.
+    ; This method is only provided for testing.
     (define (test1 r rs)
       (for/and ([r2 rs])
         (if (is-subarity? (car r) (car r2))
@@ -78,11 +112,6 @@
     (~> (empty-sorted-ranks sorts (list (kind sorts 'X)) (kind sorts 'X))
         (add-rank (list 'Y) 'Y)))
 
-  (define a-sr-3
-    (~> (empty-sorted-ranks sorts (list (kind sorts 'A)) (kind sorts 'A))
-        (add-rank (list 'A) 'B)
-        (add-rank (list 'B) 'A)))
-
   (check-true (is-subarity? a-sr-1 (list 'B) (list 'A)))
   (check-true (is-subarity? a-sr-1 (list 'A) (list 'A)))
   (check-true (is-subarity? a-sr-1 (list 'B) (list 'B)))
@@ -107,7 +136,14 @@
 
   (check-true (monotonic? a-sr-1))
   (check-true (monotonic? a-sr-2))
-  (check-false (monotonic? a-sr-3)))
+
+  ; Try to make a non-monotonic rank list
+  (check-exn exn:fail?
+             (thunk (~> (empty-sorted-ranks sorts
+                                            (list (kind sorts 'A))
+                                            (kind sorts 'A))
+                        (add-rank (list 'A) 'B)
+                        (add-rank (list 'B) 'A)))))
 
 ; Operators
 
