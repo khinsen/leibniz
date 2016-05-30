@@ -6,6 +6,7 @@
 
 (module+ test
   (require rackunit racket/function rackjure/threading)
+  ; Define a simple sort graph for testing
   (define sorts
     (~> (empty-sort-graph)
         (add-sort 'A) (add-sort 'B)
@@ -13,13 +14,14 @@
         (add-sort 'X) (add-sort 'Y)
         (add-subsort-relation 'Y 'X))))
 
+;
 ; List of ranks partially sorted by arity
-
+;
 (define-class sorted-ranks
 
   (field sort-graph k-rank ranks)
 
-  (define (check-rank k-arity k-sort)
+  (define (check-kinds k-arity k-sort)
     (unless (equal? k-rank (cons k-arity k-sort))
       (error "operator not monotonic"))
     this)
@@ -31,13 +33,19 @@
 
   (define (add-rank arity sort)
 
+    ; Adding a new rank requires
+    ; (1) finding the right place to insert it
+    ; (2) constructing the new rank list
+    ;
+    ; (add-rank*) performs (1), keeping a list of already-inspected
+    ; ranks (prefix) in reverse order for later use by (insert-rank),
+    ; which performs (2).
+
     (define (insert-rank prefix ranks)
-      (define (append-reverse prefix ranks)
-        (if (empty? prefix)
-            ranks
-            (append-reverse (rest prefix) (cons (first prefix) ranks))))
       (sorted-ranks sort-graph k-rank
-                    (append-reverse prefix (cons (cons arity sort) ranks))))
+                    (for/fold ([ranks (cons (cons arity sort) ranks)])
+                              ([r prefix])
+                      (cons r ranks))))
 
     (define (add-rank* prefix ranks)
       (if (empty? ranks)
@@ -45,9 +53,9 @@
           (match-let* ([(and r (cons a s)) (first ranks)])
             (cond
               [(is-subarity? arity a)
-               ; We hit a higher arity, so we must add the new
+               ; We hit a higher arity, so we must insert the new
                ; one before it. We must also check the sorts
-               ; for monotonicity.
+               ; for ensuring monotonicity.
                (if (is-subsort? sort-graph sort s)
                    (insert-rank prefix ranks)
                    (error "operator not monotonic"))
@@ -55,15 +63,15 @@
               [(and (is-subarity? a arity)
                     (not (is-subsort? sort-graph s sort)))
                ; We hit a sub-arity of the one we want to add,
-               ; but the corresponding sort is not a sub-sort.
-               ; This means the ranks are not monotonic.
+               ; but the corresponding sort is not a sub-sort,
+               ; so we signal a monotonicity error.
                (error "operator not monotonic")]
               [else
                ; We get here in two situations:
-               ; 1) Two unrelated arities.
+               ; 1) The new arity is unrelated to the current one.
                ; 2) The new arity is higher than the current one
                ;    AND monotonicity has been verified.
-               ; We thus move on to check for potentially higher arities.
+               ; We thus move on to the next entry in the rank list.
                (add-rank* (cons r prefix) (rest ranks))]))))
 
     (add-rank* empty ranks))
@@ -103,6 +111,7 @@
   (sorted-ranks sort-graph k-rank empty))
 
 (module+ test
+
   (define a-sr-1
     (~> (empty-sorted-ranks sorts (list (kind sorts 'A)) (kind sorts 'A))
         (add-rank (list 'A) 'A)
@@ -145,8 +154,9 @@
                         (add-rank (list 'A) 'B)
                         (add-rank (list 'B) 'A)))))
 
+;
 ; Operators
-
+;
 (define-class operator
 
   (field sort-graph ranks-by-k-arity)
@@ -159,7 +169,7 @@
     (define k-sort (kind-constraint sort-graph sort))
     (define (update ranks)
       (~> ranks
-          (check-rank k-arity k-sort)
+          (check-kinds k-arity k-sort)
           (add-rank arity sort)))
     (operator sort-graph
               (hash-update ranks-by-k-arity k-arity update
@@ -175,18 +185,32 @@
   (operator sort-graph (hash)))
 
 (module+ test
+
   (define an-op
     (~> (empty-operator sorts)
         (add (list 'A) 'A)
         (add (list 'B) 'B)
         (add (list 'Y) 'Y)))
+
+  (check-equal? (dict-count (operator-ranks-by-k-arity an-op)) 2)
   (check-equal? (lookup an-op (list 'A)) (cons (list 'A) 'A))
   (check-equal? (lookup an-op (list 'B)) (cons (list 'B) 'B))
   (check-equal? (lookup an-op (list 'Y)) (cons (list 'Y) 'Y))
-  (check-equal? (lookup an-op (list 'X)) (cons (list (set 'X 'Y)) (set 'X 'Y))))
+  (check-equal? (lookup an-op (list 'X)) (cons (list (set 'X 'Y)) (set 'X 'Y)))
 
+  ; Try to make non-monotonic operators
+  (check-exn exn:fail?
+             (thunk (~> (empty-operator sorts)
+                        (add (list 'A) 'B)
+                        (add (list 'B) 'A))))
+  (check-exn exn:fail?
+             (thunk (~> (empty-operator sorts)
+                        (add (list 'A) 'B)
+                        (add (list 'B) 'X)))))
+
+;
 ; Signatures
-
+;
 (define-class signature
 
   (field sort-graph operators)
@@ -210,7 +234,6 @@
   (signature sort-graph (hash)))
 
 (module+ test
-
   (define a-signature
     (~> (empty-signature sorts)
         (add-op 'foo empty 'B)
