@@ -15,6 +15,7 @@
   [kind                     (sort-graph? symbol? . -> . set?)]
   [has-kind?                (sort-graph? set? . -> . boolean?)]
   [maximal-sorts            (sort-graph? set? . -> . set?)]
+  [sort?                    (any/c . -> . boolean?)]
   [sort-constraint?         (any/c . -> . boolean?)]
   [valid-sort-constraint?   (sort-graph? any/c . -> . boolean?)]
   [validate-sort-constraint (sort-graph? sort-constraint? . -> . void?)]
@@ -29,6 +30,9 @@
 (module+ test
   (require rackunit racket/function rackjure/threading))
 
+;
+; Sort graphs
+;
 (define-class sort-graph
 
   (field kinds supersorts subsorts)
@@ -161,11 +165,23 @@
 (define (empty-sort-graph)
   (sort-graph (hash) (hash) (hash)))
 
+;
+; Tests for sorts and sort constraints
+;
+(define (sort? x)
+  (symbol? x))
+
 (define (sort-constraint? x)
   (or (equal? x #f)
-      (symbol? x)
-      (and (set? x) (not (set-empty? x)))))
+      (sort? x)
+      (and (set? x)
+           (not (set-empty? x))
+           (for/and ([e x])
+             (sort? e)))))
 
+;
+; Unit tests
+;
 (module+ test
   (define an-s-graph
     (~> (empty-sort-graph)

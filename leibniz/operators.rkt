@@ -1,5 +1,14 @@
 #lang racket
 
+(provide
+ (contract-out
+  [signature?      (any/c . -> . boolean?)]
+  [preregular?     (signature? . -> . boolean?)]
+  [empty-signature (sort-graph? . -> . signature?)]
+  [add-op          (signature? symbol? (listof sort?) sort? . -> . signature?)] 
+  [lookup-op       (signature? symbol? (listof sort?)
+                       . -> . (cons/c (listof sort?) symbol?))]))
+
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
          rackjure/threading
