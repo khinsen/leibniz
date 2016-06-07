@@ -7,7 +7,8 @@
   [empty-signature (sort-graph? . -> . signature?)]
   [add-op          (signature? symbol? (listof sort?) sort? . -> . signature?)] 
   [lookup-op       (signature? symbol? (listof sort?)
-                       . -> . (cons/c (listof sort?) symbol?))]))
+                    . -> .
+                    (or/c #f (cons/c (listof sort-or-kind?) sort-or-kind?)))]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
