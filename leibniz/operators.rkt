@@ -1,8 +1,8 @@
 #lang racket
 
 (provide
+ (struct-out signature)
  (contract-out
-  [signature?      (any/c . -> . boolean?)]
   [preregular?     (signature? . -> . boolean?)]
   [empty-signature (sort-graph? . -> . signature?)]
   [add-op          (signature? symbol? (listof sort?) sort? . -> . signature?)] 
