@@ -26,7 +26,13 @@
         (add-op 'a-Y empty 'Y)
         (add-op 'foo empty 'B)
         (add-op 'foo (list 'B) 'A)
-        (add-op 'foo (list 'A 'B) 'A))))
+        (add-op 'foo (list 'A 'B) 'A)
+        (add-var 'A-var 'A)
+        (add-var 'B-var 'B)
+        (add-var 'Zero-var 'Zero)
+        (add-var 'Integer-var 'Integer)
+        (add-var 'NonZeroInteger-var 'NonZeroInteger)
+        (add-var 'StrangelyNamedVar 'Zero))))
 
 ;
 ; The generic interface for terms
@@ -148,7 +154,9 @@
             term))
   (define-simple-check (check-no-substitution signature pattern)
     (equal? (pattern.substitute signature pattern
-                                (substitution (var 'a-strange-name 'Zero) 0))
+                                (substitution
+                                 (make-var a-signature 'StrangelyNamedVar)
+                                 0))
             pattern)))
 
 (module+ test
@@ -219,15 +227,27 @@
          value
          pattern))])
 
+(define (make-var signature symbol)
+  (define sort-or-kind (lookup-var signature symbol))
+  (and sort-or-kind
+       (var symbol sort-or-kind)))
+
 (module+ test
-  (check-true (term.has-vars? (var 'foo 'A)))
-  (check-single-match a-signature (var 'foo 'Zero) 0
-                      (substitution (var 'foo 'Zero) 0))
-  (check-single-match a-signature (var 'foo 'Integer) 0
-                      (substitution (var 'foo 'Integer) 0))
-  (check-no-match a-signature (var 'foo 'NonZeroInteger) 0)
-  (check-self-substitution a-signature (var 'foo 'Zero) 0)
-  (check-no-substitution a-signature (var 'bar 'Zero)))
+  (define A-var (make-var a-signature 'A-var))
+  (define B-var (make-var a-signature 'B-var))
+  (define Zero-var (make-var a-signature 'Zero-var))
+  (define Integer-var (make-var a-signature 'Integer-var))
+  (define NonZeroInteger-var (make-var a-signature 'NonZeroInteger-var))
+  (check-true (term.has-vars? A-var))
+  (check-true (term.has-vars? Zero-var))
+  (check-true (term.has-vars? Integer-var))
+  (check-single-match a-signature Zero-var 0
+                      (substitution Zero-var 0))
+  (check-single-match a-signature Integer-var 0
+                      (substitution Integer-var 0))
+  (check-no-match a-signature NonZeroInteger-var 0)
+  (check-self-substitution a-signature Zero-var 0)
+  (check-no-substitution a-signature Zero-var))
 
 ;
 ; Operator-defined patterns
@@ -272,42 +292,39 @@
                   (generic-substitute signature arg substitution))))])
 
 (module+ test
-  (define var-X (var 'X 'B))
-  (define var-Y (var 'Y 'A))
-
-  (define a-one-var-pattern (make-term a-signature 'foo (list var-X)))
+  (define a-one-var-pattern (make-term a-signature 'foo (list B-var)))
   (check-equal? (term.sort a-one-var-pattern) 'A)
   (check-true (term.has-vars? a-one-var-pattern))
   (check-single-match a-signature a-one-var-pattern
                       (make-term a-signature 'foo (list a-B))
-                      (substitution var-X a-B))
+                      (substitution B-var a-B))
   (check-no-match a-signature a-one-var-pattern
                   (make-term a-signature 'foo (list an-A)))
 
-  (define a-two-var-pattern (make-term a-signature 'foo (list var-Y var-X)))
+  (define a-two-var-pattern (make-term a-signature 'foo (list A-var B-var)))
   (check-equal? (term.sort a-two-var-pattern) 'A)
   (check-true (term.has-vars? a-two-var-pattern))
   (check-single-match a-signature a-two-var-pattern
                       (make-term a-signature 'foo (list an-A a-B))
                       (merge-substitutions
-                       (substitution var-X a-B)
-                       (substitution var-Y an-A)))
+                       (substitution B-var a-B)
+                       (substitution A-var an-A)))
   (check-single-match a-signature a-two-var-pattern
                       (make-term a-signature 'foo (list a-B a-B))
                       (merge-substitutions
-                       (substitution var-X a-B)
-                       (substitution var-Y a-B)))
+                       (substitution B-var a-B)
+                       (substitution A-var a-B)))
 
-  (define a-double-var-pattern (make-term a-signature 'foo (list var-X var-X)))
+  (define a-double-var-pattern (make-term a-signature 'foo (list B-var B-var)))
   (define foo0 (make-term a-signature 'foo empty))
   (check-equal? (term.sort a-double-var-pattern) 'A)
   (check-true (term.has-vars? a-double-var-pattern))
   (check-single-match a-signature a-double-var-pattern
                       (make-term a-signature 'foo (list a-B a-B))
-                      (substitution var-X a-B))
+                      (substitution B-var a-B))
   (check-single-match a-signature a-double-var-pattern
                       (make-term a-signature 'foo (list foo0 foo0))
-                      (substitution var-X foo0))
+                      (substitution B-var foo0))
   (check-no-match a-signature a-double-var-pattern
                   (make-term a-signature 'foo (list a-B foo0)))
   (check-self-substitution a-signature
@@ -325,4 +342,3 @@
        (if (ormap term.has-vars? args)
            (op-pattern op args (cdr rank))
            (op-term op args (cdr rank)))))
-
