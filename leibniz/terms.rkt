@@ -166,7 +166,7 @@
 ;
 ; Operator-defined terms
 ;
-(struct op-term (op args sort)
+(struct op-term (signature op args sort)
   #:transparent
   #:methods gen:term
   [(define (term.sort t)
@@ -208,7 +208,7 @@
 ;
 ; Variables
 ;
-(struct var (name sort-or-kind)
+(struct var (signature name sort-or-kind)
   #:transparent
   #:methods gen:term
   [(define (term.sort t)
@@ -230,7 +230,7 @@
 (define (make-var signature symbol)
   (define sort-or-kind (lookup-var signature symbol))
   (and sort-or-kind
-       (var symbol sort-or-kind)))
+       (var signature symbol sort-or-kind)))
 
 (module+ test
   (define A-var (make-var a-signature 'A-var))
@@ -333,12 +333,15 @@
   (check-no-substitution a-signature a-double-var-pattern))
 
 ;
-; Make an operator-defined term. The result is a pattern
+; Make a variable or an operator-defined term. The result is a pattern
 ; if any of the arguments is a pattern.
 ;
-(define (make-term signature op args)
-  (define rank (lookup-op signature op (map term.sort args)))
-  (and rank
-       (if (ormap term.has-vars? args)
-           (op-pattern op args (cdr rank))
-           (op-term op args (cdr rank)))))
+(define (make-term signature name args)
+  (define sort-or-rank (lookup-symbol signature name (map term.sort args)))
+  (if (pair? sort-or-rank)
+      (and sort-or-rank
+           (if (ormap term.has-vars? args)
+               (op-pattern signature name args (cdr sort-or-rank))
+               (op-term signature name args (cdr sort-or-rank))))
+      (and sort-or-rank
+           (var signature name sort-or-rank))))
