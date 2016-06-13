@@ -33,10 +33,12 @@
 ;
 (define-generics term
   [term.sort term]
+  [term.signature term]
   [term.has-vars? term]
   #:fast-defaults
   ([number?
     (define term.sort number-term.sort)
+    (define term.signature number-term.signature)
     (define (term.has-vars? x) #f)])
   #:fallbacks
   [(define (term.has-vars? x) #f)])
@@ -47,6 +49,8 @@
   (check-equal? (term.sort -1) 'NonZeroInteger)
   (check-equal? (term.sort 1/2) 'PositiveRational)
   (check-equal? (term.sort -1/2) 'NonZeroRational)
+  (check-equal? (term.signature 0) integer-signature)
+  (check-equal? (term.signature 1/2) exact-number-signature)
   (check-false (term.has-vars? 1)))
 
 ;
@@ -164,7 +168,9 @@
   #:transparent
   #:methods gen:term
   [(define (term.sort t)
-     (op-term-sort t))]
+     (op-term-sort t))
+   (define (term.signature t)
+     (op-term-signature t))]
   #:methods gen:pattern [])
 
 (module+ test
@@ -236,6 +242,8 @@
   #:methods gen:term
   [(define (term.sort t)
      (var-sort-or-kind t))
+   (define (term.signature t)
+     (var-signature t))
    (define (term.has-vars? t)
      #t)]
   #:methods gen:pattern
@@ -290,6 +298,8 @@
   #:methods gen:term
   [(define (term.sort t)
      (op-term-sort t))
+   (define (term.signature t)
+     (op-term-signature t))
    (define (term.has-vars? t)
      #t)]
   #:methods gen:pattern
@@ -368,6 +378,9 @@
 ; if any of the arguments is a pattern.
 ;
 (define (make-term signature name args)
+  (for ([arg args])
+    (unless (equal? (term.signature arg) signature)
+      (error "argument has wrong signature")))
   (define sort-or-rank (lookup-op signature name (map term.sort args)))
   (and sort-or-rank
        (if (ormap term.has-vars? args)
