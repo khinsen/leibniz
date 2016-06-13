@@ -6,16 +6,9 @@
   [preregular?     (signature? . -> . boolean?)]
   [empty-signature (sort-graph? . -> . signature?)]
   [add-op          (signature? symbol? (listof sort?) sort? . -> . signature?)] 
-  [add-var         (signature? symbol? sort-or-kind? . -> . signature?)] 
   [lookup-op       (signature? symbol? (listof sort?)
                     . -> .
-                    (or/c #f (cons/c (listof sort-or-kind?) sort-or-kind?)))]
-  [lookup-var      (signature? symbol? . -> . (or/c #f sort-or-kind?))]
-  [lookup-symbol   (signature? symbol? (listof sort?)
-                    . -> .
-                    (or/c #f
-                          sort-or-kind?
-                          (cons/c (listof sort-or-kind?) sort-or-kind?)))]))
+                    (or/c #f (cons/c (listof sort-or-kind?) sort-or-kind?)))]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -298,62 +291,36 @@
 ;
 (define-class signature
 
-  (field sort-graph operators vars)
+  (field sort-graph operators)
 
   (define (add-op symbol arity sort)
-    (when (hash-has-key? vars symbol)
-      (error (format "symbol ~a already used for a variable")))
     (for ([arg arity])
       (validate-sort-constraint sort-graph arg))
     (validate-sort-constraint sort-graph sort)
     (signature sort-graph
                (hash-update operators symbol
                             (λ (op) (add op arity sort))
-                            (thunk (add (empty-operator sort-graph) arity sort)))
-               vars))
-
-  (define (add-var symbol sort-or-kind)
-    (when (hash-has-key? operators symbol)
-      (error (format "symbol ~a already used for an operator")))
-    (when (hash-has-key? vars symbol)
-      (error (format "symbol ~a already used for a variable")))
-    (signature sort-graph operators
-               (hash-set vars symbol sort-or-kind)))
+                            (thunk (add (empty-operator sort-graph)
+                                        arity sort)))))
 
   (define (lookup-op symbol arity)
     (define op (hash-ref operators symbol #f))
     (and op
          (lookup op arity)))
 
-  (define (lookup-var symbol)
-    (hash-ref vars symbol #f))
-
-  (define (lookup-symbol symbol arity)
-    (or (and (empty? arity) (lookup-var symbol))
-        (lookup-op symbol arity)))
-
   (define (preregular?)
     (for/and ([op (hash-values operators)])
       (preregular-op? op))))
 
 (define (empty-signature sort-graph)
-  (signature sort-graph (hash) (hash)))
+  (signature sort-graph (hash)))
 
 (module+ test
   (define a-signature
     (~> (empty-signature sorts)
         (add-op 'foo empty 'B)
-        (add-op 'foo (list 'A 'B) 'A)
-        (add-var 'X 'A)))
+        (add-op 'foo (list 'A 'B) 'A)))
   (check-true (preregular? a-signature))
   (check-equal? (lookup-op a-signature 'foo empty) (cons empty 'B))
   (check-false (lookup-op a-signature 'X empty))
-  (check-equal? (lookup-var a-signature 'X) 'A)
-  (check-false (lookup-var a-signature 'foo))
-  (check-equal? (lookup-symbol a-signature 'foo empty) (cons empty 'B))
-  (check-equal? (lookup-symbol a-signature 'X empty) 'A)
-  (check-false (lookup-symbol a-signature 'bar empty))
-  (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X)))
-  (check-exn exn:fail? (thunk (add-var signature 'foo 'X)))
-  (check-exn exn:fail? (thunk (add-var signature 'X 'X)))
-  (check-exn exn:fail? (thunk (add-op signature 'X empty 'X))))
+  (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X))))

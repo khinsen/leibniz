@@ -26,13 +26,7 @@
         (add-op 'a-Y empty 'Y)
         (add-op 'foo empty 'B)
         (add-op 'foo (list 'B) 'A)
-        (add-op 'foo (list 'A 'B) 'A)
-        (add-var 'A-var 'A)
-        (add-var 'B-var 'B)
-        (add-var 'Zero-var 'Zero)
-        (add-var 'Integer-var 'Integer)
-        (add-var 'NonZeroInteger-var 'NonZeroInteger)
-        (add-var 'StrangelyNamedVar 'Zero))))
+        (add-op 'foo (list 'A 'B) 'A))))
 
 ;
 ; The generic interface for terms
@@ -155,7 +149,7 @@
   (define-simple-check (check-no-substitution signature pattern)
     (equal? (pattern.substitute signature pattern
                                 (substitution
-                                 (make-var a-signature 'StrangelyNamedVar)
+                                 (make-var a-varset 'StrangelyNamedVar)
                                  0))
             pattern)))
 
@@ -206,6 +200,35 @@
                   (make-term a-signature 'foo empty)))
 
 ;
+; Varsets
+;
+(define-class varset 
+
+  (field signature vars)
+
+  (define (add-var symbol sort-or-kind)
+        (when (hash-has-key? vars symbol)
+          (error (format "symbol ~a already used")))
+        (validate-sort-constraint (signature-sort-graph signature) sort-or-kind)
+        (varset signature
+                (hash-set vars symbol sort-or-kind)))
+
+  (define (lookup-var symbol)
+    (hash-ref vars symbol #f)))
+
+(define (empty-varset signature)
+  (varset signature (hash)))
+
+(module+ test
+  (define some-varset
+    (~> (empty-varset a-signature)
+        (add-var 'X 'A)))
+  (check-equal? (lookup-var some-varset 'X) 'A)
+  (check-false (lookup-var some-varset 'foo))
+  (check-exn exn:fail? (thunk (add-var some-varset 'X 'X)))
+  (check-exn exn:fail? (thunk (add-var some-varset 'Z 'Z))))
+
+;
 ; Variables
 ;
 (struct var (signature name sort-or-kind)
@@ -227,17 +250,25 @@
          value
          pattern))])
 
-(define (make-var signature symbol)
-  (define sort-or-kind (lookup-var signature symbol))
+(define (make-var varset symbol)
+  (define sort-or-kind (lookup-var varset symbol))
   (and sort-or-kind
-       (var signature symbol sort-or-kind)))
+       (var (varset-signature varset) symbol sort-or-kind)))
 
 (module+ test
-  (define A-var (make-var a-signature 'A-var))
-  (define B-var (make-var a-signature 'B-var))
-  (define Zero-var (make-var a-signature 'Zero-var))
-  (define Integer-var (make-var a-signature 'Integer-var))
-  (define NonZeroInteger-var (make-var a-signature 'NonZeroInteger-var))
+  (define a-varset
+    (~> (empty-varset a-signature)
+        (add-var 'A-var 'A)
+        (add-var 'B-var 'B)
+        (add-var 'Zero-var 'Zero)
+        (add-var 'Integer-var 'Integer)
+        (add-var 'NonZeroInteger-var 'NonZeroInteger)
+        (add-var 'StrangelyNamedVar 'Zero)))
+  (define A-var (make-var a-varset 'A-var))
+  (define B-var (make-var a-varset 'B-var))
+  (define Zero-var (make-var a-varset 'Zero-var))
+  (define Integer-var (make-var a-varset 'Integer-var))
+  (define NonZeroInteger-var (make-var a-varset 'NonZeroInteger-var))
   (check-true (term.has-vars? A-var))
   (check-true (term.has-vars? Zero-var))
   (check-true (term.has-vars? Integer-var))
@@ -337,11 +368,8 @@
 ; if any of the arguments is a pattern.
 ;
 (define (make-term signature name args)
-  (define sort-or-rank (lookup-symbol signature name (map term.sort args)))
-  (if (pair? sort-or-rank)
-      (and sort-or-rank
-           (if (ormap term.has-vars? args)
-               (op-pattern signature name args (cdr sort-or-rank))
-               (op-term signature name args (cdr sort-or-rank))))
-      (and sort-or-rank
-           (var signature name sort-or-rank))))
+  (define sort-or-rank (lookup-op signature name (map term.sort args)))
+  (and sort-or-rank
+       (if (ormap term.has-vars? args)
+           (op-pattern signature name args (cdr sort-or-rank))
+           (op-term signature name args (cdr sort-or-rank)))))
