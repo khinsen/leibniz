@@ -146,7 +146,10 @@
       (define value-sorts (map cdr (matching-ranks-for-arity arg-sorts)))
       (or (< (length value-sorts) 2)
           (for/and ([vs (rest value-sorts)])
-            (is-subsort? sort-graph (first value-sorts) vs))))))
+            (is-subsort? sort-graph (first value-sorts) vs)))))
+
+  (define (all-ranks-for-k-arity)
+    ranks))
 
 (define (empty-sorted-ranks sort-graph k-arity k-sort)
   (define k-rank (cons k-arity k-sort))
@@ -249,7 +252,13 @@
 
   (define (preregular-op?)
     (for/and ([srl (hash-values ranks-by-k-arity)])
-      (preregular-rank-list? srl))))
+      (preregular-rank-list? srl)))
+
+  (define (all-ranks)
+    (in-generator
+     (for* ([sorted-ranks (in-hash-values ranks-by-k-arity)]
+            [rank (all-ranks-for-k-arity sorted-ranks)])
+       (yield rank)))))
 
 (define (empty-operator sort-graph)
   (operator sort-graph (hash)))
@@ -267,7 +276,10 @@
   (check-equal? (lookup an-op (list 'B)) (cons (list 'B) 'B))
   (check-equal? (lookup an-op (list 'Y)) (cons (list 'Y) 'Y))
   (check-equal? (lookup an-op (list 'X)) (cons (list (set 'X 'Y)) (set 'X 'Y)))
-
+  (check-equal? (for/set ([r (all-ranks an-op)]) r)
+                (set (cons (list 'A) 'A)
+                     (cons (list 'B) 'B)
+                     (cons (list 'Y) 'Y)))
   (check-true (preregular-op? an-op))
 
   ; Try to make non-monotonic operators
@@ -315,7 +327,13 @@
 
   (define (preregular?)
     (for/and ([op (hash-values operators)])
-      (preregular-op? op))))
+      (preregular-op? op)))
+
+  (define (all-ops)
+    (in-generator #:arity 2
+     (for* ([(symbol op) operators]
+            [rank (all-ranks op)])
+       (yield symbol rank))))
 
 (define (empty-signature sort-graph)
   (signature sort-graph (hash)))
@@ -329,3 +347,5 @@
   (check-equal? (lookup-op a-signature 'foo empty) (cons empty 'B))
   (check-false (lookup-op a-signature 'X empty))
   (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X))))
+  (check-equal? (for/set ([(s r) (all-ops a-signature)]) r)
+                (set (cons empty 'B) (cons (list 'A 'B) 'A)))
