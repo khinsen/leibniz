@@ -335,6 +335,14 @@
             [rank (all-ranks op)])
        (yield symbol rank))))
 
+  (define (merge-signatures other)
+    (define merged-sort-graph
+      (merge-sort-graphs sort-graph (signature-sort-graph other)))
+    (for/fold ([sig (empty-signature merged-sort-graph)])
+              ([(symbol rank) (stream-append (sequence->stream (all-ops))
+                                             (sequence->stream (send other all-ops)))])
+      (send sig add-op symbol (car rank) (cdr rank)))))
+
 (define (empty-signature sort-graph)
   (signature sort-graph (hash)))
 
@@ -346,6 +354,26 @@
   (check-true (preregular? a-signature))
   (check-equal? (lookup-op a-signature 'foo empty) (cons empty 'B))
   (check-false (lookup-op a-signature 'X empty))
-  (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X))))
   (check-equal? (for/set ([(s r) (all-ops a-signature)]) r)
                 (set (cons empty 'B) (cons (list 'A 'B) 'A)))
+  (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X)))
+  (check-equal? (merge-signatures (empty-signature sorts)
+                                  (empty-signature sorts))
+                (empty-signature sorts))
+  (check-equal? (merge-signatures a-signature (empty-signature sorts))
+                a-signature)
+  (check-equal? (merge-signatures a-signature (empty-signature sorts))
+                a-signature)
+  (check-equal? (merge-signatures a-signature a-signature)
+                a-signature)
+  (check-equal? (merge-signatures a-signature
+                                  (~> (empty-signature
+                                       (~> sorts
+                                           (add-subsort-relation 'X 'B)))
+                                      (add-op 'bar empty 'X)))
+                (~> (empty-signature
+                     (~> sorts
+                         (add-subsort-relation 'X 'B)))
+                    (add-op 'bar empty 'X)
+                    (add-op 'foo empty 'B)
+                    (add-op 'foo (list 'A 'B) 'A))))
