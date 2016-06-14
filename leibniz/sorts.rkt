@@ -7,7 +7,7 @@
   [validate-sort            (sort-graph? symbol? . -> . void?)]
   [add-sort                 (sort-graph? symbol? . -> . sort-graph?)]
   [add-subsort-relation     (sort-graph? symbol? symbol? . -> . sort-graph?)]
-  [merge-with               (sort-graph? sort-graph? . -> . sort-graph?)]
+  [merge-sort-graphs        (sort-graph? sort-graph? . -> . sort-graph?)]
   [all-sorts                (sort-graph? . -> . set?)]
   [all-subsorts             (sort-graph? . -> . set?)]
   [has-sort?                (sort-graph? symbol? . -> . boolean?)]
@@ -80,7 +80,7 @@
                 (hash-update subsorts supersort
                                  (λ (s) (set-add s subsort)))))
 
-  (define (merge-with s-graph)
+  (define (merge-sort-graphs s-graph)
     (let ([sg
            (for/fold ([sg this])
                      ([sort (send s-graph all-sorts)])
@@ -199,7 +199,7 @@
         (add-sort 'X) (add-sort 'Y)
         (add-subsort-relation 'A 'X)
         (add-subsort-relation 'X 'Y)))
-  (define merged (merge-with an-s-graph another-s-graph))
+  (define merged (merge-sort-graphs an-s-graph another-s-graph))
   (define two-kinds
     (~> an-s-graph
         (add-sort 'V) (add-sort 'W)
@@ -231,7 +231,7 @@
   (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'C 'A)))
 
   (check-equal? merged
-                (merge-with another-s-graph an-s-graph))
+                (merge-sort-graphs another-s-graph an-s-graph))
   (check-true (has-sort? merged 'A))
   (check-true (has-sort? merged 'X))
   (check-true (is-subsort? merged 'A 'X ))
