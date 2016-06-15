@@ -3,12 +3,13 @@
 (provide
  (struct-out signature)
  (contract-out
-  [preregular?     (signature? . -> . boolean?)]
-  [empty-signature (sort-graph? . -> . signature?)]
-  [add-op          (signature? symbol? (listof sort?) sort? . -> . signature?)] 
-  [lookup-op       (signature? symbol? (listof sort?)
-                    . -> .
-                    (or/c #f (cons/c (listof sort-or-kind?) sort-or-kind?)))]))
+  [preregular?      (signature? . -> . boolean?)]
+  [empty-signature  ((sort-graph?) (#:builtins set?) . ->* . signature?)]
+  [add-op           (signature? symbol? (listof sort?) sort? . -> . signature?)] 
+  [merge-signatures (signature? signature? . -> . signature?)]
+  [lookup-op        (signature? symbol? (listof sort?)
+                     . -> .
+                     (or/c #f (cons/c (listof sort-or-kind?) sort-or-kind?)))]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -308,7 +309,7 @@
 ;
 (define-class signature
 
-  (field sort-graph operators)
+  (field sort-graph operators builtins)
 
   (define (add-op symbol arity sort)
     (for ([arg arity])
@@ -318,7 +319,8 @@
                (hash-update operators symbol
                             (λ (op) (add op arity sort))
                             (thunk (add (empty-operator sort-graph)
-                                        arity sort)))))
+                                        arity sort)))
+               builtins))
 
   (define (lookup-op symbol arity)
     (define op (hash-ref operators symbol #f))
@@ -338,13 +340,15 @@
   (define (merge-signatures other)
     (define merged-sort-graph
       (merge-sort-graphs sort-graph (signature-sort-graph other)))
-    (for/fold ([sig (empty-signature merged-sort-graph)])
+    (define merged-builtins (set-union builtins (signature-builtins other)))
+    (for/fold ([sig (empty-signature merged-sort-graph
+                                     #:builtins merged-builtins)])
               ([(symbol rank) (stream-append (sequence->stream (all-ops))
                                              (sequence->stream (send other all-ops)))])
       (send sig add-op symbol (car rank) (cdr rank)))))
 
-(define (empty-signature sort-graph)
-  (signature sort-graph (hash)))
+(define (empty-signature sort-graph #:builtins [builtins (set)])
+  (signature sort-graph (hash) builtins))
 
 (module+ test
   (define a-signature
@@ -360,6 +364,9 @@
   (check-equal? (merge-signatures (empty-signature sorts)
                                   (empty-signature sorts))
                 (empty-signature sorts))
+  (check-equal? (merge-signatures (empty-signature sorts #:builtins (set 'foo))
+                                  (empty-signature sorts #:builtins (set 'bar)))
+                (empty-signature sorts  #:builtins (set 'foo 'bar)))
   (check-equal? (merge-signatures a-signature (empty-signature sorts))
                 a-signature)
   (check-equal? (merge-signatures a-signature (empty-signature sorts))
