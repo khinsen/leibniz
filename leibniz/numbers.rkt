@@ -8,6 +8,16 @@
          "./operators.rkt"
          rackjure/threading)
 
+(module+ test
+  (require rackunit racket/function rackjure/threading)
+  (define (sort-of-term signature name args)
+    (define rank (lookup-op signature name (map number-term.sort args)))
+    (and rank
+         (cdr rank))))
+
+;
+; Integers and their subsets
+;
 (define integer-sorts
   (~> (empty-sort-graph)
       ; Natural numbers
@@ -23,8 +33,34 @@
       (add-subsort-relation 'NonZeroInteger 'Integer)
       (add-subsort-relation 'NonZeroNatural 'NonZeroInteger)))
 
-(define integer-signature (empty-signature integer-sorts))
+(define integer-signature
+  (~> (empty-signature integer-sorts #:builtins (set 'integer))
+      (add-op '+ (list 'Integer 'Integer) 'Integer)
+      (add-op '+ (list 'Natural 'Natural) 'Natural)
+      (add-op '+ (list 'NonZeroNatural 'Natural) 'NonZeroNatural)
+      (add-op '+ (list 'Natural 'NonZeroNatural) 'NonZeroNatural)
+      (add-op '+ (list 'Zero 'Zero) 'Zero)
+      (add-op '- (list 'Integer 'Integer) 'Integer)
+      (add-op '* (list 'Integer 'Integer) 'Integer)
+      (add-op '* (list 'Integer 'Zero) 'Zero)
+      (add-op '* (list 'Zero 'Integer) 'Zero)
+      (add-op '* (list 'Natural 'Natural) 'Natural)
+      (add-op '* (list 'NonZeroNatural 'NonZeroNatural) 'NonZeroNatural)))
 
+(module+ test
+  (check-equal? (sort-of-term integer-signature '+ (list 1 2)) 'NonZeroNatural)
+  (check-equal? (sort-of-term integer-signature '+ (list 0 2)) 'NonZeroNatural)
+  (check-equal? (sort-of-term integer-signature '+ (list 0 0)) 'Zero)
+  (check-equal? (sort-of-term integer-signature '+ (list -1 0)) 'Integer)
+  (check-equal? (sort-of-term integer-signature '- (list 0 0)) 'Integer)
+  (check-equal? (sort-of-term integer-signature '* (list 1 2)) 'NonZeroNatural)
+  (check-equal? (sort-of-term integer-signature '* (list 0 2)) 'Zero)
+  (check-equal? (sort-of-term integer-signature '* (list -2 0)) 'Zero)
+  (check-equal? (sort-of-term integer-signature '* (list -2 -2)) 'Integer))
+
+;
+; Rationals and their subsets
+;
 (define exact-number-sorts
   (~> integer-sorts
       ; Rational numbers
@@ -37,7 +73,42 @@
       (add-subsort-relation 'PositiveRational 'NonZeroRational)
       (add-subsort-relation 'NonZeroNatural 'PositiveRational)))
 
-(define exact-number-signature (empty-signature exact-number-sorts))
+(define exact-number-signature
+  (~> (merge-signatures integer-signature
+                        (empty-signature exact-number-sorts
+                                         #:builtins (set 'rational)))
+      (add-op '+ (list 'Rational 'Rational) 'Rational)
+      (add-op '+ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
+      (add-op '- (list 'Rational 'Rational) 'Rational)
+      (add-op '* (list 'Rational 'Rational) 'Rational)
+      (add-op '* (list 'PositiveRational 'PositiveRational) 'PositiveRational)
+      (add-op '* (list 'NonZeroRational 'NonZeroRational) 'NonZeroRational)
+      (add-op '* (list 'Zero 'Rational) 'Zero)
+      (add-op '* (list 'Rational 'Zero) 'Zero)
+      (add-op '/ (list 'Rational 'NonZeroRational) 'Rational)
+      (add-op '/ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
+      (add-op '/ (list 'Zero 'NonZeroRational) 'Zero)))
+
+(module+ test
+  (check-equal? (sort-of-term exact-number-signature
+                              '+ (list 1/2 2/3)) 'PositiveRational)
+  (check-equal? (sort-of-term exact-number-signature
+                              '+ (list 1/2 -2/3)) 'Rational)
+  (check-equal? (sort-of-term exact-number-signature
+                              '- (list 1/2 -2/3)) 'Rational)
+  (check-equal? (sort-of-term exact-number-signature
+                              '* (list 1/2 2/3)) 'PositiveRational)
+  (check-equal? (sort-of-term exact-number-signature
+                              '* (list 0 2/3)) 'Zero)
+  (check-equal? (sort-of-term exact-number-signature
+                              '* (list 1/2 -2/3)) 'NonZeroRational)
+  (check-equal? (sort-of-term exact-number-signature
+                              '/ (list 1/2 -2/3)) 'Rational)
+  (check-equal? (sort-of-term exact-number-signature
+                              '/ (list 1/2 2/3)) 'PositiveRational)
+  (check-equal? (sort-of-term exact-number-signature
+                              '/ (list 1/2 0))
+                (kind exact-number-sorts 'Rational)))
 
 (define (number-term.sort x)
   (cond
