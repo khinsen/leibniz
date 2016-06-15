@@ -33,15 +33,16 @@
 ;
 (define-generics term
   [term.sort term]
-  [term.signature term]
   [term.has-vars? term]
+  [term.builtin-type term]
   #:fast-defaults
   ([number?
     (define term.sort number-term.sort)
-    (define term.signature number-term.signature)
-    (define (term.has-vars? x) #f)])
+    (define (term.has-vars? x) #f)
+    (define term.builtin-type number-term.builtin-type)])
   #:fallbacks
-  [(define (term.has-vars? x) #f)])
+  [(define (term.has-vars? x) #f)
+   (define (term.builtin-type x) #f)])
 
 (module+ test
   (check-equal? (term.sort 0) 'Zero)
@@ -49,8 +50,8 @@
   (check-equal? (term.sort -1) 'NonZeroInteger)
   (check-equal? (term.sort 1/2) 'PositiveRational)
   (check-equal? (term.sort -1/2) 'NonZeroRational)
-  (check-equal? (term.signature 0) integer-signature)
-  (check-equal? (term.signature 1/2) exact-number-signature)
+  (check-equal? (term.builtin-type 0) 'integer)
+  (check-equal? (term.builtin-type 1/2) 'rational)
   (check-false (term.has-vars? 1)))
 
 ;
@@ -168,9 +169,7 @@
   #:transparent
   #:methods gen:term
   [(define (term.sort t)
-     (op-term-sort t))
-   (define (term.signature t)
-     (op-term-signature t))]
+     (op-term-sort t))]
   #:methods gen:pattern [])
 
 (module+ test
@@ -210,24 +209,24 @@
 ;
 (define-class varset 
 
-  (field signature vars)
+  (field sort-graph vars)
 
   (define (add-var symbol sort-or-kind)
         (when (hash-has-key? vars symbol)
           (error (format "symbol ~a already used")))
-        (validate-sort-constraint (signature-sort-graph signature) sort-or-kind)
-        (varset signature
+        (validate-sort-constraint sort-graph sort-or-kind)
+        (varset sort-graph
                 (hash-set vars symbol sort-or-kind)))
 
   (define (lookup-var symbol)
     (hash-ref vars symbol #f)))
 
-(define (empty-varset signature)
-  (varset signature (hash)))
+(define (empty-varset sort-graph)
+  (varset sort-graph (hash)))
 
 (module+ test
   (define some-varset
-    (~> (empty-varset a-signature)
+    (~> (empty-varset sorts)
         (add-var 'X 'A)))
   (check-equal? (lookup-var some-varset 'X) 'A)
   (check-false (lookup-var some-varset 'foo))
@@ -237,13 +236,11 @@
 ;
 ; Variables
 ;
-(struct var (signature name sort-or-kind)
+(struct var (sort-graph name sort-or-kind)
   #:transparent
   #:methods gen:term
   [(define (term.sort t)
      (var-sort-or-kind t))
-   (define (term.signature t)
-     (var-signature t))
    (define (term.has-vars? t)
      #t)]
   #:methods gen:pattern
@@ -261,11 +258,11 @@
 (define (make-var varset symbol)
   (define sort-or-kind (lookup-var varset symbol))
   (and sort-or-kind
-       (var (varset-signature varset) symbol sort-or-kind)))
+       (var (varset-sort-graph varset) symbol sort-or-kind)))
 
 (module+ test
   (define a-varset
-    (~> (empty-varset a-signature)
+    (~> (empty-varset sorts)
         (add-var 'A-var 'A)
         (add-var 'B-var 'B)
         (add-var 'Zero-var 'Zero)
@@ -298,8 +295,6 @@
   #:methods gen:term
   [(define (term.sort t)
      (op-term-sort t))
-   (define (term.signature t)
-     (op-term-signature t))
    (define (term.has-vars? t)
      #t)]
   #:methods gen:pattern
@@ -377,12 +372,45 @@
 ; Make a variable or an operator-defined term. The result is a pattern
 ; if any of the arguments is a pattern.
 ;
+(define (allowed-term? signature term)
+  (cond
+    [(op-term? term)
+     (equal? (op-term-signature term) signature)]
+    [(var? term)
+     (equal? (var-sort-graph term) (signature-sort-graph signature))]
+    [(term.builtin-type term)
+     => (λ (t) (set-member? (signature-builtins signature) t))]
+    [else
+     (error "Unknown term type")]))
+
 (define (make-term signature name args)
   (for ([arg args])
-    (unless (equal? (term.signature arg) signature)
-      (error "argument has wrong signature")))
+    (unless (allowed-term? signature arg)
+      (error "argument term not compatible with signature")))
   (define rank (lookup-op signature name (map term.sort args)))
   (and rank
        (if (ormap term.has-vars? args)
            (op-pattern signature name args (cdr rank))
            (op-term signature name args (cdr rank)))))
+
+(module+ test
+  (define simple-sorts
+    (~> (empty-sort-graph)
+        (add-sort 'A) (add-sort 'B)
+        (add-subsort-relation 'B 'A)))
+  (define simple-signature
+    (~> (empty-signature simple-sorts)
+        (add-op 'foo empty 'B)
+        (add-op 'foo (list 'B) 'A)
+        (add-op 'foo (list 'A 'B) 'A)))
+  ; Error: Argument term was made for a-signature
+  (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list a-B))))
+  ; Error: variable from an incompatible varset
+  (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list B-var))))
+  ; Error: integers are not allowed in simple-signature
+  (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list 1))))
+  ; All arguments correct
+  (let* ([a-B (make-term simple-signature 'foo empty)]
+         [an-A (make-term simple-signature 'foo (list a-B))])
+    (check-equal? (term.sort (make-term simple-signature 'foo (list an-A a-B)))
+                  'A)))

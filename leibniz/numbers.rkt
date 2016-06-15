@@ -1,6 +1,6 @@
 #lang racket
 
-(provide number-term.sort number-term.signature
+(provide number-term.sort number-term.builtin-type
          integer-sorts integer-signature
          exact-number-sorts exact-number-signature)
 
@@ -117,8 +117,8 @@
     [(integer? x) (if (positive? x) 'NonZeroNatural 'NonZeroInteger)]
     [else (if (positive? x) 'PositiveRational 'NonZeroRational)]))
 
-(define (number-term.signature x)
+(define (number-term.builtin-type x)
   (cond
     [(inexact? x) (error "not yet implemented")]
-    [(integer? x) integer-signature]
-    [else exact-number-signature]))
+    [(integer? x) 'integer]
+    [else 'rational]))
