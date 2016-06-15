@@ -381,8 +381,8 @@
   (for ([arg args])
     (unless (equal? (term.signature arg) signature)
       (error "argument has wrong signature")))
-  (define sort-or-rank (lookup-op signature name (map term.sort args)))
-  (and sort-or-rank
+  (define rank (lookup-op signature name (map term.sort args)))
+  (and rank
        (if (ormap term.has-vars? args)
-           (op-pattern signature name args (cdr sort-or-rank))
-           (op-term signature name args (cdr sort-or-rank)))))
+           (op-pattern signature name args (cdr rank))
+           (op-term signature name args (cdr rank)))))
