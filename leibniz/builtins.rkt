@@ -1,6 +1,7 @@
 #lang racket
 
 (provide number-term.sort number-term.builtin-type
+         truth-sorts truth-signature
          integer-sorts integer-signature
          exact-number-sorts exact-number-signature)
 
@@ -14,6 +15,22 @@
     (define rank (lookup-op signature name (map number-term.sort args)))
     (and rank
          (cdr rank))))
+
+;
+; Booleans
+;
+(define truth-sorts
+  (~> (empty-sort-graph)
+      (add-sort 'Boolean)))
+
+(define truth-signature
+  (~> (empty-signature truth-sorts)
+      (add-op 'true empty 'Boolean)
+      (add-op 'false empty 'Boolean)))
+
+(module+ test
+  (check-equal? (sort-of-term truth-signature 'true empty) 'Boolean)
+  (check-equal? (sort-of-term truth-signature 'false empty) 'Boolean))
 
 ;
 ; Integers and their subsets
