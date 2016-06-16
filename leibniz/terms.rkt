@@ -128,16 +128,22 @@
 (define (non-pattern-substitute signature term substitution)
   term)
 
+(define (non-pattern-vars term)
+  (set))
+
 (define-generics pattern
   [pattern.match signature pattern term]
   [pattern.substitute signature pattern substitution]
+  [pattern.vars pattern]
   #:fast-defaults
   ([number?
     (define pattern.match non-pattern-match)
-    (define pattern.substitute non-pattern-substitute)])
+    (define pattern.substitute non-pattern-substitute)
+    (define pattern.vars non-pattern-vars)])
   #:fallbacks
   [(define pattern.match non-pattern-match)
-   (define pattern.substitute non-pattern-substitute)])
+   (define pattern.substitute non-pattern-substitute)
+   (define pattern.vars non-pattern-vars)])
 
 (define (all-matches signature pattern term)
   (sequence->list (pattern.match signature pattern term)))
@@ -244,16 +250,18 @@
    (define (term.has-vars? t)
      #t)]
   #:methods gen:pattern
-  [(define (pattern.match signature pattern term)
+  [(define (pattern.match signature pattern var)
      (conditional-match (conforms-to? (signature-sort-graph signature)
-                                      (term.sort term)
+                                      (term.sort var)
                                       (var-sort-or-kind pattern))
-                        (substitution pattern term)))
-   (define (pattern.substitute signature pattern substitution)
-     (define value (substitution-value substitution pattern))
+                        (substitution pattern var)))
+   (define (pattern.substitute signature var substitution)
+     (define value (substitution-value substitution var))
      (if value
          value
-         pattern))])
+         var))
+   (define (pattern.vars var)
+     (set var))])
 
 (define (make-var varset symbol)
   (define sort-or-kind (lookup-var varset symbol))
@@ -275,8 +283,11 @@
   (define Integer-var (make-var a-varset 'Integer-var))
   (define NonZeroInteger-var (make-var a-varset 'NonZeroInteger-var))
   (check-true (term.has-vars? A-var))
+  (check-equal? (pattern.vars A-var) (set A-var))
   (check-true (term.has-vars? Zero-var))
+  (check-equal? (pattern.vars Zero-var) (set Zero-var))
   (check-true (term.has-vars? Integer-var))
+  (check-equal? (pattern.vars Integer-var) (set Integer-var))
   (check-single-match a-signature Zero-var 0
                       (substitution Zero-var 0))
   (check-single-match a-signature Integer-var 0
@@ -325,12 +336,17 @@
      (make-term signature
                 (op-term-op pattern)
                 (for/list ([arg (op-term-args pattern)])
-                  (generic-substitute signature arg substitution))))])
+                  (generic-substitute signature arg substitution))))
+
+   (define/generic generic-vars pattern.vars)
+   (define (pattern.vars pattern)
+     (foldl set-union (set) (map generic-vars (op-term-args pattern))))])
 
 (module+ test
   (define a-one-var-pattern (make-term a-signature 'foo (list B-var)))
   (check-equal? (term.sort a-one-var-pattern) 'A)
   (check-true (term.has-vars? a-one-var-pattern))
+  (check-equal? (pattern.vars a-one-var-pattern) (set B-var))
   (check-single-match a-signature a-one-var-pattern
                       (make-term a-signature 'foo (list a-B))
                       (substitution B-var a-B))
@@ -340,6 +356,7 @@
   (define a-two-var-pattern (make-term a-signature 'foo (list A-var B-var)))
   (check-equal? (term.sort a-two-var-pattern) 'A)
   (check-true (term.has-vars? a-two-var-pattern))
+  (check-equal? (pattern.vars a-two-var-pattern) (set A-var B-var))
   (check-single-match a-signature a-two-var-pattern
                       (make-term a-signature 'foo (list an-A a-B))
                       (merge-substitutions
@@ -355,6 +372,7 @@
   (define foo0 (make-term a-signature 'foo empty))
   (check-equal? (term.sort a-double-var-pattern) 'A)
   (check-true (term.has-vars? a-double-var-pattern))
+  (check-equal? (pattern.vars a-double-var-pattern) (set B-var))
   (check-single-match a-signature a-double-var-pattern
                       (make-term a-signature 'foo (list a-B a-B))
                       (substitution B-var a-B))
