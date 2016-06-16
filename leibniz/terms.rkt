@@ -31,18 +31,36 @@
 ;
 ; The generic interface for terms
 ;
+(define (non-pattern-match signature term1 term2)
+  (conditional-match (equal? term1 term2) empty-substitution))
+
+(define (non-pattern-substitute signature term substitution)
+  term)
+
+(define (non-pattern-vars term)
+  (set))
+
 (define-generics term
   [term.sort term]
-  [term.has-vars? term]
   [term.builtin-type term]
+  [term.has-vars? term]
+  [term.vars term]
+  [term.match signature term other]
+  [term.substitute signature term substitution]
   #:fast-defaults
   ([number?
     (define term.sort number-term.sort)
+    (define term.builtin-type number-term.builtin-type)
     (define (term.has-vars? x) #f)
-    (define term.builtin-type number-term.builtin-type)])
+    (define term.vars non-pattern-vars)
+    (define term.match non-pattern-match)
+    (define term.substitute non-pattern-substitute)])
   #:fallbacks
-  [(define (term.has-vars? x) #f)
-   (define (term.builtin-type x) #f)])
+  [(define (term.builtin-type x) #f)
+   (define (term.has-vars? x) #f)
+   (define term.vars non-pattern-vars)
+   (define term.match non-pattern-match)
+   (define term.substitute non-pattern-substitute)])
 
 (module+ test
   (check-equal? (term.sort 0) 'Zero)
@@ -116,52 +134,23 @@
       (single-match substitution)
       no-match))
 
-;
-; The generic interface for patterns
-; Non-pattern term data types implement trivial versions
-; of its methods, in which matching is an equality test
-; and substitution does nothing.
-;
-(define (non-pattern-match signature term1 term2)
-  (conditional-match (equal? term1 term2) empty-substitution))
-
-(define (non-pattern-substitute signature term substitution)
-  term)
-
-(define (non-pattern-vars term)
-  (set))
-
-(define-generics pattern
-  [pattern.match signature pattern term]
-  [pattern.substitute signature pattern substitution]
-  [pattern.vars pattern]
-  #:fast-defaults
-  ([number?
-    (define pattern.match non-pattern-match)
-    (define pattern.substitute non-pattern-substitute)
-    (define pattern.vars non-pattern-vars)])
-  #:fallbacks
-  [(define pattern.match non-pattern-match)
-   (define pattern.substitute non-pattern-substitute)
-   (define pattern.vars non-pattern-vars)])
-
 (define (all-matches signature pattern term)
-  (sequence->list (pattern.match signature pattern term)))
+  (sequence->list (term.match signature pattern term)))
 
 (module+ test
   (define-simple-check (check-no-match signature pattern term)
-    (= 0 (sequence-length (pattern.match signature pattern term))))
+    (= 0 (sequence-length (term.match signature pattern term))))
   (define-simple-check (check-single-match signature pattern term substitution)
     (equal? (all-matches signature pattern term) (list substitution)))
   (define-simple-check (check-self-substitution signature pattern term)
-    (equal? (pattern.substitute signature pattern
-                                (first (all-matches signature pattern term)))
+    (equal? (term.substitute signature pattern
+                             (first (all-matches signature pattern term)))
             term))
   (define-simple-check (check-no-substitution signature pattern)
-    (equal? (pattern.substitute signature pattern
-                                (substitution
-                                 (make-var a-varset 'StrangelyNamedVar)
-                                 0))
+    (equal? (term.substitute signature pattern
+                             (substitution
+                              (make-var a-varset 'StrangelyNamedVar)
+                              0))
             pattern)))
 
 (module+ test
@@ -175,8 +164,7 @@
   #:transparent
   #:methods gen:term
   [(define (term.sort t)
-     (op-term-sort t))]
-  #:methods gen:pattern [])
+     (op-term-sort t))])
 
 (module+ test
   (define an-A (make-term a-signature 'an-A empty))
@@ -245,22 +233,22 @@
 (struct var (sort-graph name sort-or-kind)
   #:transparent
   #:methods gen:term
-  [(define (term.sort t)
+  [(define/generic generic-sort term.sort)
+   (define (term.sort t)
      (var-sort-or-kind t))
    (define (term.has-vars? t)
-     #t)]
-  #:methods gen:pattern
-  [(define (pattern.match signature pattern var)
+     #t)
+   (define (term.match signature var other)
      (conditional-match (conforms-to? (signature-sort-graph signature)
-                                      (term.sort var)
-                                      (var-sort-or-kind pattern))
-                        (substitution pattern var)))
-   (define (pattern.substitute signature var substitution)
+                                      (generic-sort other)
+                                      (var-sort-or-kind var))
+                        (substitution var other)))
+   (define (term.substitute signature var substitution)
      (define value (substitution-value substitution var))
      (if value
          value
          var))
-   (define (pattern.vars var)
+   (define (term.vars var)
      (set var))])
 
 (define (make-var varset symbol)
@@ -283,11 +271,11 @@
   (define Integer-var (make-var a-varset 'Integer-var))
   (define NonZeroInteger-var (make-var a-varset 'NonZeroInteger-var))
   (check-true (term.has-vars? A-var))
-  (check-equal? (pattern.vars A-var) (set A-var))
+  (check-equal? (term.vars A-var) (set A-var))
   (check-true (term.has-vars? Zero-var))
-  (check-equal? (pattern.vars Zero-var) (set Zero-var))
+  (check-equal? (term.vars Zero-var) (set Zero-var))
   (check-true (term.has-vars? Integer-var))
-  (check-equal? (pattern.vars Integer-var) (set Integer-var))
+  (check-equal? (term.vars Integer-var) (set Integer-var))
   (check-single-match a-signature Zero-var 0
                       (substitution Zero-var 0))
   (check-single-match a-signature Integer-var 0
@@ -306,11 +294,12 @@
   #:methods gen:term
   [(define (term.sort t)
      (op-term-sort t))
+
    (define (term.has-vars? t)
-     #t)]
-  #:methods gen:pattern
-  [(define/generic generic-match pattern.match)
-   (define (pattern.match signature pattern term)
+     #t)
+
+   (define/generic generic-match term.match)
+   (define (term.match signature pattern term)
      (define (match-args p-args t-args substitution)
        (if (empty? p-args)
            (conditional-match substitution substitution)
@@ -331,22 +320,22 @@
       [else
        (match-args p-args t-args empty-substitution)]))
 
-   (define/generic generic-substitute pattern.substitute)
-   (define (pattern.substitute signature pattern substitution)
+   (define/generic generic-substitute term.substitute)
+   (define (term.substitute signature pattern substitution)
      (make-term signature
                 (op-term-op pattern)
                 (for/list ([arg (op-term-args pattern)])
                   (generic-substitute signature arg substitution))))
 
-   (define/generic generic-vars pattern.vars)
-   (define (pattern.vars pattern)
+   (define/generic generic-vars term.vars)
+   (define (term.vars pattern)
      (foldl set-union (set) (map generic-vars (op-term-args pattern))))])
 
 (module+ test
   (define a-one-var-pattern (make-term a-signature 'foo (list B-var)))
   (check-equal? (term.sort a-one-var-pattern) 'A)
   (check-true (term.has-vars? a-one-var-pattern))
-  (check-equal? (pattern.vars a-one-var-pattern) (set B-var))
+  (check-equal? (term.vars a-one-var-pattern) (set B-var))
   (check-single-match a-signature a-one-var-pattern
                       (make-term a-signature 'foo (list a-B))
                       (substitution B-var a-B))
@@ -356,7 +345,7 @@
   (define a-two-var-pattern (make-term a-signature 'foo (list A-var B-var)))
   (check-equal? (term.sort a-two-var-pattern) 'A)
   (check-true (term.has-vars? a-two-var-pattern))
-  (check-equal? (pattern.vars a-two-var-pattern) (set A-var B-var))
+  (check-equal? (term.vars a-two-var-pattern) (set A-var B-var))
   (check-single-match a-signature a-two-var-pattern
                       (make-term a-signature 'foo (list an-A a-B))
                       (merge-substitutions
@@ -372,7 +361,7 @@
   (define foo0 (make-term a-signature 'foo empty))
   (check-equal? (term.sort a-double-var-pattern) 'A)
   (check-true (term.has-vars? a-double-var-pattern))
-  (check-equal? (pattern.vars a-double-var-pattern) (set B-var))
+  (check-equal? (term.vars a-double-var-pattern) (set B-var))
   (check-single-match a-signature a-double-var-pattern
                       (make-term a-signature 'foo (list a-B a-B))
                       (substitution B-var a-B))
