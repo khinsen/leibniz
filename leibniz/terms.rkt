@@ -1,9 +1,15 @@
 #lang racket
 
+(provide
+ (contract-out
+  [term?      (any/c . -> . boolean?)]
+  [term.sort  (term? . -> . sort-or-kind?)]
+  [term.vars  (term? . -> . set?)]))
+
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
          "./operators.rkt"
-         "./numbers.rkt"
+         "./builtins.rkt"
          "./condd.rkt"
          racket/generic
          rackjure/threading
