@@ -2,6 +2,8 @@
 
 (provide number-term.sort number-term.builtin-type
          truth-sorts truth-signature
+         symbol-sorts symbol-signature
+         string-sorts string-signature
          integer-sorts integer-signature
          exact-number-sorts exact-number-signature)
 
@@ -31,6 +33,26 @@
 (module+ test
   (check-equal? (sort-of-term truth-signature 'true empty) 'Boolean)
   (check-equal? (sort-of-term truth-signature 'false empty) 'Boolean))
+
+;
+; Symbols
+;
+(define symbol-sorts
+  (~> (empty-sort-graph)
+      (add-sort 'Symbol)))
+
+(define symbol-signature
+  (empty-signature symbol-sorts #:builtins (set 'symbol)))
+
+;
+; Strings
+;
+(define string-sorts
+  (~> (empty-sort-graph)
+      (add-sort 'String)))
+
+(define string-signature
+  (empty-signature symbol-sorts #:builtins (set 'string)))
 
 ;
 ; Integers and their subsets

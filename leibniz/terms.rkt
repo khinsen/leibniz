@@ -60,6 +60,20 @@
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
     (define term.match non-pattern-match)
+    (define term.substitute non-pattern-substitute)]
+   [symbol?
+    (define (term.sort x) 'Symbol)
+    (define (term.builtin-type x) 'symbol)
+    (define (term.has-vars? x) #f)
+    (define term.vars non-pattern-vars)
+    (define term.match non-pattern-match)
+    (define term.substitute non-pattern-substitute)]
+   [string?
+    (define (term.sort x) 'String)
+    (define (term.builtin-type x) 'string)
+    (define (term.has-vars? x) #f)
+    (define term.vars non-pattern-vars)
+    (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)])
   #:fallbacks
   [(define (term.builtin-type x) #f)
@@ -76,7 +90,13 @@
   (check-equal? (term.sort -1/2) 'NonZeroRational)
   (check-equal? (term.builtin-type 0) 'integer)
   (check-equal? (term.builtin-type 1/2) 'rational)
-  (check-false (term.has-vars? 1)))
+  (check-false (term.has-vars? 1))
+  (check-equal? (term.sort 'foo) 'Symbol)
+  (check-equal? (term.builtin-type 'foo) 'symbol)
+  (check-false (term.has-vars? 'foo))
+  (check-equal? (term.sort "foo") 'String)
+  (check-equal? (term.builtin-type "foo") 'string)
+  (check-false (term.has-vars? "foo")))
 
 ;
 ; Substitutions are var->term hashes describing a match.
