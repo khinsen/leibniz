@@ -2,9 +2,11 @@
 
 (provide
  (contract-out
-  [term?      (any/c . -> . boolean?)]
-  [term.sort  (term? . -> . sort-or-kind?)]
-  [term.vars  (term? . -> . set?)]))
+  [term?         (any/c . -> . boolean?)]
+  [term.sort     (term? . -> . sort-or-kind?)]
+  [term.vars     (term? . -> . set?)]
+  [allowed-term? (signature? term? . -> . boolean?)]
+  [make-term     (signature? symbol? list? . -> . term?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
