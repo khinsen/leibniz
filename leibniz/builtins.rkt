@@ -42,7 +42,7 @@
       (add-sort 'Symbol)))
 
 (define symbol-signature
-  (empty-signature symbol-sorts #:builtins (set 'symbol)))
+  (empty-signature symbol-sorts #:builtins (set '*symbol*)))
 
 ;
 ; Strings
@@ -52,7 +52,7 @@
       (add-sort 'String)))
 
 (define string-signature
-  (empty-signature symbol-sorts #:builtins (set 'string)))
+  (empty-signature symbol-sorts #:builtins (set '*string*)))
 
 ;
 ; Integers and their subsets
@@ -73,7 +73,7 @@
       (add-subsort-relation 'NonZeroNatural 'NonZeroInteger)))
 
 (define integer-signature
-  (~> (empty-signature integer-sorts #:builtins (set 'integer))
+  (~> (empty-signature integer-sorts #:builtins (set '*integer*))
       (add-op '+ (list 'Integer 'Integer) 'Integer)
       (add-op '+ (list 'Natural 'Natural) 'Natural)
       (add-op '+ (list 'NonZeroNatural 'Natural) 'NonZeroNatural)
@@ -115,7 +115,7 @@
 (define exact-number-signature
   (~> (merge-signatures integer-signature
                         (empty-signature exact-number-sorts
-                                         #:builtins (set 'rational)))
+                                         #:builtins (set '*rational*)))
       (add-op '+ (list 'Rational 'Rational) 'Rational)
       (add-op '+ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
       (add-op '- (list 'Rational 'Rational) 'Rational)
@@ -159,5 +159,5 @@
 (define (number-term.builtin-type x)
   (cond
     [(inexact? x) (error "not yet implemented")]
-    [(integer? x) 'integer]
-    [else 'rational]))
+    [(integer? x) '*integer*]
+    [else '*rational*]))

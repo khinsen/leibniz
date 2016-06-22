@@ -72,7 +72,7 @@
     (define term.substitute non-pattern-substitute)]
    [symbol?
     (define (term.sort x) 'Symbol)
-    (define (term.builtin-type x) 'symbol)
+    (define (term.builtin-type x) '*symbol*)
     (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
@@ -80,7 +80,7 @@
     (define term.substitute non-pattern-substitute)]
    [string?
     (define (term.sort x) 'String)
-    (define (term.builtin-type x) 'string)
+    (define (term.builtin-type x) '*string*)
     (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
@@ -99,18 +99,18 @@
   (check-equal? (term.sort -1) 'NonZeroInteger)
   (check-equal? (term.sort 1/2) 'PositiveRational)
   (check-equal? (term.sort -1/2) 'NonZeroRational)
-  (check-equal? (term.builtin-type 0) 'integer)
-  (check-equal? (term.builtin-type 1/2) 'rational)
-  (check-equal? (term.key 0) 'integer)
-  (check-equal? (term.key 1/2) 'rational)
+  (check-equal? (term.builtin-type 0) '*integer*)
+  (check-equal? (term.builtin-type 1/2) '*rational*)
+  (check-equal? (term.key 0) '*integer*)
+  (check-equal? (term.key 1/2) '*rational*)
   (check-false (term.has-vars? 1))
   (check-equal? (term.sort 'foo) 'Symbol)
-  (check-equal? (term.builtin-type 'foo) 'symbol)
-  (check-equal? (term.key 'foo) 'symbol)
+  (check-equal? (term.builtin-type 'foo) '*symbol*)
+  (check-equal? (term.key 'foo) '*symbol*)
   (check-false (term.has-vars? 'foo))
   (check-equal? (term.sort "foo") 'String)
-  (check-equal? (term.builtin-type "foo") 'string)
-  (check-equal? (term.key "foo") 'string)
+  (check-equal? (term.builtin-type "foo") '*string*)
+  (check-equal? (term.key "foo") '*string*)
   (check-false (term.has-vars? "foo")))
 
 ;
