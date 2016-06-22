@@ -21,7 +21,7 @@
     (error "Undefined operator in term"))
   (if (allowed-term? signature value)
       value
-      (error "illegal builtin term type")))
+      (error (format "illegal builtin term type ~s" (term.builtin-type value)))))
 
 ;
 ; Make a var (if defined in varset) or a zero-arg operator term.
