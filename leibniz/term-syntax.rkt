@@ -1,39 +1,16 @@
 #lang racket
 
+(provide term pattern with-signature with-sig-and-vars T)
+
 (require "./terms.rkt"
          racket/stxparam
          (for-syntax syntax/parse
                      racket/stxparam))
 
 (module+ test
-
-  (require "./sorts.rkt"
-           "./operators.rkt"
-           "./builtins.rkt"
+  (require "./test-examples.rkt"
            rackunit
-           racket/function
-           rackjure/threading)
-
-  (define sorts
-    (~> exact-number-sorts
-        (add-sort 'A) (add-sort 'B)
-        (add-subsort-relation 'B 'A)
-        (add-sort 'X) (add-sort 'Y)
-        (add-subsort-relation 'Y 'X)))
-  (define a-signature
-    (~> (merge-signatures (empty-signature sorts)
-                          exact-number-signature)
-        (add-op 'an-A empty 'A)
-        (add-op 'a-B empty 'B)
-        (add-op 'an-X empty 'X)
-        (add-op 'a-Y empty 'Y)
-        (add-op 'foo empty 'B)
-        (add-op 'foo (list 'B) 'A)
-        (add-op 'foo (list 'A 'B) 'A)))
-  (define a-varset
-    (~> (empty-varset sorts)
-        (add-var 'Avar 'A)
-        (add-var 'Bvar 'B))))
+           racket/function))
 
 ;
 ; Rough validation. This needs to be improved as the
