@@ -5,6 +5,7 @@
   [term?         (any/c . -> . boolean?)]
   [term.sort     (term? . -> . sort-or-kind?)]
   [term.vars     (term? . -> . set?)]
+  [term.key      (term? . -> . symbol?)]
   [allowed-term? (signature? term? . -> . boolean?)]
   [make-term     (signature? symbol? list? . -> . (or/c #f term?))]
   [empty-varset  (sort-graph? . -> . varset?)]
@@ -55,6 +56,7 @@
 (define-generics term
   [term.sort term]
   [term.builtin-type term]
+  [term.key term]
   [term.has-vars? term]
   [term.vars term]
   [term.match signature term other]
@@ -63,6 +65,7 @@
   ([number?
     (define term.sort number-term.sort)
     (define term.builtin-type number-term.builtin-type)
+    (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
     (define term.match non-pattern-match)
@@ -70,6 +73,7 @@
    [symbol?
     (define (term.sort x) 'Symbol)
     (define (term.builtin-type x) 'symbol)
+    (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
     (define term.match non-pattern-match)
@@ -77,6 +81,7 @@
    [string?
     (define (term.sort x) 'String)
     (define (term.builtin-type x) 'string)
+    (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
     (define term.match non-pattern-match)
@@ -96,12 +101,16 @@
   (check-equal? (term.sort -1/2) 'NonZeroRational)
   (check-equal? (term.builtin-type 0) 'integer)
   (check-equal? (term.builtin-type 1/2) 'rational)
+  (check-equal? (term.key 0) 'integer)
+  (check-equal? (term.key 1/2) 'rational)
   (check-false (term.has-vars? 1))
   (check-equal? (term.sort 'foo) 'Symbol)
   (check-equal? (term.builtin-type 'foo) 'symbol)
+  (check-equal? (term.key 'foo) 'symbol)
   (check-false (term.has-vars? 'foo))
   (check-equal? (term.sort "foo") 'String)
   (check-equal? (term.builtin-type "foo") 'string)
+  (check-equal? (term.key "foo") 'string)
   (check-false (term.has-vars? "foo")))
 
 ;
@@ -196,20 +205,26 @@
   #:transparent
   #:methods gen:term
   [(define (term.sort t)
-     (op-term-sort t))])
+     (op-term-sort t))
+   (define (term.key t)
+     (op-term-op t))])
 
 (module+ test
   (define an-A (make-term a-signature 'an-A empty))
   (check-equal? (term.sort an-A) 'A)
+  (check-equal? (term.key an-A) 'an-A)
   (check-false (term.has-vars? an-A))
   (define a-B (make-term a-signature 'a-B empty))
   (check-equal? (term.sort a-B) 'B)
+  (check-equal? (term.key a-B) 'a-B)
   (check-false (term.has-vars? a-B))
   (define an-X (make-term a-signature 'an-X empty))
   (check-equal? (term.sort an-X) 'X)
+  (check-equal? (term.key an-X) 'an-X)
   (check-false (term.has-vars? an-X))
   (define a-Y (make-term a-signature 'a-Y empty))
   (check-equal? (term.sort a-Y) 'Y)
+  (check-equal? (term.key a-Y) 'a-Y)
   (check-false (term.has-vars? a-Y))
  
   (check-equal? (term.sort (make-term a-signature 'foo empty)) 'B)
@@ -220,6 +235,7 @@
                 (kind sorts 'A))
   (check-equal? (term.sort (make-term a-signature 'foo (list an-A an-A)))
                 (kind sorts 'A))
+  (check-equal? (term.key (make-term a-signature 'foo empty)) 'foo)
   (check-false (make-term a-signature 'foo (list an-X)))
 
   (check-single-match a-signature
@@ -268,6 +284,8 @@
   [(define/generic generic-sort term.sort)
    (define (term.sort t)
      (var-sort-or-kind t))
+   (define (term.key t)
+     '*variable*)
    (define (term.has-vars? t)
      #t)
    (define (term.match signature var other)
@@ -304,10 +322,13 @@
   (define NonZeroInteger-var (make-var a-varset 'NonZeroInteger-var))
   (check-true (term.has-vars? A-var))
   (check-equal? (term.vars A-var) (set A-var))
+  (check-equal? (term.key A-var) '*variable*)
   (check-true (term.has-vars? Zero-var))
   (check-equal? (term.vars Zero-var) (set Zero-var))
+  (check-equal? (term.key Zero-var) '*variable*)
   (check-true (term.has-vars? Integer-var))
   (check-equal? (term.vars Integer-var) (set Integer-var))
+  (check-equal? (term.key Integer-var) '*variable*)
   (check-single-match a-signature Zero-var 0
                       (substitution Zero-var 0))
   (check-single-match a-signature Integer-var 0
@@ -326,6 +347,9 @@
   #:methods gen:term
   [(define (term.sort t)
      (op-term-sort t))
+
+   (define (term.key t)
+     (op-term-op t))
 
    (define (term.has-vars? t)
      #t)
