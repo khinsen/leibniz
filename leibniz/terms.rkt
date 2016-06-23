@@ -11,6 +11,7 @@
   [make-term         (signature? symbol? list? . -> . (or/c #f term?))]
   [empty-varset      (sort-graph? . -> . varset?)]
   [add-var           (varset? symbol? sort-or-kind? . -> . varset?)]
+  [merge-varsets     (varset? varset? . -> . varset?)]
   [var?              (any/c . -> . boolean?)]
   [make-var          (varset? symbol? . -> . (or/c #f var?))]))
 
@@ -255,14 +256,28 @@
   (field sort-graph vars)
 
   (define (add-var symbol sort-or-kind)
-        (when (hash-has-key? vars symbol)
-          (error (format "symbol ~a already used")))
-        (validate-sort-constraint sort-graph sort-or-kind)
-        (varset sort-graph
-                (hash-set vars symbol sort-or-kind)))
+    (when (and (hash-has-key? vars symbol)
+               (not (equal? (hash-ref vars symbol) sort-or-kind)))
+      (error (format "var ~s already defined with sort ~s"
+                     symbol (hash-ref vars symbol))))
+    (validate-sort-constraint sort-graph sort-or-kind)
+    (varset sort-graph
+            (hash-set vars symbol sort-or-kind)))
 
   (define (lookup-var symbol)
-    (hash-ref vars symbol #f)))
+    (hash-ref vars symbol #f))
+
+  (define (merge-varsets other)
+    (define merged-sort-graph
+      (merge-sort-graphs sort-graph (varset-sort-graph other)))
+    (for/fold ([vars (empty-varset merged-sort-graph)])
+              ([(symbol sort-or-kind)
+                (stream-append (sequence->stream vars)
+                               (sequence->stream (varset-vars other)))])
+      (send vars add-var symbol
+            (if (sort? sort-or-kind)
+                sort-or-kind
+                (extended-kind merged-sort-graph sort-or-kind))))))
 
 (define (empty-varset sort-graph)
   (varset sort-graph (hash)))
@@ -271,8 +286,12 @@
   (define some-varset
     (~> (empty-varset sorts)
         (add-var 'X 'A)))
+  (check-equal? (add-var some-varset 'X 'A) some-varset)
   (check-equal? (lookup-var some-varset 'X) 'A)
   (check-false (lookup-var some-varset 'foo))
+  (check-equal? (merge-varsets some-varset some-varset) some-varset)
+  (check-equal? (merge-varsets (empty-varset sorts) some-varset) some-varset)
+  (check-equal? (merge-varsets some-varset (empty-varset sorts)) some-varset)
   (check-exn exn:fail? (thunk (add-var some-varset 'X 'X)))
   (check-exn exn:fail? (thunk (add-var some-varset 'Z 'Z))))
 
