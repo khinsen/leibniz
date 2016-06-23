@@ -1,15 +1,19 @@
 #lang racket
 
+(provide
+ (contract-out
+  [empty-rulelist rulelist?]))
+
 (require "./sorts.rkt"
          "./operators.rkt"
-         "./terms.rkt"
-)
+         "./terms.rkt")
 
 (module+ test
   (require "./term-syntax.rkt"
            "./test-examples.rkt"
            rackunit
-           racket/function))
+           racket/function
+           rackjure/threading))
 
 ;
 ; Rules
@@ -64,3 +68,35 @@
     ; Replacement doesn't match sort of pattern
     (check-exn exn:fail?
                (thunk (make-rule a-signature (T IntVar) #f (T (foo a-B)))))))
+
+;
+; Rule lists
+; For efficiency, a rule list is organized as a hash of sublists, indexed
+; by the key of its pattern.
+;
+(define (rulelist? x)
+  (hash? x))
+
+(define empty-rulelist
+  (hash))
+
+(define (add-rule rulelist rule)
+  (let* ([pattern (rule-pattern rule)]
+         [key (term.key pattern)])
+    (hash-update rulelist
+                 key
+                 (λ (l) (append l (list rule)))
+                 empty)))
+
+(module+ test
+  (with-sig-and-vars a-signature a-varset
+    (define some-rules
+      (~> empty-rulelist
+          (add-rule (make-rule a-signature
+                               (T IntVar) #f (T 2)))
+          (add-rule (make-rule a-signature
+                               (T (foo Bvar)) #f (T Bvar)))
+          (add-rule (make-rule a-signature
+                               (T (foo Avar Bvar)) #f (T (foo Bvar))))))
+    (check-equal? (hash-count some-rules) 2)
+    (check-equal? (length (hash-ref some-rules 'foo)) 2)))
