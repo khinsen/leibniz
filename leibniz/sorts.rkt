@@ -3,7 +3,7 @@
 (provide
  (contract-out
   [sort-graph?              (any/c . -> . boolean?)]
-  [empty-sort-graph         (-> sort-graph?)]
+  [empty-sort-graph         sort-graph?]
   [validate-sort            (sort-graph? symbol? . -> . void?)]
   [add-sort                 (sort-graph? symbol? . -> . sort-graph?)]
   [add-subsort-relation     (sort-graph? symbol? symbol? . -> . sort-graph?)]
@@ -167,7 +167,7 @@
                                  (set->list (maximal-sorts constraint)))
                             ","))])))
 
-(define (empty-sort-graph)
+(define empty-sort-graph
   (sort-graph (hash) (hash) (hash)))
 
 ;
@@ -192,13 +192,13 @@
 ;
 (module+ test
   (define an-s-graph
-    (~> (empty-sort-graph)
+    (~> empty-sort-graph
         (add-sort 'A) (add-sort 'B)
         (add-sort 'C) (add-sort 'D)
         (add-subsort-relation 'A 'B) (add-subsort-relation 'B 'C)
         (add-subsort-relation 'A 'D)))
   (define another-s-graph
-    (~> (empty-sort-graph)
+    (~> empty-sort-graph
         (add-sort 'A)
         (add-sort 'X) (add-sort 'Y)
         (add-subsort-relation 'A 'X)
@@ -245,8 +245,8 @@
   (check-equal? (extended-kind merged (kind another-s-graph 'A) )
                 (kind merged 'A))
   (check-equal? (merge-sort-graphs an-s-graph an-s-graph) an-s-graph)
-  (check-equal? (merge-sort-graphs (empty-sort-graph) an-s-graph) an-s-graph)
-  (check-equal? (merge-sort-graphs an-s-graph (empty-sort-graph)) an-s-graph)
+  (check-equal? (merge-sort-graphs empty-sort-graph an-s-graph) an-s-graph)
+  (check-equal? (merge-sort-graphs an-s-graph empty-sort-graph) an-s-graph)
   (check-equal? (kind two-kinds 'A) (kind two-kinds 'C))
   (check-equal? (kind two-kinds 'V) (kind two-kinds 'W))
   (check-not-equal? (kind two-kinds 'A) (kind two-kinds 'W))

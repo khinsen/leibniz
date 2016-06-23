@@ -22,7 +22,7 @@
 ; Booleans
 ;
 (define truth-sorts
-  (~> (empty-sort-graph)
+  (~> empty-sort-graph
       (add-sort 'Boolean)))
 
 (define truth-signature
@@ -38,7 +38,7 @@
 ; Symbols
 ;
 (define symbol-sorts
-  (~> (empty-sort-graph)
+  (~> empty-sort-graph
       (add-sort 'Symbol)))
 
 (define symbol-signature
@@ -48,7 +48,7 @@
 ; Strings
 ;
 (define string-sorts
-  (~> (empty-sort-graph)
+  (~> empty-sort-graph
       (add-sort 'String)))
 
 (define string-signature
@@ -58,7 +58,7 @@
 ; Integers and their subsets
 ;
 (define integer-sorts
-  (~> (empty-sort-graph)
+  (~> empty-sort-graph
       ; Natural numbers
       (add-sort 'Natural)
       (add-sort 'Zero)

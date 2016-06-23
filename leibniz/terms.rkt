@@ -478,7 +478,7 @@
 
 (module+ test
   (define simple-sorts
-    (~> (empty-sort-graph)
+    (~> empty-sort-graph
         (add-sort 'A) (add-sort 'B)
         (add-subsort-relation 'B 'A)))
   (define simple-signature

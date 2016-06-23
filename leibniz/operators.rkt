@@ -20,7 +20,7 @@
   (require rackunit racket/function rackjure/threading)
   ; Define a simple sort graph for testing
   (define sorts
-    (~> (empty-sort-graph)
+    (~> empty-sort-graph
         (add-sort 'A) (add-sort 'B)
         (add-subsort-relation 'B 'A)
         (add-sort 'X) (add-sort 'Y)
@@ -211,7 +211,7 @@
                         (add-rank (list 'B) 'A))))
 
   ; Make a non-preregular rank list, then add a rank to make it preregular
-  (let* ([sorts (~> (empty-sort-graph)
+  (let* ([sorts (~> empty-sort-graph
                     (add-sort 'A) (add-sort 'B) (add-sort 'C)
                     (add-subsort-relation 'A 'B)
                     (add-subsort-relation 'A 'C))]
@@ -294,7 +294,7 @@
                         (add (list 'B) 'X))))
 
   ; Make a non-preregular operator, then add a rank to make it preregular
-  (let* ([sorts (~> (empty-sort-graph)
+  (let* ([sorts (~> empty-sort-graph
                     (add-sort 'A) (add-sort 'B) (add-sort 'C)
                     (add-subsort-relation 'A 'B)
                     (add-subsort-relation 'A 'C))]
