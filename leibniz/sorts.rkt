@@ -8,6 +8,7 @@
   [add-sort                 (sort-graph? symbol? . -> . sort-graph?)]
   [add-subsort-relation     (sort-graph? symbol? symbol? . -> . sort-graph?)]
   [merge-sort-graphs        (sort-graph? sort-graph? . -> . sort-graph?)]
+  [extended-kind            (sort-graph? set? . -> . set?)]
   [all-sorts                (sort-graph? . -> . set?)]
   [all-subsorts             (sort-graph? . -> . set?)]
   [has-sort?                (sort-graph? symbol? . -> . boolean?)]
@@ -88,6 +89,9 @@
       (for/fold ([sg sg])
                 ([ss-relation (send s-graph all-subsorts)])
         (send sg add-subsort-relation (car ss-relation) (cdr ss-relation)))))
+
+  (define (extended-kind sort-set)
+    (kind (set-first sort-set)))
 
   (define (all-sorts)
     (list->set (hash-keys subsorts)))
@@ -236,7 +240,13 @@
   (check-true (has-sort? merged 'X))
   (check-true (is-subsort? merged 'A 'X ))
   (check-true (is-subsort? merged 'A 'C ))
-
+  (check-equal? (extended-kind merged (kind an-s-graph 'A) )
+                (kind merged 'A))
+  (check-equal? (extended-kind merged (kind another-s-graph 'A) )
+                (kind merged 'A))
+  (check-equal? (merge-sort-graphs an-s-graph an-s-graph) an-s-graph)
+  (check-equal? (merge-sort-graphs (empty-sort-graph) an-s-graph) an-s-graph)
+  (check-equal? (merge-sort-graphs an-s-graph (empty-sort-graph)) an-s-graph)
   (check-equal? (kind two-kinds 'A) (kind two-kinds 'C))
   (check-equal? (kind two-kinds 'V) (kind two-kinds 'W))
   (check-not-equal? (kind two-kinds 'A) (kind two-kinds 'W))
