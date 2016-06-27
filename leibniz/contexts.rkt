@@ -122,7 +122,7 @@
 
   (define-syntax-class rule
     #:description "rule declaration"
-    (pattern ((~literal ->) pattern replacement
+    (pattern ((~literal =>) pattern replacement
               (~optional (~seq #:if condition)))
              #:with p-term #'(ts:T pattern)
              #:with r-term #'(ts:T replacement)
@@ -139,7 +139,7 @@
         rule-defs:rule ...)
      #'(let* ([initial (foldl merge-contexts empty-context
                               (list included-contexts.context ...))]
-              [sorts (~> (context*-sort-graph initial) sort-defs.value ...)]
+              [sorts (~> (context-sort-graph initial) sort-defs.value ...)]
               [signature (~> (merge-signatures (empty-signature sorts)
                                                (context*-signature initial))
                              op-defs.value ...)]
@@ -209,8 +209,8 @@
     (op (foo B) A)
     (op (foo A) B)
     (var X B)
-    (-> (foo an-A) a-B)
-    (-> (foo X) an-A
+    (=> (foo an-A) a-B)
+    (=> (foo X) an-A
         #:if true))
 
   (check-equal? (hash-keys (context*-rules test)) '(foo))
