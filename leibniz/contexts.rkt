@@ -170,6 +170,12 @@
                   var-defs ...
                   rule-defs ...))]))
 
+(define-syntax (with-context stx)
+  (syntax-parse stx
+    [(_ c:expr body ...)
+     #'(ts:with-sig-and-vars (context*-signature c) (context*-vars c)
+         body ...)]))
+
 (module+ test
   (define a-context
     (context
@@ -208,4 +214,8 @@
         #:if true))
 
   (check-equal? (hash-keys (context*-rules test)) '(foo))
-  (check-equal? (length (hash-ref (context*-rules test) 'foo)) 2 ))
+  (check-equal? (length (hash-ref (context*-rules test) 'foo)) 2 )
+
+  (with-context test
+    (check-equal? (term.sort (T an-A)) 'A)))
+
