@@ -1,8 +1,18 @@
 #lang racket
 
-(provide context
-         truth-context symbol-context string-context
-         integer-context exact-number-context)
+(provide 
+ (rename-out [context- context])
+ define-context
+ with-context
+ (contract-out
+  [context?             (any/c . -> . boolean?)]
+  [context-signature    (context? . -> . signature?)]
+  [context-rules        (context? . -> . rulelist?)]
+  [truth-context        context?]
+  [symbol-context       context?]
+  [string-context       context?]
+  [integer-context      context?]
+  [exact-number-context context?]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -27,47 +37,47 @@
 ; A context combines a sort-graph, a signature, a varset, and a rulelist.
 ; (Equations to be added later)
 ;
-(struct context* (sort-graph signature vars rules)
+(struct context (sort-graph signature vars rules)
         #:transparent)
 
 (define empty-context
   (let ([sorts empty-sort-graph])
-    (context* sorts
-              (empty-signature sorts)
-              (empty-varset sorts)
-              empty-rulelist)))
+    (context sorts
+             (empty-signature sorts)
+             (empty-varset sorts)
+             empty-rulelist)))
 
 (define (merge-contexts context1 context2)
-  (let* ([signature (merge-signatures (context*-signature context1)
-                                      (context*-signature context2))]
-         [vars (merge-varsets (context*-vars context1)
-                              (context*-vars context2))]
+  (let* ([signature (merge-signatures (context-signature context1)
+                                      (context-signature context2))]
+         [vars (merge-varsets (context-vars context1)
+                              (context-vars context2))]
          [sorts (signature-sort-graph signature)]
          [rules empty-rulelist])
-    (context* sorts signature vars rules)))
+    (context sorts signature vars rules)))
 
 ;
 ; Builtin contexts
 ;
 (define truth-context
-  (context* truth-sorts truth-signature
-            (empty-varset truth-sorts) empty-rulelist))
+  (context truth-sorts truth-signature
+           (empty-varset truth-sorts) empty-rulelist))
 
 (define symbol-context
-  (context* symbol-sorts symbol-signature
-            (empty-varset symbol-sorts) empty-rulelist))
+  (context symbol-sorts symbol-signature
+           (empty-varset symbol-sorts) empty-rulelist))
 
 (define string-context
-  (context* string-sorts string-signature
-            (empty-varset string-sorts) empty-rulelist))
+  (context string-sorts string-signature
+           (empty-varset string-sorts) empty-rulelist))
 
 (define integer-context
-  (context* integer-sorts integer-signature
-            (empty-varset integer-sorts) empty-rulelist))
+  (context integer-sorts integer-signature
+           (empty-varset integer-sorts) empty-rulelist))
 
 (define exact-number-context
-  (context* exact-number-sorts exact-number-signature
-            (empty-varset exact-number-sorts) empty-rulelist))
+  (context exact-number-sorts exact-number-signature
+           (empty-varset exact-number-sorts) empty-rulelist))
 
 (module+ test
   (check-equal? (merge-contexts truth-context symbol-context)
@@ -130,7 +140,7 @@
                                #'(ts:T condition)
                                #'#f))))
 
-(define-syntax (context stx)
+(define-syntax (context- stx)
   (syntax-parse stx
     [(_ included-contexts:include ...
         sort-defs:sort-or-subsort ...
@@ -141,10 +151,10 @@
                               (list included-contexts.context ...))]
               [sorts (~> (context-sort-graph initial) sort-defs.value ...)]
               [signature (~> (merge-signatures (empty-signature sorts)
-                                               (context*-signature initial))
+                                               (context-signature initial))
                              op-defs.value ...)]
               [varset (~> (merge-varsets (empty-varset sorts)
-                                         (context*-vars initial))
+                                         (context-vars initial))
                           var-defs.value ...)]
               [rules (ts:with-sig-and-vars signature varset
                        (~> empty-rulelist
@@ -153,7 +163,7 @@
                                                 rule-defs.c-term
                                                 rule-defs.r-term))
                            ...))])
-         (context* sorts signature varset rules))]))
+         (context sorts signature varset rules))]))
 
 (define-syntax (define-context stx)
   (syntax-parse stx
@@ -164,21 +174,21 @@
         var-defs:variable ...
         rule-defs:rule ...)
      #'(define name
-         (context included-contexts ...
-                  sort-defs ...
-                  op-defs ...
-                  var-defs ...
-                  rule-defs ...))]))
+         (context- included-contexts ...
+                   sort-defs ...
+                   op-defs ...
+                   var-defs ...
+                   rule-defs ...))]))
 
 (define-syntax (with-context stx)
   (syntax-parse stx
     [(_ c:expr body ...)
-     #'(ts:with-sig-and-vars (context*-signature c) (context*-vars c)
+     #'(ts:with-sig-and-vars (context-signature c) (context-vars c)
          body ...)]))
 
 (module+ test
   (define a-context
-    (context
+    (context-
      (include truth-context)
      (include exact-number-context)
      (sort A) (sort B)
@@ -197,9 +207,9 @@
      (var IntVar Integer)
      (var BoolVar Boolean)))
 
-  (check-equal? (context*-sort-graph a-context) sorts)
-  (check-equal? (context*-signature a-context) a-signature)
-  (check-equal? (context*-vars a-context) a-varset)
+  (check-equal? (context-sort-graph a-context) sorts)
+  (check-equal? (context-signature a-context) a-signature)
+  (check-equal? (context-vars a-context) a-varset)
 
   (define-context test
     (include truth-context)
@@ -213,8 +223,8 @@
     (=> (foo X) an-A
         #:if true))
 
-  (check-equal? (hash-keys (context*-rules test)) '(foo))
-  (check-equal? (length (hash-ref (context*-rules test) 'foo)) 2 )
+  (check-equal? (hash-keys (context-rules test)) '(foo))
+  (check-equal? (length (hash-ref (context-rules test) 'foo)) 2 )
 
   (with-context test
     (check-equal? (term.sort (T an-A)) 'A)))

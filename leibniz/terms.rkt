@@ -7,6 +7,9 @@
   [term.vars         (term? . -> . set?)]
   [term.key          (term? . -> . symbol?)]
   [term.builtin-type (term? . -> . symbol?)]
+  [term.match        (signature? term? term? . -> . sequence?)]
+  [term.substitute   (signature? term? substitution? . -> . term?)]
+  [substitution?     (any/c . -> . boolean?)]
   [allowed-term?     (signature? term? . -> . boolean?)]
   [make-term         (signature? symbol? list? . -> . (or/c #f term?))]
   [empty-varset      (sort-graph? . -> . varset?)]
@@ -120,6 +123,9 @@
 ; Combining two substitutions that are contradictory leads to
 ; a non-match signalled by the special value #f.
 ;
+(define (substitution? x)
+  (hash? x))
+
 (define empty-substitution (hash))
 
 (define (substitution var term)

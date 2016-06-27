@@ -1,10 +1,13 @@
 #lang racket
 
 (provide
+ (struct-out rule)
  (contract-out
   [make-rule (signature? term? (or/c #f term?) term? . -> . rule?)]
+  [rulelist? (any/c . -> . boolean?)]
   [empty-rulelist rulelist?]
-  [add-rule (rulelist? rule? . -> . rulelist?)]))
+  [add-rule (rulelist? rule? . -> . rulelist?)]
+  [lookup-rules (rulelist? symbol? . -> . list?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -89,6 +92,9 @@
                  key
                  (λ (l) (append l (list rule)))
                  empty)))
+
+(define (lookup-rules rulelist key)
+  (hash-ref rulelist key))
 
 (module+ test
   (with-sig-and-vars a-signature a-varset
