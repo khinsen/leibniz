@@ -2,7 +2,9 @@
 
 (provide
  (contract-out
-  [empty-rulelist rulelist?]))
+  [make-rule (signature? term? (or/c #f term?) term? . -> . rule?)]
+  [empty-rulelist rulelist?]
+  [add-rule (rulelist? rule? . -> . rulelist?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"

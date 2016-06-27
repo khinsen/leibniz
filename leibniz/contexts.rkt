@@ -8,10 +8,12 @@
          "./operators.rkt"
          "./builtins.rkt"
          "./terms.rkt"
+         (prefix-in ts: "./term-syntax.rkt")
          "./equations.rkt"
          rackjure/threading
          racket/stxparam
-         (for-syntax syntax/parse
+         (for-syntax (prefix-in ts: "./term-syntax.rkt")
+                     syntax/parse
                      racket/stxparam))
 
 (module+ test
@@ -116,14 +118,25 @@
     #:description "variable declaration"
     (pattern ((~literal var) var-name:id sort:id)
              #:with value
-             #'(add-var (quote var-name) (quote sort)))))
+             #'(add-var (quote var-name) (quote sort))))
+
+  (define-syntax-class rule
+    #:description "rule declaration"
+    (pattern ((~literal ->) pattern replacement
+              (~optional (~seq #:if condition)))
+             #:with p-term #'(ts:T pattern)
+             #:with r-term #'(ts:T replacement)
+             #:with c-term (if (attribute condition)
+                               #'(ts:T condition)
+                               #'#f))))
 
 (define-syntax (context stx)
   (syntax-parse stx
     [(_ included-contexts:include ...
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
-        var-defs:variable ...)
+        var-defs:variable ...
+        rule-defs:rule ...)
      #'(let* ([initial (foldl merge-contexts empty-context
                               (list included-contexts.context ...))]
               [sorts (~> (context*-sort-graph initial) sort-defs.value ...)]
@@ -132,8 +145,30 @@
                              op-defs.value ...)]
               [varset (~> (merge-varsets (empty-varset sorts)
                                          (context*-vars initial))
-                          var-defs.value ...)])
-         (context* sorts signature varset #f))]))
+                          var-defs.value ...)]
+              [rules (ts:with-sig-and-vars signature varset
+                       (~> empty-rulelist
+                           (add-rule (make-rule signature
+                                                rule-defs.p-term
+                                                rule-defs.c-term
+                                                rule-defs.r-term))
+                           ...))])
+         (context* sorts signature varset rules))]))
+
+(define-syntax (define-context stx)
+  (syntax-parse stx
+    [(_ name:id
+        included-contexts:include ...
+        sort-defs:sort-or-subsort ...
+        op-defs:operator ...
+        var-defs:variable ...
+        rule-defs:rule ...)
+     #'(define name
+         (context included-contexts ...
+                  sort-defs ...
+                  op-defs ...
+                  var-defs ...
+                  rule-defs ...))]))
 
 (module+ test
   (define a-context
@@ -158,5 +193,19 @@
 
   (check-equal? (context*-sort-graph a-context) sorts)
   (check-equal? (context*-signature a-context) a-signature)
-  (check-equal? (context*-vars a-context) a-varset))
+  (check-equal? (context*-vars a-context) a-varset)
 
+  (define-context test
+    (include truth-context)
+    (sort A) (sort B)
+    (op an-A A)
+    (op a-B B)
+    (op (foo B) A)
+    (op (foo A) B)
+    (var X B)
+    (-> (foo an-A) a-B)
+    (-> (foo X) an-A
+        #:if true))
+
+  (check-equal? (hash-keys (context*-rules test)) '(foo))
+  (check-equal? (length (hash-ref (context*-rules test) 'foo)) 2 ))
