@@ -40,6 +40,9 @@
   (when condition
     (unless (conforms-to? sort-graph (term.sort condition) 'Boolean)
       (error (format "Condition ~s not of sort Boolean" condition)))
+    (unless (and (lookup-op signature 'true empty)
+                 (lookup-op signature 'false empty))
+      (error "signature does not contain true and false"))
     (unless (set-empty?
              (set-subtract condition-vars pattern-vars))
       (error (format "Condition ~s contains variables that are not in the rule pattern" condition))))
