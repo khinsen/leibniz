@@ -94,7 +94,7 @@
                  empty)))
 
 (define (lookup-rules rulelist key)
-  (hash-ref rulelist key))
+  (hash-ref rulelist key empty))
 
 (module+ test
   (with-sig-and-vars a-signature a-varset
@@ -107,4 +107,6 @@
           (add-rule (make-rule a-signature
                                (T (foo Avar Bvar)) #f (T (foo Bvar))))))
     (check-equal? (hash-count some-rules) 2)
-    (check-equal? (length (hash-ref some-rules 'foo)) 2)))
+    (check-equal? (length (lookup-rules some-rules 'foo)) 2)
+    (check-equal? (length (lookup-rules some-rules '*variable*)) 1)
+    (check-true (empty? (lookup-rules some-rules 'bar)))))
