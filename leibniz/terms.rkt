@@ -2,22 +2,23 @@
 
 (provide
  (contract-out
-  [term?             (any/c . -> . boolean?)]
-  [term.sort         (term? . -> . sort-or-kind?)]
-  [term.vars         (term? . -> . set?)]
-  [term.key          (term? . -> . symbol?)]
-  [term.builtin-type (term? . -> . symbol?)]
-  [term.op-and-args  (term? . -> . (values (or/c #f symbol?) (or/c #f list?)))]
-  [term.match        (signature? term? term? . -> . sequence?)]
-  [term.substitute   (signature? term? substitution? . -> . term?)]
-  [substitution?     (any/c . -> . boolean?)]
-  [allowed-term?     (signature? term? . -> . boolean?)]
-  [make-term         (signature? symbol? list? . -> . (or/c #f term?))]
-  [empty-varset      (sort-graph? . -> . varset?)]
-  [add-var           (varset? symbol? sort-or-kind? . -> . varset?)]
-  [merge-varsets     (varset? varset? . -> . varset?)]
-  [var?              (any/c . -> . boolean?)]
-  [make-var          (varset? symbol? . -> . (or/c #f var?))]))
+  [term?              (any/c . -> . boolean?)]
+  [term.sort          (term? . -> . sort-or-kind?)]
+  [term.vars          (term? . -> . set?)]
+  [term.key           (term? . -> . symbol?)]
+  [term.builtin-type  (term? . -> . symbol?)]
+  [term.op-and-args   (term? . -> . (values (or/c #f symbol?) (or/c #f list?)))]
+  [term.match         (signature? term? term? . -> . sequence?)]
+  [term.substitute    (signature? term? substitution? . -> . term?)]
+  [substitution?      (any/c . -> . boolean?)]
+  [empty-substitution substitution?]
+  [allowed-term?      (signature? term? . -> . boolean?)]
+  [make-term          (signature? symbol? list? . -> . (or/c #f term?))]
+  [empty-varset       (sort-graph? . -> . varset?)]
+  [add-var            (varset? symbol? sort-or-kind? . -> . varset?)]
+  [merge-varsets      (varset? varset? . -> . varset?)]
+  [var?               (any/c . -> . boolean?)]
+  [make-var           (varset? symbol? . -> . (or/c #f var?))]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"

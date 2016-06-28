@@ -35,19 +35,45 @@
                                                  substitution))
                 (make-term signature 'true empty)))))
 
-(define (rewrite-head-once context term)
+(define (in-matching-rules context term test-conditions?)
   (define signature (context-signature context))
   (define rules (lookup-rules (context-rules context) (term.key term)))
   (unless (allowed-term? signature term)
     (error (format "term not allowed by the context")))
-  (or (for/or ([rule rules])
-        (let ([pattern (rule-pattern rule)]
-              [condition (rule-condition rule)]
-              [value (rule-replacement rule)])
-          (for/or ([s (term.match signature pattern term)])
-            (if (test-condition context condition s)
-                (term.substitute signature value s)
-                #f))))
+  (in-generator #:arity 2
+   (for* ([rule rules]
+          [s (term.match signature (rule-pattern rule) term)])
+     (when (or (not test-conditions?)
+               (test-condition context (rule-condition rule) s))
+       (yield rule s)))))
+
+(define (all-matching-rules context term test-conditions?)
+  (for/list ([(rule substitution)
+              (in-matching-rules context term test-conditions?)])
+    (cons rule substitution)))
+
+(module+ test
+  (with-context test-context
+    (define signature (context-signature test-context))
+    (check-equal? (all-matching-rules test-context (T (not true)) #f)
+                  (list (cons (make-rule signature (T (not true)) #f (T false))
+                              empty-substitution)))
+    (check-equal? (all-matching-rules test-context (T foo) #f)
+                  (list (cons (make-rule signature
+                                         (T foo) (T false) (T (not true)))
+                              empty-substitution)
+                        (cons (make-rule signature
+                                         (T foo) (T true) (T (not false)))
+                              empty-substitution)))
+    (check-equal? (all-matching-rules test-context (T foo) #t)
+                  (list (cons (make-rule signature
+                                         (T foo) (T true) (T (not false)))
+                              empty-substitution)))))
+
+(define (rewrite-head-once context term)
+  (define signature (context-signature context))
+  (or (for/first ([(rule substitution) (in-matching-rules context term #t)])
+        (term.substitute signature (rule-replacement rule) substitution))
       term))
 
 (module+ test
@@ -117,3 +143,7 @@
                   (T false))
     (check-equal? (reduce test-context (T foo))
                   (T true))))
+
+;
+; Introspection and debugging utilities
+;
