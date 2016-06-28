@@ -39,7 +39,7 @@
 
 (define (in-matching-rules context term test-conditions?)
   (define signature (context-signature context))
-  (define rules (lookup-rules (context-rules context) (term.key term)))
+  (define rules (lookup-rules (context-rules context) term))
   (unless (allowed-term? signature term)
     (error (format "term not allowed by the context")))
   (in-generator #:arity 2

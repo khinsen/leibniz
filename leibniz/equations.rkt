@@ -7,7 +7,7 @@
   [rulelist? (any/c . -> . boolean?)]
   [empty-rulelist rulelist?]
   [add-rule (rulelist? rule? . -> . rulelist?)]
-  [lookup-rules (rulelist? symbol? . -> . list?)]))
+  [lookup-rules (rulelist? term? . -> . list?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -96,8 +96,8 @@
                  (λ (l) (append l (list rule)))
                  empty)))
 
-(define (lookup-rules rulelist key)
-  (hash-ref rulelist key empty))
+(define (lookup-rules rulelist term)
+  (hash-ref rulelist (term.key term) empty))
 
 (module+ test
   (with-sig-and-vars a-signature a-varset
@@ -110,6 +110,6 @@
           (add-rule (make-rule a-signature
                                (T (foo Avar Bvar)) #f (T (foo Bvar))))))
     (check-equal? (hash-count some-rules) 2)
-    (check-equal? (length (lookup-rules some-rules 'foo)) 2)
-    (check-equal? (length (lookup-rules some-rules '*variable*)) 1)
-    (check-true (empty? (lookup-rules some-rules 'bar)))))
+    (check-equal? (length (lookup-rules some-rules (T foo))) 2)
+    (check-equal? (length (lookup-rules some-rules (T IntVar))) 1)
+    (check-true (empty? (lookup-rules some-rules (T an-A))))))
