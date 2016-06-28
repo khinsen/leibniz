@@ -7,6 +7,7 @@
   [term.vars         (term? . -> . set?)]
   [term.key          (term? . -> . symbol?)]
   [term.builtin-type (term? . -> . symbol?)]
+  [term.op-and-args  (term? . -> . (values (or/c #f symbol?) (or/c #f list?)))]
   [term.match        (signature? term? term? . -> . sequence?)]
   [term.substitute   (signature? term? substitution? . -> . term?)]
   [substitution?     (any/c . -> . boolean?)]
@@ -29,6 +30,9 @@
 
 (module+ test
   (require rackunit racket/function rackjure/threading)
+  (define-syntax-rule (check-values-equal? a b)
+    (check-equal? (call-with-values (thunk a) list)
+                  (call-with-values (thunk b) list)))
   ; Define a simple sort graph and signaturefor testing
   (define sorts
     (~> exact-number-sorts
@@ -64,6 +68,7 @@
   [term.key term]
   [term.has-vars? term]
   [term.vars term]
+  [term.op-and-args term]
   [term.match signature term other]
   [term.substitute signature term substitution]
   #:fast-defaults
@@ -73,6 +78,7 @@
     (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
+    (define (term.op-and-args x) (values #f #f))
     (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)]
    [symbol?
@@ -81,6 +87,7 @@
     (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
+    (define (term.op-and-args x) (values #f #f))
     (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)]
    [string?
@@ -89,12 +96,14 @@
     (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
+    (define (term.op-and-args x) (values #f #f))
     (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)])
   #:fallbacks
   [(define (term.builtin-type x) #f)
    (define (term.has-vars? x) #f)
    (define term.vars non-pattern-vars)
+   (define (term.op-and-args x) (values #f #f))
    (define term.match non-pattern-match)
    (define term.substitute non-pattern-substitute)])
 
@@ -109,14 +118,17 @@
   (check-equal? (term.key 0) '*integer*)
   (check-equal? (term.key 1/2) '*rational*)
   (check-false (term.has-vars? 1))
+  (check-values-equal? (term.op-and-args 1) (values #f #f))
   (check-equal? (term.sort 'foo) 'Symbol)
   (check-equal? (term.builtin-type 'foo) '*symbol*)
   (check-equal? (term.key 'foo) '*symbol*)
   (check-false (term.has-vars? 'foo))
+  (check-values-equal? (term.op-and-args 'foo) (values #f #f))
   (check-equal? (term.sort "foo") 'String)
   (check-equal? (term.builtin-type "foo") '*string*)
   (check-equal? (term.key "foo") '*string*)
-  (check-false (term.has-vars? "foo")))
+  (check-false (term.has-vars? "foo"))
+  (check-values-equal? (term.op-and-args "foo") (values #f #f)))
 
 ;
 ; Substitutions are var->term hashes describing a match.
@@ -215,25 +227,31 @@
   [(define (term.sort t)
      (op-term-sort t))
    (define (term.key t)
-     (op-term-op t))])
+     (op-term-op t))
+   (define (term.op-and-args t)
+     (values (op-term-op t) (op-term-args t)))])
 
 (module+ test
   (define an-A (make-term a-signature 'an-A empty))
   (check-equal? (term.sort an-A) 'A)
   (check-equal? (term.key an-A) 'an-A)
   (check-false (term.has-vars? an-A))
+  (check-values-equal? (term.op-and-args an-A) (values 'an-A empty))
   (define a-B (make-term a-signature 'a-B empty))
   (check-equal? (term.sort a-B) 'B)
   (check-equal? (term.key a-B) 'a-B)
   (check-false (term.has-vars? a-B))
+  (check-values-equal? (term.op-and-args a-B) (values 'a-B empty))
   (define an-X (make-term a-signature 'an-X empty))
   (check-equal? (term.sort an-X) 'X)
   (check-equal? (term.key an-X) 'an-X)
   (check-false (term.has-vars? an-X))
+  (check-values-equal? (term.op-and-args an-X) (values 'an-X empty))
   (define a-Y (make-term a-signature 'a-Y empty))
   (check-equal? (term.sort a-Y) 'Y)
   (check-equal? (term.key a-Y) 'a-Y)
   (check-false (term.has-vars? a-Y))
+  (check-values-equal? (term.op-and-args a-Y) (values 'a-Y empty))
  
   (check-equal? (term.sort (make-term a-signature 'foo empty)) 'B)
   (check-equal? (term.sort (make-term a-signature 'foo (list a-B))) 'A)
@@ -245,6 +263,9 @@
                 (kind sorts 'A))
   (check-equal? (term.key (make-term a-signature 'foo empty)) 'foo)
   (check-false (make-term a-signature 'foo (list an-X)))
+  (check-values-equal? (term.op-and-args(make-term a-signature
+                                                   'foo (list an-A)))
+                       (values 'foo (list an-A)))
 
   (check-single-match a-signature
                       (make-term a-signature 'foo (list a-B))
@@ -380,6 +401,9 @@
    (define (term.has-vars? t)
      #t)
 
+   (define (term.op-and-args t)
+     (values (op-term-op t) (op-term-args t)))
+
    (define/generic generic-match term.match)
    (define (term.match signature pattern term)
      (define (match-args p-args t-args substitution)
@@ -416,6 +440,8 @@
 (module+ test
   (define a-one-var-pattern (make-term a-signature 'foo (list B-var)))
   (check-equal? (term.sort a-one-var-pattern) 'A)
+  (check-values-equal? (term.op-and-args a-one-var-pattern)
+                       (values 'foo (list B-var)))
   (check-true (term.has-vars? a-one-var-pattern))
   (check-equal? (term.vars a-one-var-pattern) (set B-var))
   (check-single-match a-signature a-one-var-pattern
@@ -426,6 +452,8 @@
 
   (define a-two-var-pattern (make-term a-signature 'foo (list A-var B-var)))
   (check-equal? (term.sort a-two-var-pattern) 'A)
+  (check-values-equal? (term.op-and-args a-two-var-pattern)
+                       (values 'foo (list A-var B-var)))
   (check-true (term.has-vars? a-two-var-pattern))
   (check-equal? (term.vars a-two-var-pattern) (set A-var B-var))
   (check-single-match a-signature a-two-var-pattern
@@ -442,6 +470,8 @@
   (define a-double-var-pattern (make-term a-signature 'foo (list B-var B-var)))
   (define foo0 (make-term a-signature 'foo empty))
   (check-equal? (term.sort a-double-var-pattern) 'A)
+  (check-values-equal? (term.op-and-args a-double-var-pattern)
+                       (values 'foo (list B-var B-var)))
   (check-true (term.has-vars? a-double-var-pattern))
   (check-equal? (term.vars a-double-var-pattern) (set B-var))
   (check-single-match a-signature a-double-var-pattern
