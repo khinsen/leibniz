@@ -29,11 +29,13 @@
 ; Rule matching and basic term rewriting
 ;
 (define (test-condition context condition substitution)
+  (define signature (context-signature context))
   (or (not condition)
-      (let ([signature (context-signature context)])
-        (equal? (reduce context (term.substitute signature condition
-                                                 substitution))
-                (make-term signature 'true empty)))))
+      (let* ([s-condition (term.substitute signature condition substitution)]
+             [r-condition (reduce context s-condition)])
+        (let-values ([(op args) (term.op-and-args r-condition)])
+          (and (equal? op 'true)
+               (empty? args))))))
 
 (define (in-matching-rules context term test-conditions?)
   (define signature (context-signature context))
