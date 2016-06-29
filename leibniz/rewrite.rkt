@@ -23,7 +23,15 @@
     (=> (not true) false)
     (=> (not false) true)
     (=> foo (not true) #:if false)
-    (=> foo (not false) #:if true)))
+    (=> foo (not false) #:if true))
+
+  (define-context test-with-var
+    (include truth-context)
+    (op (not Boolean) Boolean)
+    (var X Boolean)
+    (=> (not true) false)
+    (=> (not false) true)
+    (=> (not (not X)) X)))
 
 ;
 ; Rule matching and basic term rewriting
@@ -79,6 +87,7 @@
       term))
 
 (module+ test
+
   (with-context test-context
     (check-equal? (rewrite-head-once test-context (T (not true)))
                   (T false))
@@ -88,7 +97,16 @@
                   (T (not (not false))))
     (check-equal? (rewrite-head-once test-context (T foo))
                   (T (not false)))
-    (check-exn exn:fail? (thunk (rewrite-head-once test-context (T 42))))))
+    (check-exn exn:fail? (thunk (rewrite-head-once test-context (T 42)))))
+
+  (with-context test-with-var
+    (check-equal? (rewrite-head-once test-with-var (T (not true)))
+                  (T false))
+    (check-equal? (rewrite-head-once test-with-var (T (not false)))
+                  (T true))
+    (check-equal? (rewrite-head-once test-with-var (T (not (not false))))
+                  (T false))
+    (check-exn exn:fail? (thunk (rewrite-head-once test-with-var (T 42))))))
 
 ;
 ; Recursive rewriting (one step)
