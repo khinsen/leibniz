@@ -144,6 +144,19 @@
              #:with r-term #`(ts:pattern #,sig-var #,vars-var replacement)
              #:with c-term (if (attribute condition)
                                #`(ts:pattern #,sig-var #,vars-var condition)
+                               #'#f))
+    (pattern ((~literal ->)
+              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
+              pattern replacement:expr
+              (~optional (~seq #:if condition)))
+             #:with vars (if (attribute var-name)
+                             #'(list (cons (quote var-name)
+                                           (quote var-sort)) ...)
+                             #'empty)
+             #:with p-term #`(ts:pattern #,sig-var #,vars-var pattern)
+             #:with r-term #'replacement
+             #:with c-term (if (attribute condition)
+                               #`(ts:pattern #,sig-var #,vars-var condition)
                                #'#f))))
 
 (define (add-vars* varset var-defs)

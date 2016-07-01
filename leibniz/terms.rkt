@@ -2,25 +2,27 @@
 
 (provide
  (contract-out
-  [term?              (any/c . -> . boolean?)]
-  [term.sort          (term? . -> . sort-or-kind?)]
-  [term.vars          (term? . -> . set?)]
-  [term.key           (term? . -> . symbol?)]
-  [term.builtin-type  (term? . -> . symbol?)]
-  [term.op-and-args   (term? . -> . (values (or/c #f symbol?) (or/c #f list?)))]
-  [term.match         (signature? term? term? . -> . sequence?)]
-  [term.substitute    (signature? term? substitution? . -> . term?)]
-  [substitution?      (any/c . -> . boolean?)]
-  [empty-substitution substitution?]
-  [allowed-term?      (signature? term? . -> . boolean?)]
-  [make-term          (signature? symbol? list? . -> . term?)]
-  [make-term*         (signature? symbol? list? . -> . (or/c #f term?))]
-  [empty-varset       (sort-graph? . -> . varset?)]
-  [add-var            (varset? symbol? sort-or-kind? . -> . varset?)]
-  [merge-varsets      (varset? varset? . -> . varset?)]
-  [var?               (any/c . -> . boolean?)]
-  [make-var           (varset? symbol? . -> . (or/c #f var?))]
-  [make-var-or-term   (signature? varset? symbol? . -> . term?)]))
+  [term?               (any/c . -> . boolean?)]
+  [term.sort           (term? . -> . sort-or-kind?)]
+  [term.vars           (term? . -> . set?)]
+  [term.key            (term? . -> . symbol?)]
+  [term.builtin-type   (term? . -> . symbol?)]
+  [term.op-and-args    (term? . -> . (values (or/c #f symbol?)
+                                             (or/c #f list?)))]
+  [term.match          (signature? term? term? . -> . sequence?)]
+  [term.substitute     (signature? term? substitution? . -> . term?)]
+  [substitution?       (any/c . -> . boolean?)]
+  [empty-substitution  substitution?]
+  [substitution-lookup (substitution? symbol? . -> . term?)]
+  [allowed-term?       (signature? term? . -> . boolean?)]
+  [make-term           (signature? symbol? list? . -> . term?)]
+  [make-term*          (signature? symbol? list? . -> . (or/c #f term?))]
+  [empty-varset        (sort-graph? . -> . varset?)]
+  [add-var             (varset? symbol? sort-or-kind? . -> . varset?)]
+  [merge-varsets       (varset? varset? . -> . varset?)]
+  [var?                (any/c . -> . boolean?)]
+  [make-var            (varset? symbol? . -> . (or/c #f var?))]
+  [make-var-or-term    (signature? varset? symbol? . -> . term?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -159,6 +161,13 @@
 
 (define (substitution-value substitution var)
   (hash-ref substitution var #f))
+
+(define (substitution-lookup substitution varname)
+  (hash-ref substitution
+            (for/first ([(v s) substitution]
+                        #:when (equal? (var-name v) varname))
+              v)
+            #f))
 
 (module+ test
   ; Substitutions are meant to be used as var->term mappings,

@@ -3,7 +3,8 @@
 (provide
  (struct-out rule)
  (contract-out
-  [make-rule (signature? term? (or/c #f term?) term? . -> . rule?)]
+  [make-rule (signature? term? (or/c #f term?) (or/c term? procedure?)
+              . -> . rule?)]
   [rulelist? (any/c . -> . boolean?)]
   [empty-rulelist rulelist?]
   [add-rule (rulelist? rule? . -> . rulelist?)]
@@ -31,11 +32,14 @@
     (error (format "Pattern ~s not allowed within signature" pattern)))
   (when (and condition (not (allowed-term? signature condition)))
     (error (format "Term ~s not allowed within signature" condition)))
-  (unless (allowed-term? signature replacement)
+  (unless (or (procedure? replacement)
+              (allowed-term? signature replacement))
     (error (format "Term ~s not allowed within signature" replacement)))
   (define pattern-vars (term.vars pattern))
   (define condition-vars (and condition (term.vars condition)))
-  (define replacement-vars (term.vars replacement))
+  (define replacement-vars (if (procedure? replacement)
+                               (set)
+                               (term.vars replacement)))
   (define sort-graph (signature-sort-graph signature))
   (when condition
     (unless (conforms-to? sort-graph (term.sort condition) 'Boolean)
@@ -49,8 +53,9 @@
   (unless (set-empty?
            (set-subtract replacement-vars pattern-vars))
     (error (format "Term ~s contains variables that are not in the rule pattern" replacement)))
-  (unless (conforms-to? sort-graph
-                        (term.sort replacement) (term.sort pattern))
+  (unless (or (procedure? replacement)
+              (conforms-to? sort-graph
+                            (term.sort replacement) (term.sort pattern)))
     (error (format "Term ~s must be of sort ~s"
                    replacement (term.sort pattern))))
   (rule pattern condition replacement))

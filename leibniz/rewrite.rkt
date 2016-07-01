@@ -31,7 +31,22 @@
     (var X Boolean)
     (=> (not true) false)
     (=> (not false) true)
-    (=> (not (not X)) X)))
+    (=> (not (not X)) X))
+
+  (define-context test-with-procedure
+    (include truth-context)
+    (op (not Boolean) Boolean)
+    (var X Boolean)
+    (-> (not X) (λ (signature pattern condition substitution)
+                  (let ([x (substitution-lookup substitution 'X)])
+                    (define-values (op args) (term.op-and-args x))
+                    (cond
+                      [(equal? op 'true)
+                       (make-term signature 'false empty)]
+                      [(equal? op 'false)
+                       (make-term signature 'true empty)]
+                      [(equal? op 'not)
+                       (first args)]))))))
 
 ;
 ; Rule matching and basic term rewriting
@@ -83,7 +98,14 @@
 (define (rewrite-head-once context term)
   (define signature (context-signature context))
   (or (for/first ([(rule substitution) (in-matching-rules context term #t)])
-        (term.substitute signature (rule-replacement rule) substitution))
+        (let ([replacement (rule-replacement rule)])
+          (if (procedure? replacement)
+              (with-handlers ([exn:fail? (lambda (v) #f)])
+                  (replacement signature
+                               (rule-pattern rule)
+                               (rule-condition rule)
+                               substitution))
+              (term.substitute signature replacement substitution))))
       term))
 
 (module+ test
@@ -106,7 +128,17 @@
                   (T true))
     (check-equal? (rewrite-head-once test-with-var (T (not (not false))))
                   (T false))
-    (check-exn exn:fail? (thunk (rewrite-head-once test-with-var (T 42))))))
+    (check-exn exn:fail? (thunk (rewrite-head-once test-with-var (T 42)))))
+
+  (with-context test-with-procedure
+    (check-equal? (rewrite-head-once test-with-procedure (T (not true)))
+                  (T false))
+    (check-equal? (rewrite-head-once test-with-procedure (T (not false)))
+                  (T true))
+    (check-equal? (rewrite-head-once test-with-procedure (T (not (not false))))
+                  (T false))
+    (check-exn exn:fail?
+               (thunk (rewrite-head-once test-with-procedure (T 42))))))
 
 ;
 ; Recursive rewriting (one step)
