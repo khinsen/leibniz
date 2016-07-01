@@ -132,13 +132,22 @@
 
   (define-syntax-class (rule sig-var vars-var)
     #:description "rule declaration"
-    (pattern ((~literal =>) pattern replacement
+    (pattern ((~literal =>)
+              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
+              pattern replacement
               (~optional (~seq #:if condition)))
+             #:with vars (if (attribute var-name)
+                             #'(list (cons (quote var-name)
+                                           (quote var-sort)) ...)
+                             #'empty)
              #:with p-term #`(ts:pattern #,sig-var #,vars-var pattern)
              #:with r-term #`(ts:pattern #,sig-var #,vars-var replacement)
              #:with c-term (if (attribute condition)
                                #`(ts:pattern #,sig-var #,vars-var condition)
                                #'#f))))
+
+(define (add-vars* varset var-defs)
+  (foldl (λ (vd vs) (add-var vs (car vd) (cdr vd))) varset var-defs))
 
 (define-syntax (context- stx)
   (syntax-parse stx
@@ -146,7 +155,7 @@
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
         var-defs:variable ...
-        (~var rule-defs (rule #'signature #'varset)) ...)
+        (~var rule-defs (rule #'signature #'r-varset)) ...)
      #`(let* ([initial (foldl merge-contexts empty-context
                               (list included-contexts.context ...))]
               [sorts (~> (context-sort-graph initial) sort-defs.value ...)]
@@ -158,10 +167,11 @@
                           var-defs.value ...)]
               [rules (~> empty-rulelist
                          (add-rule
-                          (make-rule signature
-                                     rule-defs.p-term
-                                     rule-defs.c-term
-                                     rule-defs.r-term))
+                          (let ([r-varset (add-vars* varset rule-defs.vars)])
+                            (make-rule signature
+                                       rule-defs.p-term
+                                       rule-defs.c-term
+                                       rule-defs.r-term)))
                          ...)])
          (context sorts signature varset rules))]))
 
@@ -227,4 +237,21 @@
   (check-equal? (length (hash-ref (context-rules test) 'foo)) 2 )
 
   (with-context test
-    (check-equal? (term.sort (T an-A)) 'A)))
+    (check-equal? (term.sort (T an-A)) 'A))
+
+  (define-context test2
+    (include truth-context)
+    (sort A) (sort B)
+    (op an-A A)
+    (op a-B B)
+    (op (foo B) A)
+    (op (foo A) B)
+    (=> (foo an-A) a-B)
+    (=> #:vars ([X B])
+        (foo X) an-A
+        #:if true))
+
+  (check-equal? (context-sort-graph test) (context-sort-graph test2))
+  (check-equal? (context-signature test) (context-signature test2))
+  ; context-vars must be different
+  (check-equal? (context-rules test) (context-rules test2)))
