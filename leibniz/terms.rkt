@@ -13,12 +13,14 @@
   [substitution?      (any/c . -> . boolean?)]
   [empty-substitution substitution?]
   [allowed-term?      (signature? term? . -> . boolean?)]
-  [make-term          (signature? symbol? list? . -> . (or/c #f term?))]
+  [make-term          (signature? symbol? list? . -> . term?)]
+  [make-term*         (signature? symbol? list? . -> . (or/c #f term?))]
   [empty-varset       (sort-graph? . -> . varset?)]
   [add-var            (varset? symbol? sort-or-kind? . -> . varset?)]
   [merge-varsets      (varset? varset? . -> . varset?)]
   [var?               (any/c . -> . boolean?)]
-  [make-var           (varset? symbol? . -> . (or/c #f var?))]))
+  [make-var           (varset? symbol? . -> . (or/c #f var?))]
+  [make-var-or-term   (signature? varset? symbol? . -> . term?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -263,7 +265,7 @@
   (check-equal? (term.sort (make-term a-signature 'foo (list an-A an-A)))
                 (kind sorts 'A))
   (check-equal? (term.key (make-term a-signature 'foo empty)) 'foo)
-  (check-false (make-term a-signature 'foo (list an-X)))
+  (check-exn exn:fail? (thunk (make-term a-signature 'foo (list an-X))))
   (check-values-equal? (term.op-and-args(make-term a-signature
                                                    'foo (list an-A)))
                        (values 'foo (list an-A)))
@@ -429,10 +431,10 @@
 
    (define/generic generic-substitute term.substitute)
    (define (term.substitute signature pattern substitution)
-     (make-term signature
-                (op-term-op pattern)
-                (for/list ([arg (op-term-args pattern)])
-                  (generic-substitute signature arg substitution))))
+     (make-term* signature
+                 (op-term-op pattern)
+                 (for/list ([arg (op-term-args pattern)])
+                   (generic-substitute signature arg substitution))))
 
    (define/generic generic-vars term.vars)
    (define (term.vars pattern)
@@ -503,15 +505,27 @@
     [else
      (error "Unknown term type")]))
 
-(define (make-term signature name args)
-  (for ([arg args])
-    (unless (allowed-term? signature arg)
-      (error "argument term not compatible with signature")))
+; A minimal make-term without error checking
+(define (make-term* signature name args)
   (define rank (lookup-op signature name (map term.sort args)))
   (and rank
        (if (ormap term.has-vars? args)
            (op-pattern signature name args (cdr rank))
            (op-term signature name args (cdr rank)))))
+
+; The safe-to-use make-term for general use
+(define (make-term signature name args)
+  (for ([arg args])
+    (unless (allowed-term? signature arg)
+      (error "argument term not compatible with signature")))
+  (or (make-term* signature name args)
+      (error (format "no operator definition for (~s ~s)"
+                     name (map term.sort args)))))
+
+; Make a var or a zero-arg term, searching varset first
+(define (make-var-or-term signature varset name)
+  (or (make-var varset name)
+      (make-term signature name empty)))
 
 (module+ test
   (define simple-sorts

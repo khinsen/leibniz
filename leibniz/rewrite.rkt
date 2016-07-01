@@ -122,7 +122,7 @@
                                     ; unnecessary term construction. Note the
                                     ; use of eq? for doing a fast check.
                                     term
-                                    (make-term signature op reduced-args))])
+                                    (make-term* signature op reduced-args))])
         (rewrite-head-once context with-reduced-args))
       ; builtin term type: no args
       (rewrite-head-once context term)))

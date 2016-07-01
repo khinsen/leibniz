@@ -13,26 +13,13 @@
            racket/function))
 
 ;
-; Rough validation. This needs to be improved as the
-; term construction API gets clearer.
+; Validation for atomic terms. op-terms are validated by make-term.
 ;
 (define (validate-atomic signature value)
   (if (allowed-term? signature value)
       value
       (error (format "~s: builtin term type ~s not allowed by signature"
                      value (term.builtin-type value)))))
-
-(define (validate-op-term op value)
-  (or value
-      (error (format "no operator definition for ~s" op))))
-
-;
-; Make a var (if defined in varset) or a zero-arg operator term.
-; This should perhaps be in terms.rkt
-;
-(define (make-var-or-term signature varset name)
-  (or (make-var varset name)
-      (make-term signature name empty)))
 
 ;
 ; Basic term construction syntax
@@ -54,15 +41,11 @@
     (pattern (~var a (atom sig-var)) #:with value #'a.value)
     (pattern symbol:id
              #:with value
-             #`(validate-op-term
-                (quote symbol)
-                (make-term #,sig-var (quote symbol) empty)))
+             #`(make-term #,sig-var (quote symbol) empty))
     (pattern (symbol:id (~var arg-terms (term sig-var)) ...)
              #:with value
-             #`(validate-op-term
-                (cons (quote symbol) (map term.sort (list arg-terms.value ...)))
-                (make-term #,sig-var (quote symbol)
-                           (list arg-terms.value ...)))))
+             #`(make-term #,sig-var (quote symbol)
+                          (list arg-terms.value ...))))
 
   (define-syntax-class (term-pattern sig-var vars-var)
     #:description "pattern"
@@ -70,15 +53,11 @@
     (pattern (~var a (atom sig-var)) #:with value #'a.value)
     (pattern symbol:id
              #:with value
-             #`(validate-op-term
-                (quote symbol)
-                (make-var-or-term #,sig-var #,vars-var (quote symbol))))
+             #`(make-var-or-term #,sig-var #,vars-var (quote symbol)))
     (pattern (symbol:id (~var arg-terms (term-pattern sig-var vars-var)) ...)
              #:with value
-             #`(validate-op-term
-                (cons (quote symbol) (map term.sort (list arg-terms.value ...)))
-                (make-term #,sig-var (quote symbol)
-                           (list arg-terms.value ...))))))
+             #`(make-term #,sig-var (quote symbol)
+                          (list arg-terms.value ...)))))
 
 (define-syntax (term stx)
   (syntax-parse stx
