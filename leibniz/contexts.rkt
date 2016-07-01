@@ -130,14 +130,14 @@
              #:with value
              #'(add-var (quote var-name) (quote sort))))
 
-  (define-syntax-class rule
+  (define-syntax-class (rule sig-var vars-var)
     #:description "rule declaration"
     (pattern ((~literal =>) pattern replacement
               (~optional (~seq #:if condition)))
-             #:with p-term #'(ts:T pattern)
-             #:with r-term #'(ts:T replacement)
+             #:with p-term #`(ts:pattern #,sig-var #,vars-var pattern)
+             #:with r-term #`(ts:pattern #,sig-var #,vars-var replacement)
              #:with c-term (if (attribute condition)
-                               #'(ts:T condition)
+                               #`(ts:pattern #,sig-var #,vars-var condition)
                                #'#f))))
 
 (define-syntax (context- stx)
@@ -146,8 +146,8 @@
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
         var-defs:variable ...
-        rule-defs:rule ...)
-     #'(let* ([initial (foldl merge-contexts empty-context
+        (~var rule-defs (rule #'signature #'varset)) ...)
+     #`(let* ([initial (foldl merge-contexts empty-context
                               (list included-contexts.context ...))]
               [sorts (~> (context-sort-graph initial) sort-defs.value ...)]
               [signature (~> (merge-signatures (empty-signature sorts)
@@ -156,13 +156,13 @@
               [varset (~> (merge-varsets (empty-varset sorts)
                                          (context-vars initial))
                           var-defs.value ...)]
-              [rules (ts:with-sig-and-vars signature varset
-                       (~> empty-rulelist
-                           (add-rule (make-rule signature
-                                                rule-defs.p-term
-                                                rule-defs.c-term
-                                                rule-defs.r-term))
-                           ...))])
+              [rules (~> empty-rulelist
+                         (add-rule
+                          (make-rule signature
+                                     rule-defs.p-term
+                                     rule-defs.c-term
+                                     rule-defs.r-term))
+                         ...)])
          (context sorts signature varset rules))]))
 
 (define-syntax (define-context stx)
@@ -172,7 +172,7 @@
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
         var-defs:variable ...
-        rule-defs:rule ...)
+        (~var rule-defs (rule #'signature #'varset)) ...)
      #'(define name
          (context- included-contexts ...
                    sort-defs ...
@@ -228,4 +228,3 @@
 
   (with-context test
     (check-equal? (term.sort (T an-A)) 'A)))
-
