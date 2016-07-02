@@ -13,7 +13,7 @@
   [term.substitute     (signature? term? substitution? . -> . term?)]
   [substitution?       (any/c . -> . boolean?)]
   [empty-substitution  substitution?]
-  [substitution-lookup (substitution? symbol? . -> . term?)]
+  [substitution-value  (substitution? symbol? . -> . term?)]
   [allowed-term?       (signature? term? . -> . boolean?)]
   [make-term           (signature? symbol? list? . -> . term?)]
   [make-term*          (signature? symbol? list? . -> . (or/c #f term?))]
@@ -136,7 +136,7 @@
   (check-values-equal? (term.op-and-args "foo") (values #f #f)))
 
 ;
-; Substitutions are var->term hashes describing a match.
+; Substitutions are varname->term hashes describing a match.
 ; Combining two substitutions that are contradictory leads to
 ; a non-match signalled by the special value #f.
 ;
@@ -145,34 +145,24 @@
 
 (define empty-substitution (hash))
 
-(define (substitution var term)
-  (hash var term))
+(define (substitution varname term)
+  (hash varname term))
 
 (define (merge-substitutions s1 s2)
   (if (not s2)
       #f
       (for/fold ([s-acc s1])
-                ([(var value) s2])
+                ([(varname value) s2])
         #:break (not s-acc)
-        (if (and (hash-has-key? s-acc var)
-                 (not (equal? (hash-ref s-acc var) value)))
+        (if (and (hash-has-key? s-acc varname)
+                 (not (equal? (hash-ref s-acc varname) value)))
             #f
-            (hash-set s-acc var value)))))
+            (hash-set s-acc varname value)))))
 
-(define (substitution-value substitution var)
-  (hash-ref substitution var #f))
-
-(define (substitution-lookup substitution varname)
-  (hash-ref substitution
-            (for/first ([(v s) substitution]
-                        #:when (equal? (var-name v) varname))
-              v)
-            #f))
+(define (substitution-value substitution varname)
+  (hash-ref substitution varname #f))
 
 (module+ test
-  ; Substitutions are meant to be used as var->term mappings,
-  ; but they are really just hash maps with special key collision
-  ; handling. The tests use symbol keys for simplicity.
   (check-equal? (merge-substitutions (substitution 'A 1)
                                      (substitution 'B 2))
                 (hash 'A 1 'B 2))
@@ -221,9 +211,7 @@
             term))
   (define-simple-check (check-no-substitution signature pattern)
     (equal? (term.substitute signature pattern
-                             (substitution
-                              (make-var a-varset 'StrangelyNamedVar)
-                              0))
+                             (substitution 'StrangelyNamedVar 0))
             pattern)))
 
 (module+ test
@@ -351,9 +339,9 @@
      (conditional-match (conforms-to? (signature-sort-graph signature)
                                       (generic-sort other)
                                       (var-sort-or-kind var))
-                        (substitution var other)))
+                        (substitution (var-name var) other)))
    (define (term.substitute signature var substitution)
-     (define value (substitution-value substitution var))
+     (define value (substitution-value substitution (var-name var)))
      (if value
          value
          var))
@@ -389,9 +377,9 @@
   (check-equal? (term.vars Integer-var) (set Integer-var))
   (check-equal? (term.key Integer-var) '*variable*)
   (check-single-match a-signature Zero-var 0
-                      (substitution Zero-var 0))
+                      (substitution 'Zero-var 0))
   (check-single-match a-signature Integer-var 0
-                      (substitution Integer-var 0))
+                      (substitution 'Integer-var 0))
   (check-no-match a-signature NonZeroInteger-var 0)
   (check-self-substitution a-signature Zero-var 0)
   (check-no-substitution a-signature Zero-var))
@@ -458,7 +446,7 @@
   (check-equal? (term.vars a-one-var-pattern) (set B-var))
   (check-single-match a-signature a-one-var-pattern
                       (make-term a-signature 'foo (list a-B))
-                      (substitution B-var a-B))
+                      (substitution 'B-var a-B))
   (check-no-match a-signature a-one-var-pattern
                   (make-term a-signature 'foo (list an-A)))
 
@@ -471,13 +459,13 @@
   (check-single-match a-signature a-two-var-pattern
                       (make-term a-signature 'foo (list an-A a-B))
                       (merge-substitutions
-                       (substitution B-var a-B)
-                       (substitution A-var an-A)))
+                       (substitution 'B-var a-B)
+                       (substitution 'A-var an-A)))
   (check-single-match a-signature a-two-var-pattern
                       (make-term a-signature 'foo (list a-B a-B))
                       (merge-substitutions
-                       (substitution B-var a-B)
-                       (substitution A-var a-B)))
+                       (substitution 'B-var a-B)
+                       (substitution 'A-var a-B)))
 
   (define a-double-var-pattern (make-term a-signature 'foo (list B-var B-var)))
   (define foo0 (make-term a-signature 'foo empty))
@@ -488,10 +476,10 @@
   (check-equal? (term.vars a-double-var-pattern) (set B-var))
   (check-single-match a-signature a-double-var-pattern
                       (make-term a-signature 'foo (list a-B a-B))
-                      (substitution B-var a-B))
+                      (substitution 'B-var a-B))
   (check-single-match a-signature a-double-var-pattern
                       (make-term a-signature 'foo (list foo0 foo0))
-                      (substitution B-var foo0))
+                      (substitution 'B-var foo0))
   (check-no-match a-signature a-double-var-pattern
                   (make-term a-signature 'foo (list a-B foo0)))
   (check-self-substitution a-signature

@@ -38,7 +38,7 @@
     (op (not Boolean) Boolean)
     (var X Boolean)
     (-> (not X) (λ (signature pattern condition substitution)
-                  (let ([x (substitution-lookup substitution 'X)])
+                  (let ([x (substitution-value substitution 'X)])
                     (define-values (op args) (term.op-and-args x))
                     (cond
                       [(equal? op 'true)
