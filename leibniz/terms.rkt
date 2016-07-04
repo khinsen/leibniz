@@ -22,7 +22,8 @@
   [merge-varsets       (varset? varset? . -> . varset?)]
   [var?                (any/c . -> . boolean?)]
   [make-var            (varset? symbol? . -> . (or/c #f var?))]
-  [make-var-or-term    (signature? varset? symbol? . -> . term?)]))
+  [make-var-or-term    (signature? varset? symbol? . -> . term?)]
+  [write-term          ((term? output-port?) (any/c) . ->* . void?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -219,6 +220,37 @@
   (check-no-match a-signature 0 1))
 
 ;
+; Readable output for terms
+;
+(define (write-term term port [mode #f])
+  (cond
+    [(op-term? term)
+     (if (empty? (op-term-args term))
+         (write (op-term-op term) port)
+         (begin
+           (write-string "(" port)
+           (write (op-term-op term) port)
+           (for ([arg (op-term-args term)])
+             (write-string " " port)
+             (write-term arg port mode))
+           (write-string ")" port)))]
+    [(symbol? term)
+     (begin
+       (write-string "'" port)
+       (write term port))]
+    [else
+     (write term port)]))
+
+(module+ test
+  (define (term->string term)
+    (let ([o (open-output-string)])
+      (write-term term o)
+      (get-output-string o)))
+  (check-equal? (term->string 2) "2")
+  (check-equal? (term->string 'foo) "'foo")
+  (check-equal? (term->string "foo") "\"foo\""))
+
+;
 ; Operator-defined terms
 ;
 (struct op-term (signature op args sort)
@@ -229,7 +261,9 @@
    (define (term.key t)
      (op-term-op t))
    (define (term.op-and-args t)
-     (values (op-term-op t) (op-term-args t)))])
+     (values (op-term-op t) (op-term-args t)))]
+  #:methods gen:custom-write
+  [(define write-proc write-term)])
 
 (module+ test
   (define an-A (make-term a-signature 'an-A empty))
@@ -346,7 +380,10 @@
          value
          var))
    (define (term.vars var)
-     (set var))])
+     (set var))]
+  #:methods gen:custom-write
+  [(define (write-proc var port mode)
+     (write (var-name var) port))])
 
 (define (make-var varset symbol)
   (define sort-or-kind (lookup-var varset symbol))
@@ -435,7 +472,9 @@
 
    (define/generic generic-vars term.vars)
    (define (term.vars pattern)
-     (foldl set-union (set) (map generic-vars (op-term-args pattern))))])
+     (foldl set-union (set) (map generic-vars (op-term-args pattern))))]
+  #:methods gen:custom-write
+  [(define write-proc write-term)])
 
 (module+ test
   (define a-one-var-pattern (make-term a-signature 'foo (list B-var)))
@@ -542,6 +581,8 @@
   (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list 1))))
   ; All arguments correct
   (let* ([a-B (make-term simple-signature 'foo empty)]
-         [an-A (make-term simple-signature 'foo (list a-B))])
-    (check-equal? (term.sort (make-term simple-signature 'foo (list an-A a-B)))
-                  'A)))
+         [an-A (make-term simple-signature 'foo (list a-B))]
+         [test (make-term simple-signature 'foo (list an-A a-B))])
+    (check-equal? (term.sort test) 'A)
+    (check-equal? (term->string test) "(foo (foo foo) foo)")))
+
