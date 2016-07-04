@@ -1,5 +1,9 @@
 #lang racket
 
+(provide
+ (contract-out
+  [reduce (context? term? . -> . term?)]))
+
 (require "./sorts.rkt"
          "./operators.rkt"
          "./terms.rkt"
