@@ -2,15 +2,14 @@
 
 (provide
  (contract-out
-  [boolean-context context?]))
+  [boolean context?]))
 
 (require "./builtins.rkt"
          "./terms.rkt"
-         "./contexts.rkt")
+         "./context-syntax.rkt"
+         (only-in "./contexts.rkt" context? truth-context))
 
 (module+ test
-  (require "./term-syntax.rkt")
-  (require "./rewrite.rkt")
   (require chk))
 
 ;
@@ -19,7 +18,7 @@
 ; Adapted from
 ; http://maude.cs.uiuc.edu/maude1/manual/maude-manual-html/maude-manual_16.html
 ;
-(define-context boolean-context
+(define-context boolean
   (include truth-context)
   (op (not Boolean) Boolean)
   (op (and Boolean Boolean) Boolean)
@@ -57,23 +56,23 @@
       (=> X Y) (not (xor X (and X Y)))))
 
 (module+ test
-  (with-context boolean-context
+  (with-context boolean
     (chk
-     #:= (reduce boolean-context (T (not true)))        (T false)
-     #:= (reduce boolean-context (T (not false)))       (T true)
-     #:= (reduce boolean-context (T (and true true)))   (T true)
-     #:= (reduce boolean-context (T (and true false)))  (T false)
-     #:= (reduce boolean-context (T (and false true)))  (T false)
-     #:= (reduce boolean-context (T (and false false))) (T false)
-     #:= (reduce boolean-context (T (or true true)))    (T true)
-     #:= (reduce boolean-context (T (or true false)))   (T true)
-     #:= (reduce boolean-context (T (or false true)))   (T true)
-     #:= (reduce boolean-context (T (or false false)))  (T false)
-     #:= (reduce boolean-context (T (xor true true)))   (T false)
-     #:= (reduce boolean-context (T (xor true false)))  (T true)
-     #:= (reduce boolean-context (T (xor false true)))  (T true)
-     #:= (reduce boolean-context (T (xor false false))) (T false)
-     #:= (reduce boolean-context (T (=> true true)))    (T true)
-     #:= (reduce boolean-context (T (=> true false)))   (T false)
-     #:= (reduce boolean-context (T (=> false true)))   (T true)
-     #:= (reduce boolean-context (T (=> false false)))  (T true))))
+     #:= (RT (not true))        (T false)
+     #:= (RT (not false))       (T true)
+     #:= (RT (and true true))   (T true)
+     #:= (RT (and true false))  (T false)
+     #:= (RT (and false true))  (T false)
+     #:= (RT (and false false)) (T false)
+     #:= (RT (or true true))    (T true)
+     #:= (RT (or true false))   (T true)
+     #:= (RT (or false true))   (T true)
+     #:= (RT (or false false))  (T false)
+     #:= (RT (xor true true))   (T false)
+     #:= (RT (xor true false))  (T true)
+     #:= (RT (xor false true))  (T true)
+     #:= (RT (xor false false)) (T false)
+     #:= (RT (=> true true))    (T true)
+     #:= (RT (=> true false))   (T false)
+     #:= (RT (=> false true))   (T true)
+     #:= (RT (=> false false))  (T true))))
