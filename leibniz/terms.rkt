@@ -9,15 +9,18 @@
   [term.builtin-type   (term? . -> . symbol?)]
   [term.op-and-args    (term? . -> . (values (or/c #f symbol?)
                                              (or/c #f list?)))]
+  [term.in-signature (term? signature? . -> . term?)]
   [term.match          (signature? term? term? . -> . sequence?)]
   [term.substitute     (signature? term? substitution? . -> . term?)]
   [substitution?       (any/c . -> . boolean?)]
   [empty-substitution  substitution?]
   [substitution-value  (substitution? symbol? . -> . term?)]
   [allowed-term?       (signature? term? . -> . boolean?)]
+  [valid-term?         (signature? any/c . -> . boolean?)]
   [make-term           (signature? symbol? list? . -> . term?)]
   [make-term*          (signature? symbol? list? . -> . (or/c #f term?))]
   [empty-varset        (sort-graph? . -> . varset?)]
+  [varset-sort-graph   (varset? . -> . sort-graph?)]
   [add-var             (varset? symbol? sort-or-kind? . -> . varset?)]
   [merge-varsets       (varset? varset? . -> . varset?)]
   [var?                (any/c . -> . boolean?)]
@@ -75,6 +78,7 @@
   [term.has-vars? term]
   [term.vars term]
   [term.op-and-args term]
+  [term.in-signature term signature]
   [term.match signature term other]
   [term.substitute signature term substitution]
   #:fast-defaults
@@ -85,6 +89,7 @@
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
     (define (term.op-and-args x) (values #f #f))
+    (define (term.in-signature term signature) term)
     (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)]
    [symbol?
@@ -94,6 +99,7 @@
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
     (define (term.op-and-args x) (values #f #f))
+    (define (term.in-signature term signature) term)
     (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)]
    [string?
@@ -103,6 +109,7 @@
     (define (term.has-vars? x) #f)
     (define term.vars non-pattern-vars)
     (define (term.op-and-args x) (values #f #f))
+    (define (term.in-signature term signature) term)
     (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)])
   #:fallbacks
@@ -110,6 +117,7 @@
    (define (term.has-vars? x) #f)
    (define term.vars non-pattern-vars)
    (define (term.op-and-args x) (values #f #f))
+   (define (term.in-signature term signature) term)
    (define term.match non-pattern-match)
    (define term.substitute non-pattern-substitute)])
 
@@ -125,16 +133,19 @@
   (check-equal? (term.key 1/2) '*rational*)
   (check-false (term.has-vars? 1))
   (check-values-equal? (term.op-and-args 1) (values #f #f))
+  (check-equal? (term.in-signature 1 a-signature) 1)
   (check-equal? (term.sort 'foo) 'Symbol)
   (check-equal? (term.builtin-type 'foo) '*symbol*)
   (check-equal? (term.key 'foo) '*symbol*)
   (check-false (term.has-vars? 'foo))
   (check-values-equal? (term.op-and-args 'foo) (values #f #f))
+  (check-equal? (term.in-signature 'foo a-signature) 'foo)
   (check-equal? (term.sort "foo") 'String)
   (check-equal? (term.builtin-type "foo") '*string*)
   (check-equal? (term.key "foo") '*string*)
   (check-false (term.has-vars? "foo"))
-  (check-values-equal? (term.op-and-args "foo") (values #f #f)))
+  (check-values-equal? (term.op-and-args "foo") (values #f #f))
+  (check-equal? (term.in-signature "foo" a-signature) "foo"))
 
 ;
 ; Substitutions are varname->term hashes describing a match.
@@ -253,6 +264,7 @@
 ;
 ; Operator-defined terms
 ;
+
 (struct op-term (signature op args sort)
   #:transparent
   #:methods gen:term
@@ -261,7 +273,9 @@
    (define (term.key t)
      (op-term-op t))
    (define (term.op-and-args t)
-     (values (op-term-op t) (op-term-args t)))]
+     (values (op-term-op t) (op-term-args t)))
+   (define (term.in-signature term signature)
+     (op-term-in-signature term signature))]
   #:methods gen:custom-write
   [(define write-proc write-term)])
 
@@ -380,7 +394,15 @@
          value
          var))
    (define (term.vars var)
-     (set var))]
+     (set var))
+   (define (term.in-signature x signature)
+     (define sorts (signature-sort-graph signature))
+     (var sorts
+          (var-name x) 
+          (let ([sk (var-sort-or-kind x)])
+            (if (sort? sk)
+                sk
+                (extended-kind sorts sk)))))]
   #:methods gen:custom-write
   [(define (write-proc var port mode)
      (write (var-name var) port))])
@@ -440,6 +462,9 @@
 
    (define (term.op-and-args t)
      (values (op-term-op t) (op-term-args t)))
+
+   (define (term.in-signature term signature)
+     (op-term-in-signature term signature))
 
    (define/generic generic-match term.match)
    (define (term.match signature pattern term)
@@ -541,6 +566,13 @@
     [else
      (error "Unknown term type")]))
 
+(define (valid-term? signature term)
+    (define-values (op args) (term.op-and-args term))
+    (and (term? term)
+         (allowed-term? signature term)
+         (or (not op)
+             (andmap (λ (arg) (valid-term? signature arg)) args))))
+
 ; A minimal make-term without error checking
 (define (make-term* signature name args)
   (define rank (lookup-op signature name (map term.sort args)))
@@ -563,6 +595,12 @@
   (or (make-var varset name)
       (make-term signature name empty)))
 
+; Adapt a term to a larger signature. Used for merging contexts.
+(define (op-term-in-signature term signature)
+  (define-values (op args) (term.op-and-args term))
+  (make-term* signature op
+              (map (λ (t) (term.in-signature t signature)) args)))
+
 (module+ test
   (define simple-sorts
     (~> empty-sort-graph
@@ -572,7 +610,7 @@
     (~> (empty-signature simple-sorts)
         (add-op 'foo empty 'B)
         (add-op 'foo (list 'B) 'A)
-        (add-op 'foo (list 'A 'B) 'A)))
+        (add-op 'foo (list 'A 'B) 'B)))
   ; Error: Argument term was made for a-signature
   (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list a-B))))
   ; Error: variable from an incompatible varset
@@ -580,9 +618,23 @@
   ; Error: integers are not allowed in simple-signature
   (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list 1))))
   ; All arguments correct
-  (let* ([a-B (make-term simple-signature 'foo empty)]
-         [an-A (make-term simple-signature 'foo (list a-B))]
-         [test (make-term simple-signature 'foo (list an-A a-B))])
-    (check-equal? (term.sort test) 'A)
-    (check-equal? (term->string test) "(foo (foo foo) foo)")))
+  (define ss-a-B (make-term simple-signature 'foo empty))
+  (define ss-an-A (make-term simple-signature 'foo (list ss-a-B)))
+  (define ss-test (make-term simple-signature 'foo (list ss-an-A ss-a-B)))
+
+  (check-equal? (term.sort ss-test) 'B)
+  (check-equal? (term->string ss-test) "(foo (foo foo) foo)")
+  (check-true (valid-term? simple-signature ss-a-B))
+  (check-true (valid-term? simple-signature ss-an-A))
+  (check-true (valid-term? simple-signature ss-test))
+
+  (define larger-signature
+    (~> simple-signature
+        (add-op 'foo (list 'A 'A) 'A)))
+  (check-true (valid-term? larger-signature 
+                           (term.in-signature ss-a-B larger-signature)))
+  (check-true (valid-term? larger-signature 
+                           (term.in-signature ss-an-A larger-signature)))
+  (check-true (valid-term? larger-signature 
+                           (term.in-signature ss-test larger-signature))))
 
