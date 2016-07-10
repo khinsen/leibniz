@@ -52,7 +52,7 @@
       (add-sort 'String)))
 
 (define string-signature
-  (empty-signature symbol-sorts #:builtins (set '*string*)))
+  (empty-signature string-sorts #:builtins (set '*string*)))
 
 ;
 ; Integers and their subsets
