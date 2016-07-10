@@ -20,6 +20,7 @@
          "./terms.rkt"
          (prefix-in ts: "./term-syntax.rkt")
          "./equations.rkt"
+         "./condd.rkt"
          rackjure/threading
          racket/stxparam
          (for-syntax (prefix-in ts: "./term-syntax.rkt")
@@ -40,6 +41,16 @@
 (struct context (sort-graph signature vars rules)
         #:transparent)
 
+(define (valid-context? context)
+  (condd
+   [(not (context? context)) #f]
+   #:do (define sorts (context-sort-graph context))
+   #:do (define signature (context-signature context))
+   [(not (equal? (signature-sort-graph signature) sorts)) #f]
+   [(not (equal? (varset-sort-graph (context-vars context)) sorts)) #f]
+   [else (for/and ([r (in-rules (context-rules context))])
+           (valid-rule? signature r))]))
+
 (define empty-context
   (let ([sorts empty-sort-graph])
     (context sorts
@@ -47,13 +58,18 @@
              (empty-varset sorts)
              empty-rulelist)))
 
+(module+ test
+  (check-true (valid-context? empty-context)))
+
 (define (merge-contexts context1 context2)
   (let* ([signature (merge-signatures (context-signature context1)
                                       (context-signature context2))]
          [vars (merge-varsets (context-vars context1)
                               (context-vars context2))]
          [sorts (signature-sort-graph signature)]
-         [rules empty-rulelist])
+         [rules (merge-rulelists signature
+                                 (context-rules context1)
+                                 (context-rules context2))])
     (context sorts signature vars rules)))
 
 ;
@@ -94,7 +110,9 @@
                        (list truth-context string-context exact-number-context))
                 (foldl merge-contexts empty-context
                        (list string-context exact-number-context truth-context)))
-)
+  (check-true (valid-context? (merge-contexts symbol-context string-context)))
+  (check-true (valid-context? (merge-contexts truth-context exact-number-context))))
+
 ;
 ; Syntax for context definitions
 ;
