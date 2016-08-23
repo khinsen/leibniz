@@ -74,9 +74,10 @@ specification languages
 [OBJ](http://cseweb.ucsd.edu/~goguen/sys/obj.html) and its modern
 offshoot [Maude](http://maude.cs.illinois.edu/). For readers familiar
 with these languages, a Leibniz "context" is equivalent to an "object"
-in OBJ or to a "functional module" in Maude. Reading the Maude
-documentation is currently the best preparation for understanding
-Leibniz.
+in OBJ or to a
+"[functional module](http://maude.cs.uiuc.edu/maude2-manual/html/maude-manualch4.html)"
+in Maude. Reading the Maude documentation is currently the best
+preparation for understanding Leibniz.
 
 However, Leibniz is much simpler than Maude, lacking both Maude's
 flexible syntax and its support for non-functional modules.  This is
@@ -88,7 +89,7 @@ must therefore be easy to implement in a wide range of software
 packages, whereas reimplementing Maude is of little interest, given
 that its source code is open.
 
-## Dependencies
+## Required software
 
 This first implementation of Leibniz is written in
 [Racket](http://racket-lang.org/), whose support for implementing
@@ -105,6 +106,16 @@ To install these libraries, type:
 ```bash
    raco pkg install rackjure chk
 ```
+
+To run the Leibniz test suite, type
+```bash
+   raco test leibniz
+```
+in the main project directory (where this file resides). You can run an individual module's tests by typing
+```bash
+   raco test leibniz/sorts.rkt
+```
+etc.
 
 ## License
 
