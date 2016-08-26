@@ -7,9 +7,10 @@
   [empty-signature  ((sort-graph?) (#:builtins set?) . ->* . signature?)]
   [add-op           (signature? symbol? (listof sort?) sort? . -> . signature?)] 
   [merge-signatures (signature? signature? . -> . signature?)]
-  [lookup-op        (signature? symbol? (listof sort?)
+  [lookup-op        (signature? symbol? (listof sort-constraint?)
                      . -> .
-                     (or/c #f (cons/c (listof sort-or-kind?) sort-or-kind?)))]))
+                     (or/c #f (cons/c (listof sort-constraint?)
+                                      sort-or-kind?)))]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -102,14 +103,15 @@
   ; ranks: the partially sorted list of ranks
 
   (define (check-kinds k-arity k-sort)
-    (unless (equal? k-rank (cons k-arity k-sort))
+    (unless (and (k-arity-equal? sort-graph k-arity (car k-rank))
+                 (equal? k-sort (cdr k-rank)))
       (error "operator not monotonic"))
     this)
 
   (define (is-subarity? arity1 arity2)
     (and (= (length arity1) (length arity2))
          (for/and ([s1 arity1] [s2 arity2])
-           (is-subsort? sort-graph s1 s2))))
+           (conforms-to? sort-graph s1 s2))))
 
   (define (add-rank arity sort)
 
@@ -189,8 +191,10 @@
   (define (preregular-rank-list?)
     ; Do a brute-force search over all possible argument sorts
     ; and check that there is always a unique least value sort.
-    ; There is a lot of room for improvement.
-    (for/and ([arg-sorts (cartesian-product (car k-rank))])
+    ; There is probably a much better way to do this.
+    (for/and ([arg-sorts (cartesian-product
+                          (map (λ (sc) (conforming-sorts sort-graph sc))
+                               (car k-rank)))])
       (define value-sorts (map cdr (matching-ranks-for-arity arg-sorts)))
       (or (< (length value-sorts) 2)
           (for/and ([vs (rest value-sorts)])
@@ -206,17 +210,23 @@
 (module+ test
 
   (define a-sr-1
-    (~> (empty-sorted-ranks sorts (list (kind sorts 'A)) (kind sorts 'A))
+    (~> (empty-sorted-ranks sorts
+                            (list (kind-constraint sorts 'A))
+                            (kind-constraint sorts 'A))
         (add-rank (list 'A) 'A)
         (add-rank (list 'B) 'B)))
 
   (define a-sr-2
-    (~> (empty-sorted-ranks sorts (list (kind sorts 'X)) (kind sorts 'X))
+    (~> (empty-sorted-ranks sorts
+                            (list (kind-constraint sorts 'X))
+                            (kind-constraint sorts 'X))
         (add-rank (list 'Y) 'Y)))
 
   (define a-sr-3
-    (~> (empty-sorted-ranks sorts (list (kind sorts 'A) (kind sorts 'X))
-                            (kind sorts 'A))
+    (~> (empty-sorted-ranks sorts
+                            (list (kind-constraint sorts 'A)
+                                  (kind-constraint sorts 'X))
+                            (kind-constraint sorts 'A))
         (add-rank (list 'A 'X) 'A)
         (add-rank (list 'B 'Y) 'B)))
 
@@ -240,7 +250,8 @@
   (check-equal? (smallest-rank-for-arity a-sr-1 (list 'B)) (cons (list 'B) 'B))
   (check-equal? (smallest-rank-for-arity a-sr-2 (list 'Y)) (cons (list 'Y) 'Y))
   (check-equal? (smallest-rank-for-arity a-sr-2 (list 'X))
-                (cons (list (set 'X 'Y)) (set 'X 'Y)))
+                (cons (list (kind-constraint sorts 'X))
+                      (kind-constraint sorts 'X)))
 
   (check-true (monotonic? a-sr-1))
   (check-true (monotonic? a-sr-2))
@@ -252,8 +263,8 @@
   ; Try to make a non-monotonic rank list
   (check-exn exn:fail?
              (thunk (~> (empty-sorted-ranks sorts
-                                            (list (kind sorts 'A))
-                                            (kind sorts 'A))
+                                            (list (kind-constraint sorts 'A))
+                                            (kind-constraint sorts 'A))
                         (add-rank (list 'A) 'B)
                         (add-rank (list 'B) 'A))))
 
@@ -263,8 +274,8 @@
                     (add-subsort-relation 'A 'B)
                     (add-subsort-relation 'A 'C))]
          [srl (~> (empty-sorted-ranks sorts
-                                      (list (kind sorts 'A))
-                                      (kind sorts 'A))
+                                      (list (kind-constraint sorts 'A))
+                                      (kind-constraint sorts 'A))
                   (add-rank (list 'B) 'B)
                   (add-rank (list 'C) 'C))])
     (check-false (preregular-rank-list? srl))
@@ -286,19 +297,25 @@
 
   (define (add arity sort)
     (define k-arity (kind-arity arity))
-    (define k-sort (kind-constraint sort-graph sort))
+    (define k-sort (kind sort-graph sort))
+    ; We can't use k-arity as the key for the hash ranks-by-k-arity
+    ; because different (and thus non-equal?) kind-of values can stand
+    ; for the same k-arity. We use the set of conforming sorts
+    ; instead.
+    (define key (map (λ (c) (conforming-sorts sort-graph c)) k-arity))
     (define (update ranks)
       (~> ranks
           (check-kinds k-arity k-sort)
           (add-rank arity sort)))
     (operator sort-graph
-              (hash-update ranks-by-k-arity k-arity update
+              (hash-update ranks-by-k-arity key update
                            (thunk (empty-sorted-ranks sort-graph
                                                       k-arity k-sort)))))
   
   (define (lookup arity)
     (define k-arity (kind-arity arity))
-    (some~> (hash-ref ranks-by-k-arity k-arity #f)
+    (define key (map (λ (c) (conforming-sorts sort-graph c)) k-arity))
+    (some~> (hash-ref ranks-by-k-arity key #f)
             (smallest-rank-for-arity arity)))
 
   (define (preregular-op?)
@@ -326,7 +343,9 @@
   (check-equal? (lookup an-op (list 'A)) (cons (list 'A) 'A))
   (check-equal? (lookup an-op (list 'B)) (cons (list 'B) 'B))
   (check-equal? (lookup an-op (list 'Y)) (cons (list 'Y) 'Y))
-  (check-equal? (lookup an-op (list 'X)) (cons (list (set 'X 'Y)) (set 'X 'Y)))
+  (match-let ([(cons arity sort) (lookup an-op (list 'X))])
+    (check-true (k-arity-equal? sorts arity (list (kind-constraint sorts 'X))))
+    (check-equal? sort (kind sorts 'X)))
   (check-equal? (for/set ([r (all-ranks an-op)]) r)
                 (set (cons (list 'A) 'A)
                      (cons (list 'B) 'B)

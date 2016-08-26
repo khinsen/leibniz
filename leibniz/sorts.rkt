@@ -3,29 +3,32 @@
 (provide
  (contract-out
   [sort-graph?              (any/c . -> . boolean?)]
+  [kind-of?                 (any/c . -> . boolean?)]
   [empty-sort-graph         sort-graph?]
   [validate-sort            (sort-graph? symbol? . -> . void?)]
   [add-sort                 (sort-graph? symbol? . -> . sort-graph?)]
   [add-subsort-relation     (sort-graph? symbol? symbol? . -> . sort-graph?)]
   [merge-sort-graphs        (sort-graph? sort-graph? . -> . sort-graph?)]
-  [extended-kind            (sort-graph? set? . -> . set?)]
   [all-sorts                (sort-graph? . -> . set?)]
-  [all-subsorts             (sort-graph? . -> . set?)]
+  [all-subsort-relations    (sort-graph? . -> . set?)]
+  [all-subsorts             (sort-graph? sort? . -> . set?)]
   [has-sort?                (sort-graph? symbol? . -> . boolean?)]
   [is-subsort?              (sort-graph? symbol? symbol? . -> . boolean?)]
-  [kind                     (sort-graph? symbol? . -> . set?)]
-  [has-kind?                (sort-graph? set? . -> . boolean?)]
-  [maximal-sorts            (sort-graph? set? . -> . set?)]
-  [sort?                    (any/c . -> . boolean?)]
-  [sort-or-kind?            (any/c . -> . boolean?)]
-  [sort-constraint?         (any/c . -> . boolean?)]
+  [kind                     (sort-graph? symbol? . -> . kind?)]
+  [has-kind?                (sort-graph? kind? . -> . boolean?)]
   [valid-sort-constraint?   (sort-graph? any/c . -> . boolean?)]
   [validate-sort-constraint (sort-graph? sort-constraint? . -> . void?)]
   [kind-constraint          (sort-graph? sort-constraint?
                                          . -> . sort-constraint?)]
   [conforms-to?             (sort-graph? sort-constraint? sort-constraint?
                                          . -> . boolean?)]
-  [constraint->string       (sort-graph? sort-constraint? . -> . string?)]))
+  [conforming-sorts         (sort-graph? sort-constraint? . -> . set?)]
+  [equivalent-constraints?  (sort-graph? sort-constraint? sort-constraint?
+                                         . -> . boolean?)]
+  [constraint->string       (sort-graph? sort-constraint? . -> . string?)]
+  [sort?                    (any/c . -> . boolean?)]
+  [sort-or-kind?            (any/c . -> . boolean?)]
+  [sort-constraint?         (any/c . -> . boolean?)]))
 
 (require "./lightweight-class.rkt")
 
@@ -55,6 +58,9 @@
 ;    same kind as this sort".
 ;
 
+(struct kind-of (sort) #:transparent)
+
+;
 ; Sort graphs
 ;
 (define-class sort-graph
@@ -72,15 +78,6 @@
   (define (has-sort? sort)
     (hash-has-key? subsorts sort))
 
-  (define (is-subsort? sort1 sort2)
-    (validate-sort sort1)
-    (validate-sort sort2)
-    (or (equal? sort1 sort2)
-        (let ([ss (hash-ref subsorts sort2)])
-          (or (set-member? ss sort1)
-              (for/or ([s (in-set ss)])
-                (is-subsort? sort1 s))))))
-  
   (define (validate-sort sort)
     (unless (has-sort? sort)
       (error "undefined sort" sort)))
@@ -109,7 +106,22 @@
                 (hash-update supersorts subsort
                              (λ (s) (set-add s supersort)))
                 (hash-update subsorts supersort
-                                 (λ (s) (set-add s subsort)))))
+                             (λ (s) (set-add s subsort)))))
+
+  (define (is-subsort? sort1 sort2)
+    (validate-sort sort1)
+    (validate-sort sort2)
+    (or (equal? sort1 sort2)
+        (let ([ss (hash-ref subsorts sort2)])
+          (or (set-member? ss sort1)
+              (for/or ([s (in-set ss)])
+                (is-subsort? sort1 s))))))
+
+  (define (all-subsorts sort)
+    (define ss (hash-ref subsorts sort))
+    (for/fold ([ss ss])
+              ([s ss])
+      (set-union ss (all-subsorts s))))
 
   (define (merge-sort-graphs s-graph)
     (let ([sg
@@ -117,16 +129,13 @@
                      ([sort (send s-graph all-sorts)])
              (send sg add-sort sort))])
       (for/fold ([sg sg])
-                ([ss-relation (send s-graph all-subsorts)])
+                ([ss-relation (send s-graph all-subsort-relations)])
         (send sg add-subsort-relation (car ss-relation) (cdr ss-relation)))))
-
-  (define (extended-kind sort-set)
-    (kind (set-first sort-set)))
 
   (define (all-sorts)
     (list->set (hash-keys subsorts)))
 
-  (define (all-subsorts)
+  (define (all-subsort-relations)
     (list->set
      (apply append
             (hash-map supersorts
@@ -140,8 +149,7 @@
   (define (has-kind? x)
     (and (set? x)
          (not (set-empty? x))
-         (has-sort? (set-first x))
-         (equal? x (kind (set-first x)))))
+         (equal? x (hash-ref kinds (set-first x) #f))))
 
   (define (maximal-sorts kind)
     (for/set ([s (in-set kind)]
@@ -154,8 +162,8 @@
        #t]
       [(symbol? constraint)
        (has-sort? constraint)]
-      [(set? constraint)
-       (has-kind? constraint)]
+      [(kind-of? constraint)
+       (has-sort? (kind-of-sort constraint))]
       [else #f]))
 
   (define (validate-sort-constraint constraint)
@@ -166,10 +174,11 @@
     (validate-sort-constraint constraint)
     (cond
       [(equal? #f constraint) #f]
-      [(symbol? constraint)   (kind constraint)]
+      [(symbol? constraint)   (kind-of constraint)]
       [else                   constraint]))
 
   (define (conforms-to? c1 c2)
+    ; Checks if sort constraint c1 is narrower than sort constraint c2.
     (validate-sort-constraint c1)
     (validate-sort-constraint c2)
     (cond
@@ -177,12 +186,32 @@
        #t]
       [(equal? c1 #f)
        #f]
-      [(set? c1)
-       (equal? c1 c2)]
+      [(kind-of? c1)
+       (and (kind-of? c2)
+            (set-member? (kind (kind-of-sort c1)) (kind-of-sort c2)))]
       [(symbol? c2)
        (is-subsort? c1 c2)]
+      [else  ; remaining case: (and (symbol? c1) (kind-of? c2))
+       (set-member? (kind (kind-of-sort c2)) c1)]))
+
+  (define (conforming-sorts constraint)
+    (cond
+      [(equal? constraint #f)
+       (all-sorts)]
+      [(symbol? constraint)
+       (set-add (all-subsorts constraint) constraint)]
+      [else ; kind-of
+       (kind (kind-of-sort constraint))]))
+
+  (define (equivalent-constraints? c1 c2)
+    (validate-sort-constraint c1)
+    (validate-sort-constraint c2)
+    (cond
+      [(kind-of? c1)
+       (and (kind-of? c2)
+            (set-member? (kind (kind-of-sort c1)) (kind-of-sort c2)))]
       [else
-       (set-member? c2 c1)]))
+       (equal? c1 c2)]))
 
   (define (constraint->string constraint)
     (validate-sort-constraint constraint)
@@ -194,7 +223,7 @@
       [else
        (format "[~a]"
                (string-join (map symbol->string
-                                 (set->list (maximal-sorts constraint)))
+                                 (set->list (maximal-sorts (kind (kind-of-sort constraint)))))
                             ","))])))
 
 (define empty-sort-graph
@@ -206,16 +235,17 @@
 (define (sort? x)
   (symbol? x))
 
+(define (kind? x)
+  (set? x))
+
 (define (sort-or-kind? x)
   (or (sort? x)
-      (and (set? x)
-           (not (set-empty? x))
-           (for/and ([e x])
-             (sort? e)))))
+      (kind? x)))
 
 (define (sort-constraint? x)
   (or (equal? x #f)
-      (sort-or-kind? x)))
+      (sort? x)
+      (kind-of? x)))
 
 ;
 ; Unit tests
@@ -255,8 +285,13 @@
   (check-true (is-subsort? an-s-graph 'A 'C))
   (check-true (is-subsort? an-s-graph 'A 'D))
   (check-false (is-subsort? an-s-graph 'C 'A))
-  (check-equal? (all-subsorts an-s-graph)
+  (check-equal? (all-subsort-relations an-s-graph)
                 (set '(A . B) '(A . D) '(B . C)))
+
+  (check-equal? (all-subsorts an-s-graph 'B) (set 'A))
+  (check-equal? (all-subsorts an-s-graph 'C) (set 'A 'B))
+  (check-equal? (all-subsorts merged 'Y) (set 'A 'X))
+  (check-equal? (all-subsorts two-kinds 'W) (set 'V))
 
   (check-exn exn:fail? (thunk (add-sort an-s-graph #t)))
   (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'A 'A)))
@@ -270,10 +305,6 @@
   (check-true (has-sort? merged 'X))
   (check-true (is-subsort? merged 'A 'X ))
   (check-true (is-subsort? merged 'A 'C ))
-  (check-equal? (extended-kind merged (kind an-s-graph 'A) )
-                (kind merged 'A))
-  (check-equal? (extended-kind merged (kind another-s-graph 'A) )
-                (kind merged 'A))
   (check-equal? (merge-sort-graphs an-s-graph an-s-graph) an-s-graph)
   (check-equal? (merge-sort-graphs empty-sort-graph an-s-graph) an-s-graph)
   (check-equal? (merge-sort-graphs an-s-graph empty-sort-graph) an-s-graph)
@@ -283,27 +314,37 @@
 
   (check-true  (has-kind? two-kinds (kind two-kinds 'A)))
   (check-false (has-kind? two-kinds #f))
-  (check-false (has-kind? two-kinds (set)))
-  (check-false (has-kind? two-kinds (set 'X)))
   (check-false (has-kind? two-kinds (set 'A)))
 
   (check-equal? (kind-constraint two-kinds 'A)
-                (kind two-kinds 'A))
-  (check-equal? (kind-constraint two-kinds (kind two-kinds 'A))
-                (kind two-kinds 'A))
+                (kind-of 'A))
+  (check-equal? (kind-constraint two-kinds (kind-of 'A))
+                (kind-of 'A))
 
   (check-true  (conforms-to? two-kinds 'A 'B))
   (check-true  (conforms-to? two-kinds 'W 'W))
   (check-true  (conforms-to? two-kinds 'A #f))
   (check-true  (conforms-to? two-kinds 'V #f))
-  (check-true  (conforms-to? two-kinds 'A (kind two-kinds 'B)))
-  (check-true  (conforms-to? two-kinds 'V (kind two-kinds 'W)))
-  (check-false (conforms-to? two-kinds 'V (kind two-kinds 'A)))
+  (check-true  (conforms-to? two-kinds 'A (kind-of 'B)))
+  (check-true  (conforms-to? two-kinds 'V (kind-of 'W)))
+  (check-false (conforms-to? two-kinds 'V (kind-of 'A)))
   (check-false (conforms-to? two-kinds 'A 'V))
-  (check-true  (conforms-to? two-kinds (kind two-kinds 'A) (kind two-kinds 'B)))
-  (check-false (conforms-to? two-kinds (kind two-kinds 'A) (kind two-kinds 'W)))
+  (check-true  (conforms-to? two-kinds (kind-of 'A) (kind-of 'B)))
+  (check-false (conforms-to? two-kinds (kind-of 'A) (kind-of 'W)))
+
+  (check-equal? (conforming-sorts two-kinds 'B)
+                (set 'A 'B))
+  (check-equal? (conforming-sorts two-kinds (kind-of 'B))
+                (set 'A 'B 'C 'D))
+  (check-equal? (conforming-sorts two-kinds #f)
+                (set 'A 'B 'C 'D 'V 'W))
+
+  (check-true (equivalent-constraints? two-kinds (kind-of 'A) (kind-of 'A)))
+  (check-true (equivalent-constraints? two-kinds (kind-of 'A) (kind-of 'B)))
+  (check-true (equivalent-constraints? two-kinds (kind-of 'V) (kind-of 'W)))
+  (check-false (equivalent-constraints? two-kinds (kind-of 'A) (kind-of 'W)))
 
   (check-equal? (constraint->string two-kinds 'A) "A")
   (check-equal? (constraint->string two-kinds 'V) "V")
-  (check-equal? (constraint->string two-kinds (kind two-kinds 'V)) "[W]")
+  (check-equal? (constraint->string two-kinds (kind-of 'V)) "[W]")
   (check-equal? (constraint->string two-kinds #f) "[*]"))

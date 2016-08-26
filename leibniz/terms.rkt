@@ -332,14 +332,14 @@
   ; sort-graph: the sort graph everything is based on
   ; vars: a hash mapping from var names (symbols) to sort constraints
 
-  (define (add-var symbol sort-or-kind)
+  (define (add-var symbol sort-constraint)
     (when (and (hash-has-key? vars symbol)
-               (not (equal? (hash-ref vars symbol) sort-or-kind)))
+               (not (equal? (hash-ref vars symbol) sort-constraint)))
       (error (format "var ~s already defined with sort ~s"
                      symbol (hash-ref vars symbol))))
-    (validate-sort-constraint sort-graph sort-or-kind)
+    (validate-sort-constraint sort-graph sort-constraint)
     (varset sort-graph
-            (hash-set vars symbol sort-or-kind)))
+            (hash-set vars symbol sort-constraint)))
 
   (define (lookup-var symbol)
     (hash-ref vars symbol #f))
@@ -347,14 +347,11 @@
   (define (merge-varsets other)
     (define merged-sort-graph
       (merge-sort-graphs sort-graph (varset-sort-graph other)))
-    (for/fold ([vars (empty-varset merged-sort-graph)])
-              ([(symbol sort-or-kind)
+    (for/fold ([merged-vars (empty-varset merged-sort-graph)])
+              ([(symbol sort-constraint)
                 (stream-append (sequence->stream vars)
                                (sequence->stream (varset-vars other)))])
-      (send vars add-var symbol
-            (if (sort? sort-or-kind)
-                sort-or-kind
-                (extended-kind merged-sort-graph sort-or-kind))))))
+      (send merged-vars add-var symbol sort-constraint))))
 
 (define (empty-varset sort-graph)
   (varset sort-graph (hash)))
@@ -375,12 +372,18 @@
 ;
 ; Variables
 ;
-(struct var (sort-graph name sort-or-kind)
+(struct var (sort-graph name sort-constraint)
   #:transparent
   #:methods gen:term
   [(define/generic generic-sort term.sort)
    (define (term.sort t)
-     (var-sort-or-kind t))
+     (define sc (var-sort-constraint t))
+     (cond
+       [(symbol? sc)
+          sc]
+       [else
+        (conforming-sorts (var-sort-graph t) sc)])
+     (var-sort-constraint t))
    (define (term.key t)
      '*variable*)
    (define (term.has-vars? t)
@@ -388,7 +391,7 @@
    (define (term.match signature var other)
      (conditional-match (conforms-to? (signature-sort-graph signature)
                                       (generic-sort other)
-                                      (var-sort-or-kind var))
+                                      (var-sort-constraint var))
                         (substitution (var-name var) other)))
    (define (term.substitute signature var substitution)
      (define value (substitution-value substitution (var-name var)))
@@ -401,10 +404,7 @@
      (define sorts (signature-sort-graph signature))
      (var sorts
           (var-name x) 
-          (let ([sk (var-sort-or-kind x)])
-            (if (sort? sk)
-                sk
-                (extended-kind sorts sk)))))]
+          (var-sort-constraint x)))]
   #:methods gen:custom-write
   [(define (write-proc var port mode)
      (write (var-name var) port))])
