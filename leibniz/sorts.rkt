@@ -33,12 +33,42 @@
   (require rackunit racket/function rackjure/threading))
 
 ;
+; Sorts and kinds
+;
+; A sort is nothing but a label, represented by a Racket symbol.  A
+; sort can be declared a subsort of other sorts. The subsort relations
+; define a partial order on sorts and form a directed acyclic graph
+; (DAG). Each connected component of this graph defines a kind. Sorts
+; that belong to different kinds are completely unrelated. Kinds
+; matter because operator definitions are subject to constraints on
+; their argument sorts if there are multiple definitions for sorts in
+; the same kind. Kinds are represented as sets of the sorts they contain,
+; i.e. as sets of symbols.
+;
+; Sort and kind constraints are used in operator and variable definitions.
+; They limit the sorts which can be used in certain places. There are three
+; types of sort constraints:
+;  - #f stands for no constraint
+;  - a sort allows itself and any of its subsorts
+;  - a kind constraint, represented by a value of structure kind-of
+;    that contains a sort symbol, stands for "all sorts that are of the
+;    same kind as this sort".
+;
+
 ; Sort graphs
 ;
 (define-class sort-graph
 
   (field kinds supersorts subsorts)
-  
+  ; kinds: a hash mapping sorts to their kinds, each kind being a set of sorts
+  ; supersorts: a hash mapping sorts to their immediate supersorts
+  ; subsorts: a hash mapping sorts to their immediate subsorts
+
+  ; The information in supersorts and subsorts is identical (a
+  ; directed graph); each hash can be created from the other. The set
+  ; of kinds can also be computed from the subsort relations. All
+  ; three are stored explicitly for more efficient lookup.
+
   (define (has-sort? sort)
     (hash-has-key? subsorts sort))
 

@@ -48,11 +48,58 @@
                 (list empty)))
 
 ;
+; Operators and signatures
+;
+; Following the terminology of "Order-Sorted Algebra I" by Goguen and
+; Meseguer, an operator is defined by a symbol (its name), its arity
+; (a list of sort constraints, one for each arguments), and its sort
+; (the sort of the term defined by the operator). The combination
+; (arity, sort) is called the rank of the operator.  A signature is a
+; set of operators that respect the criterion of monotonicity: if two
+; operator definitions have the same name and the same number of
+; arguments, and all argument sorts of the first are subsorts of the
+; corresponding argument sorts of the second, then the sort of the
+; first must be a subsort of the sort of the second.
+;
+; All these definitions are stored in a few data structures:
+;
+;  - A signature is a hash from symbols to operators.
+;
+;  - An operator is a hash from kind-arities to sorted rank lists
+;
+;  - A sorted rank list is a list of ranks that is kept partially
+;    sorted with respect to subsort relations as new ranks are added to
+;    it.
+;
+; A kind-arity is obtained from an arity by substituting each sort by its
+; kind. Kind-arities matter because operator definitions with different
+; kind-arities are completely distinct, even if they share the same name,
+; whereas definitions with the same kind-arity are subject to monotonicity
+; and preregularity (a stronger condition that ensures some nice properties,
+; see the paper for the details). Kind-arities are represented as lists of
+; kind constraints. Different kind constraint specifications can stand for
+; the same kind, so equality testing of kind-arities is not straightforward.
+
+(define (k-arity-equal? sort-graph a1 a2)
+  (andmap (λ (c1 c2) (equivalent-constraints? sort-graph c1 c2)) a1 a2))
+
+; Monotonicity is easy to check incrementally during the assembly of a
+; signature, and any attempt to make a non-monotonic one throws an
+; execption. Preregularity cannot be verified in the same way, because
+; a non-preregular signature can become preregular by adding more
+; operator definitions. It is therefore the responsibility of client
+; code to check a signature for preregularity.
+
+;
 ; List of ranks partially sorted by arity
 ;
 (define-class sorted-ranks
 
   (field sort-graph k-rank ranks)
+  ; sort-graph: the sort graph everything is based on
+  ; k-rank: the kind-arity plus kind-of-sort that is common
+  ;         to all definitions in this rank list
+  ; ranks: the partially sorted list of ranks
 
   (define (check-kinds k-arity k-sort)
     (unless (equal? k-rank (cons k-arity k-sort))
@@ -230,6 +277,9 @@
 (define-class operator
 
   (field sort-graph ranks-by-k-arity)
+  ; sort-graph: the sort graph everything is based on
+  ; ranks-by-k-arity: a hash mapping kind-arities to
+  ;                   sorted rank lists
 
   (define (kind-arity arity)
     (map (λ (sc) (kind-constraint sort-graph sc)) arity))
@@ -310,6 +360,10 @@
 (define-class signature
 
   (field sort-graph operators builtins)
+  ; sort-graph: the sort graph everything is based on
+  ; operators: a hash mapping operator names (symbols) to operators
+  ; builtins: the builtin special term types included in this signature
+  ;           (a set of symbols)
 
   (define (add-op symbol arity sort)
     (for ([arg arity])
