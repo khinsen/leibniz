@@ -42,7 +42,7 @@
   (define-syntax-rule (check-values-equal? a b)
     (check-equal? (call-with-values (thunk a) list)
                   (call-with-values (thunk b) list)))
-  ; Define a simple sort graph and signaturefor testing
+  ; Define a simple sort graph and signature for testing
   (define sorts
     (~> exact-number-sorts
         (add-sort 'A) (add-sort 'B)
@@ -329,6 +329,8 @@
 (define-class varset 
 
   (field sort-graph vars)
+  ; sort-graph: the sort graph everything is based on
+  ; vars: a hash mapping from var names (symbols) to sort constraints
 
   (define (add-var symbol sort-or-kind)
     (when (and (hash-has-key? vars symbol)

@@ -13,13 +13,21 @@
 
 (module+ test
   (require rackunit racket/function rackjure/threading)
-  (define (sort-of-term signature name args)
+  (define (sort-of-noarg-term signature name)
+    (define rank (lookup-op signature name empty))
+    (and rank
+         (cdr rank)))
+  (define (sort-of-numarg-term signature name args)
     (define rank (lookup-op signature name (map number-term.sort args)))
     (and rank
          (cdr rank))))
 
 ;
 ; Booleans
+;
+; These are standard operator-argument terms, but they are built
+; in because built-in operations such as equality testing depend
+; on them.
 ;
 (define truth-sorts
   (~> empty-sort-graph
@@ -31,8 +39,14 @@
       (add-op 'false empty 'Boolean)))
 
 (module+ test
-  (check-equal? (sort-of-term truth-signature 'true empty) 'Boolean)
-  (check-equal? (sort-of-term truth-signature 'false empty) 'Boolean))
+  (check-equal? (sort-of-noarg-term truth-signature 'true) 'Boolean)
+  (check-equal? (sort-of-noarg-term truth-signature 'false) 'Boolean))
+
+;
+; The remaining built-in term types are special terms in that they
+; do not follow the operator-arguments structure. These are the standard
+; fundamental data types that most programming languages offer.
+;
 
 ;
 ; Symbols
@@ -87,15 +101,15 @@
       (add-op '* (list 'NonZeroNatural 'NonZeroNatural) 'NonZeroNatural)))
 
 (module+ test
-  (check-equal? (sort-of-term integer-signature '+ (list 1 2)) 'NonZeroNatural)
-  (check-equal? (sort-of-term integer-signature '+ (list 0 2)) 'NonZeroNatural)
-  (check-equal? (sort-of-term integer-signature '+ (list 0 0)) 'Zero)
-  (check-equal? (sort-of-term integer-signature '+ (list -1 0)) 'Integer)
-  (check-equal? (sort-of-term integer-signature '- (list 0 0)) 'Integer)
-  (check-equal? (sort-of-term integer-signature '* (list 1 2)) 'NonZeroNatural)
-  (check-equal? (sort-of-term integer-signature '* (list 0 2)) 'Zero)
-  (check-equal? (sort-of-term integer-signature '* (list -2 0)) 'Zero)
-  (check-equal? (sort-of-term integer-signature '* (list -2 -2)) 'Integer))
+  (check-equal? (sort-of-numarg-term integer-signature '+ (list 1 2)) 'NonZeroNatural)
+  (check-equal? (sort-of-numarg-term integer-signature '+ (list 0 2)) 'NonZeroNatural)
+  (check-equal? (sort-of-numarg-term integer-signature '+ (list 0 0)) 'Zero)
+  (check-equal? (sort-of-numarg-term integer-signature '+ (list -1 0)) 'Integer)
+  (check-equal? (sort-of-numarg-term integer-signature '- (list 0 0)) 'Integer)
+  (check-equal? (sort-of-numarg-term integer-signature '* (list 1 2)) 'NonZeroNatural)
+  (check-equal? (sort-of-numarg-term integer-signature '* (list 0 2)) 'Zero)
+  (check-equal? (sort-of-numarg-term integer-signature '* (list -2 0)) 'Zero)
+  (check-equal? (sort-of-numarg-term integer-signature '* (list -2 -2)) 'Integer))
 
 ;
 ; Rationals and their subsets
@@ -129,24 +143,24 @@
       (add-op '/ (list 'Zero 'NonZeroRational) 'Zero)))
 
 (module+ test
-  (check-equal? (sort-of-term exact-number-signature
-                              '+ (list 1/2 2/3)) 'PositiveRational)
-  (check-equal? (sort-of-term exact-number-signature
-                              '+ (list 1/2 -2/3)) 'Rational)
-  (check-equal? (sort-of-term exact-number-signature
-                              '- (list 1/2 -2/3)) 'Rational)
-  (check-equal? (sort-of-term exact-number-signature
-                              '* (list 1/2 2/3)) 'PositiveRational)
-  (check-equal? (sort-of-term exact-number-signature
-                              '* (list 0 2/3)) 'Zero)
-  (check-equal? (sort-of-term exact-number-signature
-                              '* (list 1/2 -2/3)) 'NonZeroRational)
-  (check-equal? (sort-of-term exact-number-signature
-                              '/ (list 1/2 -2/3)) 'Rational)
-  (check-equal? (sort-of-term exact-number-signature
-                              '/ (list 1/2 2/3)) 'PositiveRational)
-  (check-equal? (sort-of-term exact-number-signature
-                              '/ (list 1/2 0))
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '+ (list 1/2 2/3)) 'PositiveRational)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '+ (list 1/2 -2/3)) 'Rational)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '- (list 1/2 -2/3)) 'Rational)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '* (list 1/2 2/3)) 'PositiveRational)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '* (list 0 2/3)) 'Zero)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '* (list 1/2 -2/3)) 'NonZeroRational)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '/ (list 1/2 -2/3)) 'Rational)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '/ (list 1/2 2/3)) 'PositiveRational)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '/ (list 1/2 0))
                 (kind exact-number-sorts 'Rational)))
 
 (define (number-term.sort x)
