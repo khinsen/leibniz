@@ -21,7 +21,7 @@
   [make-term*          (signature? symbol? list? . -> . (or/c #f term?))]
   [empty-varset        (sort-graph? . -> . varset?)]
   [varset-sort-graph   (varset? . -> . sort-graph?)]
-  [add-var             (varset? symbol? sort-or-kind? . -> . varset?)]
+  [add-var             (varset? symbol? sort? . -> . varset?)]
   [merge-varsets       (varset? varset? . -> . varset?)]
   [var?                (any/c . -> . boolean?)]
   [make-var            (varset? symbol? . -> . (or/c #f var?))]
@@ -331,15 +331,16 @@
   (field sort-graph vars)
   ; sort-graph: the sort graph everything is based on
   ; vars: a hash mapping from var names (symbols) to sort constraints
+  ;       (sorts, i.e. symbols as well)
 
-  (define (add-var symbol sort-or-kind)
+  (define (add-var symbol sort)
     (when (and (hash-has-key? vars symbol)
-               (not (equal? (hash-ref vars symbol) sort-or-kind)))
+               (not (equal? (hash-ref vars symbol) sort)))
       (error (format "var ~s already defined with sort ~s"
                      symbol (hash-ref vars symbol))))
-    (validate-sort-constraint sort-graph sort-or-kind)
+    (validate-sort sort-graph sort)
     (varset sort-graph
-            (hash-set vars symbol sort-or-kind)))
+            (hash-set vars symbol sort)))
 
   (define (lookup-var symbol)
     (hash-ref vars symbol #f))
@@ -348,13 +349,10 @@
     (define merged-sort-graph
       (merge-sort-graphs sort-graph (varset-sort-graph other)))
     (for/fold ([vars (empty-varset merged-sort-graph)])
-              ([(symbol sort-or-kind)
+              ([(symbol sort)
                 (stream-append (sequence->stream vars)
                                (sequence->stream (varset-vars other)))])
-      (send vars add-var symbol
-            (if (sort? sort-or-kind)
-                sort-or-kind
-                (extended-kind merged-sort-graph sort-or-kind))))))
+      (send vars add-var symbol sort))))
 
 (define (empty-varset sort-graph)
   (varset sort-graph (hash)))
@@ -375,12 +373,12 @@
 ;
 ; Variables
 ;
-(struct var (sort-graph name sort-or-kind)
+(struct var (sort-graph name sort)
   #:transparent
   #:methods gen:term
   [(define/generic generic-sort term.sort)
    (define (term.sort t)
-     (var-sort-or-kind t))
+     (var-sort t))
    (define (term.key t)
      '*variable*)
    (define (term.has-vars? t)
@@ -388,7 +386,7 @@
    (define (term.match signature var other)
      (conditional-match (conforms-to? (signature-sort-graph signature)
                                       (generic-sort other)
-                                      (var-sort-or-kind var))
+                                      (var-sort var))
                         (substitution (var-name var) other)))
    (define (term.substitute signature var substitution)
      (define value (substitution-value substitution (var-name var)))
@@ -399,20 +397,15 @@
      (set var))
    (define (term.in-signature x signature)
      (define sorts (signature-sort-graph signature))
-     (var sorts
-          (var-name x) 
-          (let ([sk (var-sort-or-kind x)])
-            (if (sort? sk)
-                sk
-                (extended-kind sorts sk)))))]
+     (var sorts (var-name x) (var-sort x)))]
   #:methods gen:custom-write
   [(define (write-proc var port mode)
      (write (var-name var) port))])
 
 (define (make-var varset symbol)
-  (define sort-or-kind (lookup-var varset symbol))
-  (and sort-or-kind
-       (var (varset-sort-graph varset) symbol sort-or-kind)))
+  (define sort (lookup-var varset symbol))
+  (and sort
+       (var (varset-sort-graph varset) symbol sort)))
 
 (module+ test
   (define a-varset
