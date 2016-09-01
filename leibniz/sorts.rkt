@@ -17,6 +17,7 @@
   [has-kind?                (sort-graph? set? . -> . boolean?)]
   [maximal-sorts            (sort-graph? set? . -> . set?)]
   [sort?                    (any/c . -> . boolean?)]
+  [kind?                    (any/c . -> . boolean?)]
   [sort-or-kind?            (any/c . -> . boolean?)]
   [sort-constraint?         (any/c . -> . boolean?)]
   [valid-sort-constraint?   (sort-graph? any/c . -> . boolean?)]
@@ -217,12 +218,15 @@
 (define (sort? x)
   (symbol? x))
 
+(define (kind? x)
+  (and (set? x)
+       (not (set-empty? x))
+       (for/and ([e x])
+         (sort? e))))
+
 (define (sort-or-kind? x)
   (or (sort? x)
-      (and (set? x)
-           (not (set-empty? x))
-           (for/and ([e x])
-             (sort? e)))))
+      (kind? x)))
 
 (define (sort-constraint? x)
   (or (equal? x #f)
