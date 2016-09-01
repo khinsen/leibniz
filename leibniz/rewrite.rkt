@@ -55,14 +55,12 @@
 ;
 ; Rule matching and basic term rewriting
 ;
-(define (test-condition context condition substitution)
+(define (test-condition context condition)
   (define signature (context-signature context))
-  (or (not condition)
-      (let* ([s-condition (term.substitute signature condition substitution)]
-             [r-condition (reduce context s-condition)])
-        (let-values ([(op args) (term.op-and-args r-condition)])
-          (and (equal? op 'true)
-               (empty? args))))))
+  (let* ([r-condition (reduce context condition)])
+    (let-values ([(op args) (term.op-and-args r-condition)])
+      (and (equal? op 'true)
+           (empty? args)))))
 
 (define (in-matching-rules context term test-conditions?)
   (define signature (context-signature context))
@@ -71,45 +69,41 @@
     (error (format "term not allowed by the context")))
   (in-generator #:arity 2
    (for* ([rule rules]
-          [s (term.match signature (rule-pattern rule) term)])
+          [(condition-thunk replacement-thunk) (rule-match signature rule term)])
      (when (or (not test-conditions?)
-               (test-condition context (rule-condition rule) s))
-       (yield rule s)))))
+               (not condition-thunk)
+               (test-condition context (condition-thunk)))
+       (yield rule replacement-thunk)))))
 
 (define (all-matching-rules context term test-conditions?)
-  (for/list ([(rule substitution)
+  (for/list ([(rule replacement-thunk)
               (in-matching-rules context term test-conditions?)])
-    (cons rule substitution)))
+    (cons rule replacement-thunk)))
 
 (module+ test
+
+  (define (check-matching-rules context test test-conditions? matching-rules)
+    (define matches (all-matching-rules context test test-conditions?))
+    (check-equal? (map car matches) matching-rules))
+
   (with-context test-context
     (define signature (context-signature test-context))
-    (check-equal? (all-matching-rules test-context (T (not true)) #f)
-                  (list (cons (make-rule signature (T (not true)) #f (T false))
-                              empty-substitution)))
-    (check-equal? (all-matching-rules test-context (T foo) #f)
-                  (list (cons (make-rule signature
-                                         (T foo) (T false) (T (not true)))
-                              empty-substitution)
-                        (cons (make-rule signature
-                                         (T foo) (T true) (T (not false)))
-                              empty-substitution)))
-    (check-equal? (all-matching-rules test-context (T foo) #t)
-                  (list (cons (make-rule signature
-                                         (T foo) (T true) (T (not false)))
-                              empty-substitution)))))
+    (check-matching-rules test-context (T (not true)) #f
+                          (list (make-p-rule signature (T (not true)) #f (T false))))
+    
+    (check-matching-rules test-context (T foo) #f
+                          (list (make-p-rule signature
+                                             (T foo) (T false) (T (not true)))
+                                (make-p-rule signature
+                                             (T foo) (T true) (T (not false)))))
+    (check-matching-rules test-context (T foo) #t
+                          (list (make-p-rule signature
+                                                    (T foo) (T true) (T (not false)))))))
 
 (define (rewrite-head-once context term)
   (define signature (context-signature context))
-  (or (for/first ([(rule substitution) (in-matching-rules context term #t)])
-        (let ([replacement (rule-replacement rule)])
-          (if (procedure? replacement)
-              (with-handlers ([exn:fail? (lambda (v) #f)])
-                  (replacement signature
-                               (rule-pattern rule)
-                               (rule-condition rule)
-                               substitution))
-              (term.substitute signature replacement substitution))))
+  (or (for/or ([(rule replacement-thunk) (in-matching-rules context term #t)])
+        (replacement-thunk))
       term))
 
 (module+ test

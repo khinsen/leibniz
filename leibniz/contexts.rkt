@@ -165,24 +165,46 @@
                              #'(list (cons (quote var-name)
                                            (quote var-sort)) ...)
                              #'empty)
-             #:with p-term #`(ts:pattern #,sig-var #,vars-var pattern)
-             #:with r-term #`(ts:pattern #,sig-var #,vars-var replacement)
-             #:with c-term (if (attribute condition)
-                               #`(ts:pattern #,sig-var #,vars-var condition)
-                               #'#f))
+             #:with constructor
+             (if (attribute condition)
+                 #`(λ (signature)
+                     (make-p-rule signature
+                                  (ts:pattern #,sig-var #,vars-var pattern)
+                                  (ts:pattern #,sig-var #,vars-var condition)
+                                  (ts:pattern #,sig-var #,vars-var replacement)))
+                 #`(λ (signature)
+                     (make-p-rule signature
+                                  (ts:pattern #,sig-var #,vars-var pattern)
+                                  #f
+                                  (ts:pattern #,sig-var #,vars-var replacement)))))
     (pattern ((~literal ->)
               (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
-              pattern replacement:expr
+              pattern replacement-fn:expr
               (~optional (~seq #:if condition)))
              #:with vars (if (attribute var-name)
                              #'(list (cons (quote var-name)
                                            (quote var-sort)) ...)
                              #'empty)
-             #:with p-term #`(ts:pattern #,sig-var #,vars-var pattern)
-             #:with r-term #'replacement
-             #:with c-term (if (attribute condition)
-                               #`(ts:pattern #,sig-var #,vars-var condition)
-                               #'#f))))
+             #:with constructor
+             (if (attribute condition)
+                 #`(λ (signature)
+                     (make-p-rule signature
+                                  (ts:pattern #,sig-var #,vars-var pattern)
+                                  (ts:pattern #,sig-var #,vars-var condition)
+                                  replacement-fn))
+                 #`(λ (signature)
+                     (make-p-rule signature
+                                  (ts:pattern #,sig-var #,vars-var pattern)
+                                  #f
+                                  replacement-fn))))
+    (pattern ((~literal fn) (op-name:id arg-name:id ...+) fn:expr)
+             #:with vars #'empty
+             #:with constructor
+             #'(λ (signature)
+                 (make-fn-rule signature
+                               (quote op-name)
+                               (length (list (quote arg-name) ...))
+                               fn)))))
 
 (define (add-vars* varset var-defs)
   (foldl (λ (vd vs) (add-var vs (car vd) (cdr vd))) varset var-defs))
@@ -206,10 +228,7 @@
               [rules (~> empty-rulelist
                          (add-rule
                           (let ([r-varset (add-vars* varset rule-defs.vars)])
-                            (make-rule signature
-                                       rule-defs.p-term
-                                       rule-defs.c-term
-                                       rule-defs.r-term)))
+                            (rule-defs.constructor signature)))
                          ...)])
          (context sorts signature varset rules))]))
 

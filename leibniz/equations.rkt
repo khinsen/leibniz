@@ -1,11 +1,14 @@
 #lang racket
 
 (provide
- (struct-out rule)
+ (struct-out p-rule)
  (contract-out
-  [make-rule (signature? term? (or/c #f term?) (or/c term? procedure?)
-              . -> . rule?)]
   [valid-rule? (signature? any/c . -> . boolean?)]
+  [make-p-rule (signature? term? (or/c #f term?) (or/c term? procedure?)
+               . -> . p-rule?)]
+  [make-fn-rule (signature? symbol? (and/c integer? positive?) procedure?
+                . -> . fn-rule?)]
+  [rule-match (signature? rule? term? . -> . sequence?)]
   [rulelist? (any/c . -> . boolean?)]
   [empty-rulelist rulelist?]
   [in-rules (rulelist? . -> . stream?)]
@@ -15,7 +18,8 @@
 
 (require "./sorts.rkt"
          "./operators.rkt"
-         "./terms.rkt")
+         "./terms.rkt"
+         racket/generator)
 
 (module+ test
   (require "./term-syntax.rkt"
@@ -25,12 +29,23 @@
            rackjure/threading))
 
 ;
-; Rules
+; Rules are either pattern rules or function rules
 ;
-(struct rule (pattern condition replacement)
+(define (rule? x)
+  (or (p-rule? x)
+      (fn-rule? x)))
+
+(define (valid-rule? signature x)
+  (or (valid-p-rule? signature x)
+      (valid-fn-rule? signature x)))
+
+;
+; Pattern rules
+;
+(struct p-rule (pattern condition replacement)
         #:transparent)
 
-(define (make-rule signature pattern condition replacement)
+(define (make-p-rule signature pattern condition replacement)
   (unless (allowed-term? signature pattern)
     (error (format "Pattern ~s not allowed within signature" pattern)))
   (when (and condition (not (allowed-term? signature condition)))
@@ -61,52 +76,107 @@
                             (term.sort replacement) (term.sort pattern)))
     (error (format "Term ~s must be of sort ~s"
                    replacement (term.sort pattern))))
-  (rule pattern condition replacement))
+  (p-rule pattern condition replacement))
 
-(define (valid-rule? signature rule)
-  (and (rule? rule)
-       (valid-term? signature (rule-pattern rule))
-       (or (not (rule-condition rule))
-           (valid-term? signature (rule-condition rule)))
-       (or (procedure? (rule-replacement rule))
-           (valid-term? signature (rule-replacement rule)))))
+(define (valid-p-rule? signature rule)
+  (and (p-rule? rule)
+       (valid-term? signature (p-rule-pattern rule))
+       (or (not (p-rule-condition rule))
+           (valid-term? signature (p-rule-condition rule)))
+       (or (procedure? (p-rule-replacement rule))
+           (valid-term? signature (p-rule-replacement rule)))))
 
 (module+ test
   (with-sig-and-vars a-signature a-varset
-    (check-equal? (make-rule a-signature (T IntVar) #f (T 2))
-                  (rule (T IntVar) #f (T 2)))
-    (check-equal? (make-rule a-signature (T IntVar) (T true) (T 2))
-                  (rule (T IntVar) (T true) (T 2)))
-    (check-true (valid-rule? a-signature (rule (T IntVar) #f (T 2))))
-    (check-true (valid-rule? a-signature (rule (T IntVar) (T true) (T 2))))
+    (check-equal? (make-p-rule a-signature (T IntVar) #f (T 2))
+                  (p-rule (T IntVar) #f (T 2)))
+    (check-equal? (make-p-rule a-signature (T IntVar) (T true) (T 2))
+                  (p-rule (T IntVar) (T true) (T 2)))
+    (check-true (valid-p-rule? a-signature (p-rule (T IntVar) #f (T 2))))
+    (check-true (valid-p-rule? a-signature (p-rule (T IntVar) (T true) (T 2))))
     ; Term 'bar not allowed in signature
-    (check-exn exn:fail? (thunk (make-rule a-signature 'bar #f (T 2))))
-    (check-exn exn:fail? (thunk (make-rule a-signature (T Avar) 'bar (T 2))))
-    (check-exn exn:fail? (thunk (make-rule a-signature (T IntVar) #f 'bar)))
+    (check-exn exn:fail? (thunk (make-p-rule a-signature 'bar #f (T 2))))
+    (check-exn exn:fail? (thunk (make-p-rule a-signature (T Avar) 'bar (T 2))))
+    (check-exn exn:fail? (thunk (make-p-rule a-signature (T IntVar) #f 'bar)))
     ; Condition not a boolean
-    (check-exn exn:fail? (thunk (make-rule a-signature (T IntVar) (T 0) (T 2))))
+    (check-exn exn:fail? (thunk (make-p-rule a-signature (T IntVar) (T 0) (T 2))))
     ; Variable in condition but not in pattern
     (check-exn exn:fail?
-               (thunk (make-rule a-signature (T IntVar) (T BoolVar) (T 2))))
+               (thunk (make-p-rule a-signature (T IntVar) (T BoolVar) (T 2))))
     ; Variable in replacement but not in pattern
     (check-exn exn:fail?
-               (thunk (make-rule a-signature (T IntVar) #f (T BoolVar))))
+               (thunk (make-p-rule a-signature (T IntVar) #f (T BoolVar))))
     ; Replacement doesn't match sort of pattern
     (check-exn exn:fail?
-               (thunk (make-rule a-signature (T IntVar) #f (T (foo a-B)))))))
+               (thunk (make-p-rule a-signature (T IntVar) #f (T (foo a-B)))))))
 
+;
+; Function rules
+;
+(struct fn-rule (op n-args fn)
+        #:transparent)
+
+(define (make-fn-rule signature op n-args fn)
+  (unless (has-unrestricted-arity? signature op n-args)
+    (error (format "Operator ~a has no unrestricted arity for ~a arguments" op n-args)))
+  (fn-rule op n-args fn))
+
+(define (valid-fn-rule? signature rule)
+  (fn-rule? rule))
+
+;
+; Match a rule to a term
+;
+(define (rule-match signature rule term)
+
+  (define (p-rule-match signature rule term)
+    (define pattern (p-rule-pattern rule))
+    (define condition (p-rule-condition rule))
+    (define replacement (p-rule-replacement rule))
+    (in-generator #:arity 2
+      (for ([substitution (term.match signature pattern term)])
+        (yield (if condition
+                   (thunk (term.substitute signature condition substitution))
+                   #f)
+               (if (procedure? replacement)
+                   (thunk (with-handlers ([exn:fail? (lambda (v) #f)])
+                            (replacement signature
+                                         pattern condition substitution)))
+                   (thunk (term.substitute signature replacement substitution)))))))
+
+  (define (fn-rule-match signature rule term)
+    (define-values (op args) (term.op-and-args term))
+    (if (and (equal? op (fn-rule-op rule))
+             (equal? (length args) (fn-rule-n-args rule)))
+        (in-generator #:arity 2
+          (yield #f
+                 (thunk (with-handlers ([exn:fail? (lambda (v) #f)])
+                          ((fn-rule-fn rule) signature op args)))))
+        empty-sequence))
+
+  (if (p-rule? rule)
+      (p-rule-match signature rule term)
+      (fn-rule-match signature rule term)))
+
+;
 ; Convert a rule to a new (larger) signature. Used for merging contexts.
+;
 (define (in-signature rule signature)
-  (make-rule signature
-             (term.in-signature (rule-pattern rule) signature)
-             (let ([c (rule-condition rule)])
-               (if c
-                   (term.in-signature c signature)
-                   c))
-             (let ([r (rule-replacement rule)])
-               (if (procedure? r)
-                   r
-                   (term.in-signature r signature))) ))
+  (if (p-rule? rule)
+      (make-p-rule signature
+                   (term.in-signature (p-rule-pattern rule) signature)
+                   (let ([c (p-rule-condition rule)])
+                     (if c
+                         (term.in-signature c signature)
+                         c))
+                   (let ([r (p-rule-replacement rule)])
+                     (if (procedure? r)
+                         r
+                         (term.in-signature r signature))) )
+      (make-fn-rule signature
+                    (fn-rule-op rule)
+                    (fn-rule-n-args rule)
+                    (fn-rule-fn rule))))
 
 (module+ test
   (define larger-signature
@@ -115,11 +185,11 @@
   (with-sig-and-vars a-signature a-varset
     (check-true
      (valid-rule? larger-signature
-                  (in-signature (make-rule a-signature (T foo) #f (T foo))
+                  (in-signature (make-p-rule a-signature (T foo) #f (T foo))
                                 larger-signature)))
     (check-true
      (valid-rule? larger-signature
-                  (in-signature (make-rule a-signature (T IntVar) #f (T 2))
+                  (in-signature (make-p-rule a-signature (T IntVar) #f (T 2))
                                 larger-signature)))))
 
 ;
@@ -134,12 +204,13 @@
   (hash))
 
 (define (add-rule rulelist rule)
-  (let* ([pattern (rule-pattern rule)]
-         [key (term.key pattern)])
-    (hash-update rulelist
+  (define key (if (p-rule? rule)
+                  (term.key (p-rule-pattern rule))
+                  (fn-rule-op rule)))
+  (hash-update rulelist
                  key
                  (λ (l) (append l (list rule)))
-                 empty)))
+                 empty))
 
 (define (lookup-rules rulelist term)
   (hash-ref rulelist (term.key term) empty))
@@ -156,9 +227,9 @@
 
 (module+ test
   (with-sig-and-vars a-signature a-varset
-    (define rule1 (make-rule a-signature (T IntVar) #f (T 2)))
-    (define rule2 (make-rule a-signature (T (foo Bvar)) #f (T Bvar)))
-    (define rule3 (make-rule a-signature (T (foo Avar Bvar)) #f (T (foo Bvar))))
+    (define rule1 (make-p-rule a-signature (T IntVar) #f (T 2)))
+    (define rule2 (make-p-rule a-signature (T (foo Bvar)) #f (T Bvar)))
+    (define rule3 (make-p-rule a-signature (T (foo Avar Bvar)) #f (T (foo Bvar))))
     (define some-rules
       (~> empty-rulelist
           (add-rule rule1)
