@@ -10,7 +10,9 @@
   [merge-signatures (signature? signature? . -> . signature?)]
   [lookup-op        (signature? symbol? (listof sort?)
                      . -> .
-                     (or/c #f (cons/c (listof sort-or-kind?) sort-or-kind?)))]))
+                     (or/c #f (cons/c (listof sort-constraint?) sort-or-kind?)))]
+  [has-unrestricted-arity? (signature? symbol? (and/c integer? positive?)
+                           . -> . boolean?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -279,30 +281,63 @@
 ;
 (define-class operator
 
-  (field sort-graph ranks-by-k-arity)
+  (field sort-graph ranks-by-k-arity unrestricted-arities)
   ; sort-graph: the sort graph everything is based on
   ; ranks-by-k-arity: a hash mapping kind-arities to
   ;                   sorted rank lists
+  ; unrestricted-arities: hash from argument numbers to sorts, defining
+  ;                       the argument counts for which an unrestricted
+  ;                       arity is defined
 
   (define (kind-arity arity)
     (map (λ (sc) (kind-constraint sort-graph sc)) arity))
 
+  (define (unrestricted-arity? arity)
+    (cond
+      [(not (member #f arity))
+       #f]
+      [(equal? (list->set arity) (set #f))
+       #t]
+      [else
+       (error "partially unrestricted arities not implemented")]))
+
   (define (add-rank arity sort)
-    (define k-arity (kind-arity arity))
-    (define k-sort (kind sort-graph sort))
-    (define (update ranks)
-      (~> ranks
-          (check-kinds k-arity k-sort)
-          (add arity sort)))
-    (operator sort-graph
-              (hash-update ranks-by-k-arity k-arity update
-                           (thunk (empty-sorted-ranks sort-graph
-                                                      k-arity k-sort)))))
+    (define n-args (length arity))
+
+    (define (add-standard-arity)
+      (define k-arity (kind-arity arity))
+      (define k-sort (kind sort-graph sort))
+      (define (update ranks)
+        (~> ranks
+            (check-kinds k-arity k-sort)
+            (add arity sort)))
+      (if (hash-has-key? unrestricted-arities n-args)
+          (error (format "arity for ~a arguments is unrestricted"
+                         n-args ))
+          (operator sort-graph
+                    (hash-update ranks-by-k-arity k-arity update
+                                 (thunk (empty-sorted-ranks sort-graph
+                                                            k-arity k-sort)))
+                    unrestricted-arities)))
+
+    (define (add-unrestricted-arity)
+      (unless (equal? sort (hash-ref unrestricted-arities n-args sort))
+        (error (format "unrestricted arity for ~a arguments already has sort ~a"
+                       n-args sort) ))
+      (operator sort-graph ranks-by-k-arity
+                (hash-set unrestricted-arities n-args sort)))
+
+    (if (unrestricted-arity? arity)
+        (add-unrestricted-arity)
+        (add-standard-arity)))
   
   (define (lookup-rank arity)
-    (define k-arity (kind-arity arity))
-    (some~> (hash-ref ranks-by-k-arity k-arity #f)
-            (smallest-rank-for-arity arity)))
+    (define n-args (length arity))
+    (define unrestricted-sort (hash-ref unrestricted-arities n-args #f))
+    (if unrestricted-sort
+        (cons (make-list n-args #f) unrestricted-sort)
+        (some~> (hash-ref ranks-by-k-arity (kind-arity arity) #f)
+                (smallest-rank-for-arity arity))))
 
   (define (preregular-op?)
     (for/and ([srl (hash-values ranks-by-k-arity)])
@@ -312,10 +347,12 @@
     (in-generator
      (for* ([sorted-ranks (in-hash-values ranks-by-k-arity)]
             [rank (all-ranks-for-k-arity sorted-ranks)])
-       (yield rank)))))
+       (yield rank))
+     (for ([(n-args sort) unrestricted-arities])
+       (yield (cons (make-list n-args #f) sort))))))
 
 (define (empty-operator sort-graph)
-  (operator sort-graph (hash)))
+  (operator sort-graph (hash) (hash)))
 
 (module+ test
 
@@ -356,7 +393,22 @@
                  (add-rank (list 'B) 'B)
                  (add-rank (list 'C) 'C))])
     (check-false (preregular-op? op))
-    (check-true (preregular-op? (~> op (add-rank (list 'A) 'A))))))
+    (check-true (preregular-op? (~> op (add-rank (list 'A) 'A)))))
+
+  ; Operators with #f arguments
+  (define a-special-op
+    (~> an-op
+        (add-rank (list #f #f) 'A)))
+  (check-equal? (lookup-rank a-special-op (list 'Y 'A))
+                (cons (list #f #f) 'A))
+  (check-equal? (lookup-rank a-special-op (list 'B 'X))
+                (cons (list #f #f) 'A))
+  (check-exn exn:fail?
+             (thunk (~> a-special-op
+                        (add-rank (list #f 'B) 'B))))
+  (check-exn exn:fail?
+             (thunk (~> a-special-op
+                        (add-rank (list #f #f) 'B)))))
 
 ;
 ; Signatures
@@ -385,6 +437,13 @@
     (and op
          (lookup-rank op arity)))
 
+  (define (has-unrestricted-arity? symbol n-args)
+    (define op (hash-ref operators symbol #f))
+    (define rank (and op
+                      (lookup-rank op (make-list n-args #f))))
+    (and rank
+         (equal? (car rank) (make-list n-args #f))))
+
   (define (preregular?)
     (for/and ([op (hash-values operators)])
       (preregular-op? op)))
@@ -403,7 +462,7 @@
                                      #:builtins merged-builtins)])
               ([(symbol rank) (stream-append (sequence->stream (all-ops))
                                              (sequence->stream (send other all-ops)))])
-      (unless (andmap sort? (car rank))
+      (when (ormap kind? (car rank))
         ; Kinds as sort constraints need special attention when merging
         ; signatures, because the merging the sort graph can also merge
         ; formerly distinct kinds, or enlarge existing kinds. Since kinds
@@ -419,12 +478,15 @@
   (define a-signature
     (~> (empty-signature sorts)
         (add-op 'foo empty 'B)
-        (add-op 'foo (list 'A 'B) 'A)))
+        (add-op 'foo (list 'A 'B) 'A)
+        (add-op 'foo (list #f) 'A)))
   (check-true (preregular? a-signature))
   (check-equal? (lookup-op a-signature 'foo empty) (cons empty 'B))
   (check-false (lookup-op a-signature 'X empty))
+  (check-true (has-unrestricted-arity? a-signature 'foo 1))
+  (check-false (has-unrestricted-arity? a-signature 'foo 2))
   (check-equal? (for/set ([(s r) (all-ops a-signature)]) r)
-                (set (cons empty 'B) (cons (list 'A 'B) 'A)))
+                (set (cons empty 'B) (cons (list 'A 'B) 'A) (cons (list #f) 'A)))
   (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X)))
   (check-equal? (merge-signatures (empty-signature sorts)
                                   (empty-signature sorts))
@@ -448,4 +510,5 @@
                          (add-subsort-relation 'X 'B)))
                     (add-op 'bar empty 'X)
                     (add-op 'foo empty 'B)
-                    (add-op 'foo (list 'A 'B) 'A))))
+                    (add-op 'foo (list 'A 'B) 'A)
+                    (add-op 'foo (list #f) 'A))))

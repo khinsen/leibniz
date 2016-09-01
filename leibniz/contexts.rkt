@@ -131,15 +131,22 @@
              #:with value
              #'(add-subsort-relation (quote sort1) (quote sort2))))
 
+  (define-syntax-class sort-constraint
+    #:description "sort constraint"
+    (pattern sort-name:id
+             #:with value #'(quote sort-name))
+    (pattern ((~datum *))
+             #:with value #'#f))
+
   (define-syntax-class operator
     #:description "operator declaration"
     (pattern ((~literal op) op-name:id sort:id)
              #:with value
              #'(add-op (quote op-name) empty (quote sort)))
-    (pattern ((~literal op) (op-name:id arg-sort:id ...) sort:id)
+    (pattern ((~literal op) (op-name:id arg-sort:sort-constraint ...) sort:id)
              #:with value
              #'(add-op (quote op-name)
-                       (list (quote arg-sort) ...)
+                       (list arg-sort.value ...)
                        (quote sort))))
 
   (define-syntax-class variable
