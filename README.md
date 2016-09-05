@@ -122,3 +122,10 @@ etc.
 I expect to properly document and release this code at some time,
 under a meaningful license. But for now, it is research code covered
 by the [CRAPL](http://matt.might.net/articles/crapl/) license.
+
+
+## Branch notes
+
+This branch explores a different implementation for set constraints,
+in particular those that restrict to a kind. It looks much too
+complicated for the expected benefit at this time.
