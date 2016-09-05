@@ -122,3 +122,11 @@ etc.
 I expect to properly document and release this code at some time,
 under a meaningful license. But for now, it is research code covered
 by the [CRAPL](http://matt.might.net/articles/crapl/) license.
+
+## Branch notes
+
+Most branches of this repository contain experiments that test the
+utility and feasibility of ideas for improvements and new features.
+Each branch has a short note in this place that explains its reason
+for being. This branch (master) always contains the version currently
+considered most useful.
