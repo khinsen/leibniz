@@ -122,3 +122,14 @@ etc.
 I expect to properly document and release this code at some time,
 under a meaningful license. But for now, it is research code covered
 by the [CRAPL](http://matt.might.net/articles/crapl/) license.
+
+## Branch notes
+
+This branch explores a possible implementation for operators with
+unrestricted arities (much like Maude's polymorphic attribute) and a
+new type of rule ("function rule") that can be used with them.  For
+now, operators must either have all arguments unrestricted or none at
+all, but this is merely for convenience of implementation.
+No bad surprises were discovered during implementation, and the result
+works fine, but it remains to be seen if this addition is important
+enough to be worth the added complexity.
