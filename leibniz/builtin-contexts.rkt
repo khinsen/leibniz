@@ -13,6 +13,23 @@
   (require chk))
 
 ;
+; Syntactic equality of terms
+;
+(define-context equality
+  (include truth-context)
+  (op (== [*] [*]) Boolean)
+  (fn (== x y) (λ (signature op args)
+                 (make-term signature
+                            (if (equal? (first args) (second args)) 'true 'false)
+                            empty))))
+
+(module+ test
+  (with-context equality
+    (chk
+     #:= (RT (== true true))  (T true)
+     #:= (RT (== true false)) (T false))))
+
+;
 ; Boolean algebra
 ;
 ; Adapted from
