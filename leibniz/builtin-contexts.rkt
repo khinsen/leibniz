@@ -2,12 +2,15 @@
 
 (provide
  (contract-out
-  [boolean context?]))
+  [boolean context?]
+  [integers context?]
+  [exact-numbers context?]))
 
 (require "./builtins.rkt"
          "./terms.rkt"
          "./context-syntax.rkt"
-         (only-in "./contexts.rkt" context? truth-context))
+         (only-in "./contexts.rkt" context? truth-context
+                                   integer-context exact-number-context))
 
 (module+ test
   (require chk))
@@ -76,3 +79,56 @@
      #:= (RT (=> true false))   (T false)
      #:= (RT (=> false true))   (T true)
      #:= (RT (=> false false))  (T true))))
+
+;
+; Integers and exact numbers
+;
+
+(define (binary-op predicate proc)
+  (λ (signature pattern condition substitution)
+    (let ([x (substitution-value substitution 'X)]
+          [y (substitution-value substitution 'Y)])
+      (unless (and (predicate x) (predicate y))
+        (error "arguments not numbers"))
+      (proc x y))))
+
+(define-context integers
+  (include integer-context)
+  (-> #:vars ([X Integer] [Y Integer])
+      (+ X Y) (binary-op exact? +))
+  (-> #:vars ([X Integer] [Y Integer])
+      (- X Y) (binary-op exact? -))
+  (-> #:vars ([X Integer] [Y Integer])
+      (* X Y) (binary-op exact? *)))
+
+(module+ test
+  (with-context integers
+    (chk
+     #:= (RT (+ 2 3)) (T 5)
+     #:= (RT (- 2 3)) (T -1)
+     #:= (RT (* 2 3)) (T 6))))
+
+(define-context exact-numbers
+  (include exact-number-context)
+  (-> #:vars ([X Rational] [Y Rational])
+      (+ X Y) (binary-op exact? +))
+  (-> #:vars ([X Rational] [Y Rational])
+      (- X Y) (binary-op exact? -))
+  (-> #:vars ([X Rational] [Y Rational])
+      (* X Y) (binary-op exact? *))
+  (-> #:vars ([X Rational] [Y Rational])
+    (/ X Y) (binary-op exact? /)))
+
+(module+ test
+  (with-context exact-numbers
+    (chk
+     #:= (RT (+ 2 3)) (T 5)
+     #:= (RT (+ 1/2 -1/2)) (T 0)
+     #:= (RT (- 2 3)) (T -1)
+     #:= (RT (- 1/2 1/2)) (T 0)
+     #:= (RT (* 2 3)) (T 6)
+     #:= (RT (* 1/2 1/2)) (T 1/4)
+     #:= (RT (/ 2 3)) (T 2/3)
+     #:= (RT (/ 1/2 1/2)) (T 1)
+     ; Division by zero throws and exception, so no rewrite
+     #:= (RT (/ 1 0)) (T (/ 1 0)))))
