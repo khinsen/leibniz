@@ -12,7 +12,8 @@
   [symbol-context       context?]
   [string-context       context?]
   [integer-context      context?]
-  [exact-number-context context?]))
+  [exact-number-context context?]
+  [IEEE-float-context   context?]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -94,6 +95,10 @@
 (define exact-number-context
   (context exact-number-sorts exact-number-signature
            (empty-varset exact-number-sorts) empty-rulelist))
+
+(define IEEE-float-context
+  (context IEEE-float-sorts IEEE-float-signature
+           (empty-varset IEEE-float-sorts) empty-rulelist))
 
 (module+ test
   (check-equal? (merge-contexts truth-context symbol-context)

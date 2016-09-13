@@ -4,13 +4,15 @@
  (contract-out
   [boolean context?]
   [integers context?]
-  [exact-numbers context?]))
+  [exact-numbers context?]
+  [IEEE-floating-point context?]))
 
 (require "./builtins.rkt"
          "./terms.rkt"
          "./context-syntax.rkt"
          (only-in "./contexts.rkt" context? truth-context
-                                   integer-context exact-number-context))
+                                   integer-context exact-number-context
+                                   IEEE-float-context))
 
 (module+ test
   (require chk))
@@ -142,3 +144,34 @@
      #:= (RT (/ 1/2 1/2)) (T 1)
      ; Division by zero throws and exception, so no rewrite
      #:= (RT (/ 1 0)) (T (/ 1 0)))))
+
+(define-context IEEE-floating-point
+  (include IEEE-float-context)
+  (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
+      (+ X Y) (binary-op single-flonum? +))
+  (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
+      (- X Y) (binary-op single-flonum? -))
+  (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
+      (* X Y) (binary-op single-flonum? *))
+  (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
+      (/ X Y) (binary-op single-flonum? /))
+  (-> #:vars ([X IEEE-binary64] [Y IEEE-binary64])
+      (+ X Y) (binary-op double-flonum? +))
+  (-> #:vars ([X IEEE-binary64] [Y IEEE-binary64])
+      (- X Y) (binary-op double-flonum? -))
+  (-> #:vars ([X IEEE-binary64] [Y IEEE-binary64])
+      (* X Y) (binary-op double-flonum? *))
+  (-> #:vars ([X IEEE-binary64] [Y IEEE-binary64])
+      (/ X Y) (binary-op double-flonum? /)))
+
+(module+ test
+  (with-context IEEE-floating-point
+    (chk
+     #:= (RT (+ #x1s0 #x2s0)) (T #x3s0)
+     #:= (RT (- #x1s0 #x2s0)) (T #x-1s0)
+     #:= (RT (* #x1s0 #x2s0)) (T #x2s0)
+     #:= (RT (/ #x1s0 #x2s0)) (T #x8s-1)
+     #:= (RT (+ #x1l0 #x2l0)) (T #x3l0)
+     #:= (RT (- #x1l0 #x2l0)) (T #x-1l0)
+     #:= (RT (* #x1l0 #x2l0)) (T #x2l0)
+     #:= (RT (/ #x1l0 #x2l0)) (T #x8l-1))))

@@ -5,7 +5,8 @@
          symbol-sorts symbol-signature
          string-sorts string-signature
          integer-sorts integer-signature
-         exact-number-sorts exact-number-signature)
+         exact-number-sorts exact-number-signature
+         IEEE-float-sorts IEEE-float-signature)
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -173,15 +174,75 @@
                                      '/ (list 1/2 0))
                 (kind exact-number-sorts 'Rational)))
 
+;
+; IEEE binary floating-point formats
+;
+(define IEEE-float-sorts
+  (~> empty-sort-graph
+      (add-sort 'IEEE-floating-point)
+      (add-sort 'IEEE-binary32)
+      (add-subsort-relation 'IEEE-binary32 'IEEE-floating-point)
+      (add-sort 'IEEE-binary64)
+      (add-subsort-relation 'IEEE-binary64 'IEEE-floating-point)))
+
+(define IEEE-float-signature
+  (~> (empty-signature IEEE-float-sorts
+                       #:builtins (set '*IEEE-floating-point*))
+      (add-op '+ (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
+      (add-op '- (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
+      (add-op '* (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
+      (add-op '/ (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
+      (add-op '+ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
+      (add-op '- (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
+      (add-op '* (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
+      (add-op '/ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)))
+
+(module+ test
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '+ (list #x1s1 #x3s1)) 'IEEE-binary32)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '+ (list #x1l1 #x3l1)) 'IEEE-binary64)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '+ (list #x1s1 #x3l1))
+                (kind IEEE-float-sorts 'IEEE-binary32))
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '- (list #x1s1 #x3s1)) 'IEEE-binary32)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '- (list #x1l1 #x3l1)) 'IEEE-binary64)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '- (list #x1s1 #x3l1))
+                (kind IEEE-float-sorts 'IEEE-binary32))
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '* (list #x1s1 #x3s1)) 'IEEE-binary32)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '* (list #x1l1 #x3l1)) 'IEEE-binary64)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '* (list #x1s1 #x3l1))
+                (kind IEEE-float-sorts 'IEEE-binary32))
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '/ (list #x1s1 #x3s1)) 'IEEE-binary32)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '/ (list #x1l1 #x3l1)) 'IEEE-binary64)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '/ (list #x1s1 #x3l1))
+                (kind IEEE-float-sorts 'IEEE-binary32)))
+
+;
+; Functions common to all number types
+;
 (define (number-term.sort x)
   (cond
-    [(inexact? x) (error "not yet implemented")]
+    [(single-flonum? x) 'IEEE-binary32]
+    [(double-flonum? x) 'IEEE-binary64]
+    [(inexact? x) (error "not supported")]
     [(zero? x) 'Zero]
     [(integer? x) (if (positive? x) 'NonZeroNatural 'NonZeroInteger)]
     [else (if (positive? x) 'PositiveRational 'NonZeroRational)]))
 
 (define (number-term.builtin-type x)
   (cond
-    [(inexact? x) (error "not yet implemented")]
+    [(single-flonum? x) '*IEEE-floating-point*]
+    [(double-flonum? x) '*IEEE-floating-point*]
+    [(inexact? x) (error "not supported")]
     [(integer? x) '*integer*]
     [else '*rational*]))

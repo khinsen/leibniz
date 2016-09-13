@@ -32,7 +32,7 @@
     (pattern s:str #:with value #`(validate-atomic #,sig-var s))
     (pattern ((~literal quote) symbol:id)
              #:with value #`(validate-atomic #,sig-var (quote symbol)))
-    (pattern x:number #:when (exact? (syntax-e #'x))
+    (pattern x:number
              #:with value #`(validate-atomic #,sig-var x)))
 
   (define-syntax-class (term sig-var)
