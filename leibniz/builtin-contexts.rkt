@@ -95,18 +95,24 @@
 (define-context integers
   (include integer-context)
   (-> #:vars ([X Integer] [Y Integer])
-      (+ X Y) (binary-op exact? +))
+      (+ X Y) (binary-op integer? +))
   (-> #:vars ([X Integer] [Y Integer])
-      (- X Y) (binary-op exact? -))
+      (- X Y) (binary-op integer? -))
   (-> #:vars ([X Integer] [Y Integer])
-      (* X Y) (binary-op exact? *)))
+      (* X Y) (binary-op integer? *))
+  (-> #:vars ([X Integer] [Y Integer])
+      (div X Y) (binary-op integer? quotient))
+  (-> #:vars ([X Integer] [Y Integer])
+      (rem X Y) (binary-op integer? remainder)))
 
 (module+ test
   (with-context integers
     (chk
      #:= (RT (+ 2 3)) (T 5)
      #:= (RT (- 2 3)) (T -1)
-     #:= (RT (* 2 3)) (T 6))))
+     #:= (RT (* 2 3)) (T 6)
+     #:= (RT (div 2 3)) (T 0)
+     #:= (RT (rem 2 3)) (T 2))))
 
 (define-context exact-numbers
   (include exact-number-context)
@@ -117,7 +123,11 @@
   (-> #:vars ([X Rational] [Y Rational])
       (* X Y) (binary-op exact? *))
   (-> #:vars ([X Rational] [Y Rational])
-    (/ X Y) (binary-op exact? /)))
+    (/ X Y) (binary-op exact? /))
+  (-> #:vars ([X Integer] [Y Integer])
+      (div X Y) (binary-op integer? quotient))
+  (-> #:vars ([X Integer] [Y Integer])
+      (rem X Y) (binary-op integer? remainder)))
 
 (module+ test
   (with-context exact-numbers

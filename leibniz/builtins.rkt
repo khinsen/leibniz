@@ -98,7 +98,13 @@
       (add-op '* (list 'Integer 'Zero) 'Zero)
       (add-op '* (list 'Zero 'Integer) 'Zero)
       (add-op '* (list 'Natural 'Natural) 'Natural)
-      (add-op '* (list 'NonZeroNatural 'NonZeroNatural) 'NonZeroNatural)))
+      (add-op '* (list 'NonZeroNatural 'NonZeroNatural) 'NonZeroNatural)
+      (add-op 'div (list 'Integer 'NonZeroInteger) 'Integer)
+      (add-op 'div (list 'Zero 'NonZeroInteger) 'Zero)
+      (add-op 'div (list 'Natural 'NonZeroNatural) 'Natural)
+      (add-op 'rem (list 'Integer 'NonZeroInteger) 'Integer)
+      (add-op 'rem (list 'Zero 'NonZeroInteger) 'Zero)
+      (add-op 'rem (list 'Natural 'NonZeroNatural) 'Natural)))
 
 (module+ test
   (check-equal? (sort-of-numarg-term integer-signature '+ (list 1 2)) 'NonZeroNatural)
@@ -109,7 +115,11 @@
   (check-equal? (sort-of-numarg-term integer-signature '* (list 1 2)) 'NonZeroNatural)
   (check-equal? (sort-of-numarg-term integer-signature '* (list 0 2)) 'Zero)
   (check-equal? (sort-of-numarg-term integer-signature '* (list -2 0)) 'Zero)
-  (check-equal? (sort-of-numarg-term integer-signature '* (list -2 -2)) 'Integer))
+  (check-equal? (sort-of-numarg-term integer-signature '* (list -2 -2)) 'Integer)
+  (check-equal? (sort-of-numarg-term integer-signature 'div (list -2 -2)) 'Integer)
+  (check-equal? (sort-of-numarg-term integer-signature 'div (list 0 1)) 'Zero)
+  (check-equal? (sort-of-numarg-term integer-signature 'rem (list -2 -2)) 'Integer)
+  (check-equal? (sort-of-numarg-term integer-signature 'rem (list 0 1)) 'Zero))
 
 ;
 ; Rationals and their subsets
