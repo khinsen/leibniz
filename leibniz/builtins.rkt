@@ -72,8 +72,10 @@
 ;
 ; Integers and their subsets
 ;
+; "truth" is included because comparisons have sort Boolean.
+;
 (define integer-sorts
-  (~> empty-sort-graph
+  (~> truth-sorts
       ; Natural numbers
       (add-sort 'Natural)
       (add-sort 'Zero)
@@ -89,6 +91,7 @@
 
 (define integer-signature
   (~> (empty-signature integer-sorts #:builtins (set '*integer*))
+      (merge-signatures truth-signature)
       (add-op '+ (list 'Integer 'Integer) 'Integer)
       (add-op '+ (list 'Natural 'Natural) 'Natural)
       (add-op '+ (list 'NonZeroNatural 'Natural) 'NonZeroNatural)
@@ -105,7 +108,11 @@
       (add-op 'div (list 'Natural 'NonZeroNatural) 'Natural)
       (add-op 'rem (list 'Integer 'NonZeroInteger) 'Integer)
       (add-op 'rem (list 'Zero 'NonZeroInteger) 'Zero)
-      (add-op 'rem (list 'Natural 'NonZeroNatural) 'Natural)))
+      (add-op 'rem (list 'Natural 'NonZeroNatural) 'Natural)
+      (add-op '< (list 'Integer 'Integer) 'Boolean)
+      (add-op '> (list 'Integer 'Integer) 'Boolean)
+      (add-op '<= (list 'Integer 'Integer) 'Boolean)
+      (add-op '>= (list 'Integer 'Integer) 'Boolean)))
 
 (module+ test
   (check-equal? (sort-of-numarg-term integer-signature '+ (list 1 2)) 'NonZeroNatural)
@@ -120,7 +127,11 @@
   (check-equal? (sort-of-numarg-term integer-signature 'div (list -2 -2)) 'Integer)
   (check-equal? (sort-of-numarg-term integer-signature 'div (list 0 1)) 'Zero)
   (check-equal? (sort-of-numarg-term integer-signature 'rem (list -2 -2)) 'Integer)
-  (check-equal? (sort-of-numarg-term integer-signature 'rem (list 0 1)) 'Zero))
+  (check-equal? (sort-of-numarg-term integer-signature 'rem (list 0 1)) 'Zero)
+  (check-equal? (sort-of-numarg-term integer-signature '< (list 0 1)) 'Boolean)
+  (check-equal? (sort-of-numarg-term integer-signature '> (list 0 1)) 'Boolean)
+  (check-equal? (sort-of-numarg-term integer-signature '<= (list 0 1)) 'Boolean)
+  (check-equal? (sort-of-numarg-term integer-signature '>= (list 0 1)) 'Boolean))
 
 ;
 ; Rationals and their subsets
@@ -138,9 +149,8 @@
       (add-subsort-relation 'NonZeroNatural 'PositiveRational)))
 
 (define exact-number-signature
-  (~> (merge-signatures integer-signature
-                        (empty-signature exact-number-sorts
-                                         #:builtins (set '*rational*)))
+  (~> (empty-signature exact-number-sorts #:builtins (set '*rational*))
+      (merge-signatures integer-signature)
       (add-op '+ (list 'Rational 'Rational) 'Rational)
       (add-op '+ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
       (add-op '- (list 'Rational 'Rational) 'Rational)
@@ -151,7 +161,11 @@
       (add-op '* (list 'Rational 'Zero) 'Zero)
       (add-op '/ (list 'Rational 'NonZeroRational) 'Rational)
       (add-op '/ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
-      (add-op '/ (list 'Zero 'NonZeroRational) 'Zero)))
+      (add-op '/ (list 'Zero 'NonZeroRational) 'Zero)
+      (add-op '< (list 'Rational 'Rational) 'Boolean)
+      (add-op '> (list 'Rational 'Rational) 'Boolean)
+      (add-op '<= (list 'Rational 'Rational) 'Boolean)
+      (add-op '>= (list 'Rational 'Rational) 'Boolean)))
 
 (module+ test
   (check-equal? (sort-of-numarg-term exact-number-signature
@@ -172,7 +186,15 @@
                                      '/ (list 1/2 2/3)) 'PositiveRational)
   (check-equal? (sort-of-numarg-term exact-number-signature
                                      '/ (list 1/2 0))
-                (kind exact-number-sorts 'Rational)))
+                (kind exact-number-sorts 'Rational))
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '< (list 1/2 2/3)) 'Boolean)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '> (list 1/2 2/3)) 'Boolean)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '<= (list 1/2 2/3)) 'Boolean)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '>= (list 1/2 2/3)) 'Boolean))
 
 ;
 ; IEEE binary floating-point formats
@@ -186,16 +208,24 @@
       (add-subsort-relation 'IEEE-binary64 'IEEE-floating-point)))
 
 (define IEEE-float-signature
-  (~> (empty-signature IEEE-float-sorts
-                       #:builtins (set '*IEEE-floating-point*))
+  (~> (empty-signature IEEE-float-sorts #:builtins (set '*IEEE-floating-point*))
+      (merge-signatures truth-signature)
       (add-op '+ (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '- (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '* (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '/ (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
+      (add-op '< (list 'IEEE-binary32 'IEEE-binary32) 'Boolean)
+      (add-op '> (list 'IEEE-binary32 'IEEE-binary32) 'Boolean)
+      (add-op '<= (list 'IEEE-binary32 'IEEE-binary32) 'Boolean)
+      (add-op '>= (list 'IEEE-binary32 'IEEE-binary32) 'Boolean)
       (add-op '+ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
       (add-op '- (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
       (add-op '* (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
-      (add-op '/ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)))
+      (add-op '/ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
+      (add-op '< (list 'IEEE-binary64 'IEEE-binary64) 'Boolean)
+      (add-op '> (list 'IEEE-binary64 'IEEE-binary64) 'Boolean)
+      (add-op '<= (list 'IEEE-binary64 'IEEE-binary64) 'Boolean)
+      (add-op '>= (list 'IEEE-binary64 'IEEE-binary64) 'Boolean)))
 
 (module+ test
   (check-equal? (sort-of-numarg-term IEEE-float-signature
@@ -225,7 +255,15 @@
                                      '/ (list #x1l1 #x3l1)) 'IEEE-binary64)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '/ (list #x1s1 #x3l1))
-                (kind IEEE-float-sorts 'IEEE-binary32)))
+                (kind IEEE-float-sorts 'IEEE-binary32))
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '< (list #x1s1 #x3s1)) 'Boolean)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '> (list #x1s1 #x3s1)) 'Boolean)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '<= (list #x1s1 #x3s1)) 'Boolean)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '>= (list #x1s1 #x3s1)) 'Boolean))
 
 ;
 ; Functions common to all number types
