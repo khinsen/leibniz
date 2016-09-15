@@ -13,7 +13,9 @@
 (module+ test
   (require chk)
   (c:define-context test-context
-    (include c:truth-context)
+    (sort Boolean)
+    (op true Boolean)
+    (op false Boolean)
     (op (not Boolean) Boolean)
     (op foo Boolean)
     (=> (not true) false)

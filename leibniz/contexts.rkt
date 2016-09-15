@@ -101,22 +101,45 @@
            (empty-varset IEEE-float-sorts) empty-rulelist))
 
 (module+ test
-  (check-equal? (merge-contexts truth-context symbol-context)
-                (merge-contexts symbol-context truth-context))
-  (check-equal? (merge-contexts truth-context truth-context)
-                truth-context)
-  (check-equal? (merge-contexts empty-context truth-context)
-                truth-context)
-  (check-equal? (merge-contexts truth-context empty-context)
-                truth-context)
-  (check-equal? (merge-contexts integer-context exact-number-context)
-                exact-number-context)
+
+  (define basic-truth-context
+    (context truth-sorts truth-signature
+             (empty-varset truth-sorts) empty-rulelist))
+
+  (define basic-string-context
+    (context string-sorts string-signature
+             (empty-varset string-sorts) empty-rulelist))
+
+  (define basic-integer-context
+    (context integer-sorts integer-signature
+             (empty-varset integer-sorts) empty-rulelist))
+
+  (define basic-rational-context
+    (context exact-number-sorts exact-number-signature
+             (empty-varset exact-number-sorts) empty-rulelist))
+
+  (check-equal? (merge-contexts basic-truth-context basic-string-context)
+                (merge-contexts basic-string-context basic-truth-context))
+  (check-equal? (merge-contexts basic-truth-context basic-truth-context)
+                basic-truth-context)
+  (check-equal? (merge-contexts empty-context basic-truth-context)
+                basic-truth-context)
+  (check-equal? (merge-contexts basic-truth-context empty-context)
+                basic-truth-context)
+  (check-equal? (merge-contexts basic-integer-context basic-rational-context)
+                basic-rational-context)
   (check-equal? (foldl merge-contexts empty-context
-                       (list truth-context string-context exact-number-context))
+                       (list basic-truth-context
+                             basic-string-context
+                             basic-rational-context))
                 (foldl merge-contexts empty-context
-                       (list string-context exact-number-context truth-context)))
-  (check-true (valid-context? (merge-contexts symbol-context string-context)))
-  (check-true (valid-context? (merge-contexts truth-context exact-number-context))))
+                       (list basic-string-context
+                             basic-rational-context
+                             basic-truth-context)))
+  (check-true (valid-context? (merge-contexts basic-string-context
+                                              basic-rational-context)))
+  (check-true (valid-context? (merge-contexts basic-truth-context
+                                              basic-rational-context))))
 
 ;
 ; Syntax for context definitions
@@ -235,8 +258,8 @@
 (module+ test
   (define a-context
     (context-
-     (include truth-context)
-     (include exact-number-context)
+     (include basic-truth-context)
+     (include basic-rational-context)
      (sort A) (sort B)
      (subsort B A)
      (sort X) (sort Y)
@@ -258,7 +281,7 @@
   (check-equal? (context-vars a-context) a-varset)
 
   (define-context test
-    (include truth-context)
+    (include basic-truth-context)
     (sort A) (sort B)
     (op an-A A)
     (op a-B B)
@@ -276,7 +299,7 @@
     (check-equal? (term.sort (T an-A)) 'A))
 
   (define-context test2
-    (include truth-context)
+    (include basic-truth-context)
     (sort A) (sort B)
     (op an-A A)
     (op a-B B)

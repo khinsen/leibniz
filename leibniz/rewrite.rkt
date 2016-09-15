@@ -21,7 +21,9 @@
            rackjure/threading)
 
   (define-context test-context
-    (include truth-context)
+    (sort Boolean)
+    (op true Boolean)
+    (op false Boolean)
     (op (not Boolean) Boolean)
     (op foo Boolean)
     (=> (not true) false)
@@ -30,7 +32,9 @@
     (=> foo (not false) #:if true))
 
   (define-context test-with-var
-    (include truth-context)
+    (sort Boolean)
+    (op true Boolean)
+    (op false Boolean)
     (op (not Boolean) Boolean)
     (var X Boolean)
     (=> (not true) false)
@@ -38,7 +42,9 @@
     (=> (not (not X)) X))
 
   (define-context test-with-procedure
-    (include truth-context)
+    (sort Boolean)
+    (op true Boolean)
+    (op false Boolean)
     (op (not Boolean) Boolean)
     (var X Boolean)
     (-> (not X) (λ (signature pattern condition substitution)
