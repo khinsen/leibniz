@@ -192,7 +192,7 @@
               [varset (~> (merge-varsets (empty-varset sorts)
                                          (context-vars initial))
                           var-defs.value ...)]
-              [rules (~> empty-rulelist
+              [rules (~> (context-rules initial)
                          (add-rule
                           (let ([r-varset (add-vars* varset rule-defs.vars)])
                             (make-rule signature
