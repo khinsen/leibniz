@@ -1,19 +1,14 @@
 #lang racket
 
 (provide 
- (rename-out [context- context])
+ (rename-out [context builtin-context]
+             [context- context])
  define-context
  with-context
  (contract-out
   [context?             (any/c . -> . boolean?)]
   [context-signature    (context? . -> . signature?)]
-  [context-rules        (context? . -> . rulelist?)]
-  [truth-context        context?]
-  [symbol-context       context?]
-  [string-context       context?]
-  [integer-context      context?]
-  [exact-number-context context?]
-  [IEEE-float-context   context?]))
+  [context-rules        (context? . -> . rulelist?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -72,33 +67,6 @@
                                  (context-rules context1)
                                  (context-rules context2))])
     (context sorts signature vars rules)))
-
-;
-; Builtin contexts
-;
-(define truth-context
-  (context truth-sorts truth-signature
-           (empty-varset truth-sorts) empty-rulelist))
-
-(define symbol-context
-  (context symbol-sorts symbol-signature
-           (empty-varset symbol-sorts) empty-rulelist))
-
-(define string-context
-  (context string-sorts string-signature
-           (empty-varset string-sorts) empty-rulelist))
-
-(define integer-context
-  (context integer-sorts integer-signature
-           (empty-varset integer-sorts) empty-rulelist))
-
-(define exact-number-context
-  (context exact-number-sorts exact-number-signature
-           (empty-varset exact-number-sorts) empty-rulelist))
-
-(define IEEE-float-context
-  (context IEEE-float-sorts IEEE-float-signature
-           (empty-varset IEEE-float-sorts) empty-rulelist))
 
 (module+ test
 

@@ -2,6 +2,7 @@
 
 (provide
  (contract-out
+  [truth context?]
   [boolean context?]
   [integers context?]
   [exact-numbers context?]
@@ -9,13 +10,19 @@
 
 (require "./builtins.rkt"
          "./terms.rkt"
+         "./equations.rkt"
          "./context-syntax.rkt"
-         (only-in "./contexts.rkt" context? truth-context
-                                   integer-context exact-number-context
-                                   IEEE-float-context))
+         (only-in "./contexts.rkt" context? builtin-context))
 
 (module+ test
   (require chk))
+
+;
+; Truth
+;
+(define truth
+  (builtin-context truth-sorts truth-signature
+                   (empty-varset truth-sorts) empty-rulelist))
 
 ;
 ; Boolean algebra
@@ -24,7 +31,7 @@
 ; http://maude.cs.uiuc.edu/maude1/manual/maude-manual-html/maude-manual_16.html
 ;
 (define-context boolean
-  (include truth-context)
+  (include truth)
   (op (not Boolean) Boolean)
   (op (and Boolean Boolean) Boolean)
   (op (or Boolean Boolean) Boolean)
@@ -83,6 +90,17 @@
      #:= (RT (=> false false))  (T true))))
 
 ;
+; Symbols and strings (to be completed)
+;
+(define symbol*
+  (builtin-context symbol-sorts symbol-signature
+                   (empty-varset symbol-sorts) empty-rulelist))
+
+(define string*
+  (builtin-context string-sorts string-signature
+                   (empty-varset string-sorts) empty-rulelist))
+
+;
 ; Integers and exact numbers
 ;
 (define (binary-op predicate proc)
@@ -103,8 +121,12 @@
                  (if (proc x y) 'true 'false)
                  empty))))
 
+(define integer*
+  (builtin-context integer-sorts integer-signature
+                   (empty-varset integer-sorts) empty-rulelist))
+
 (define-context integers
-  (include integer-context)
+  (include integer*)
   (-> #:vars ([X Integer] [Y Integer])
       (+ X Y) (binary-op integer? +))
   (-> #:vars ([X Integer] [Y Integer])
@@ -139,8 +161,12 @@
      #:= (RT (<= 3 3)) (T true)
      #:= (RT (>= 3 3)) (T true))))
 
+(define exact-number*
+  (builtin-context exact-number-sorts exact-number-signature
+                   (empty-varset exact-number-sorts) empty-rulelist))
+
 (define-context exact-numbers
-  (include exact-number-context)
+  (include exact-number*)
   (-> #:vars ([X Rational] [Y Rational])
       (+ X Y) (binary-op exact? +))
   (-> #:vars ([X Rational] [Y Rational])
@@ -182,8 +208,12 @@
      #:= (RT (<= 1/3 1/3)) (T true)
      #:= (RT (>= 1/3 1/3)) (T true))))
 
+(define IEEE-float*
+  (builtin-context IEEE-float-sorts IEEE-float-signature
+                   (empty-varset IEEE-float-sorts) empty-rulelist))
+
 (define-context IEEE-floating-point
-  (include IEEE-float-context)
+  (include IEEE-float*)
   (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
       (+ X Y) (binary-op single-flonum? +))
   (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
