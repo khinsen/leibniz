@@ -26,6 +26,7 @@
   [var?                (any/c . -> . boolean?)]
   [make-var            (varset? symbol? . -> . (or/c #f var?))]
   [make-var-or-term    (signature? varset? symbol? . -> . term?)]
+  [make-uvar           (sort-graph? symbol? . -> . var?)]
   [write-term          ((term? output-port?) (any/c) . ->* . void?)]))
 
 (require "./lightweight-class.rkt"
@@ -407,6 +408,9 @@
   (and sort
        (var (varset-sort-graph varset) symbol sort)))
 
+(define (make-uvar sort-graph symbol)
+  (var sort-graph symbol #f))
+
 (module+ test
   (define a-varset
     (~> (empty-varset sorts)
@@ -421,6 +425,7 @@
   (define Zero-var (make-var a-varset 'Zero-var))
   (define Integer-var (make-var a-varset 'Integer-var))
   (define NonZeroInteger-var (make-var a-varset 'NonZeroInteger-var))
+  (define U-var (make-uvar sorts 'U-var))
   (check-true (term.has-vars? A-var))
   (check-equal? (term.vars A-var) (set A-var))
   (check-equal? (term.key A-var) '*variable*)
@@ -430,13 +435,18 @@
   (check-true (term.has-vars? Integer-var))
   (check-equal? (term.vars Integer-var) (set Integer-var))
   (check-equal? (term.key Integer-var) '*variable*)
+  (check-true (term.has-vars? U-var))
+  (check-equal? (term.vars U-var) (set U-var))
+  (check-equal? (term.key U-var) '*variable*)
   (check-single-match a-signature Zero-var 0
                       (substitution 'Zero-var 0))
   (check-single-match a-signature Integer-var 0
                       (substitution 'Integer-var 0))
   (check-no-match a-signature NonZeroInteger-var 0)
   (check-self-substitution a-signature Zero-var 0)
-  (check-no-substitution a-signature Zero-var))
+  (check-no-substitution a-signature Zero-var)
+  (check-single-match a-signature U-var 0 (substitution 'U-var 0))
+  (check-self-substitution a-signature U-var 0))
 
 ;
 ; Operator-defined patterns
@@ -544,7 +554,19 @@
   (check-self-substitution a-signature
                            a-double-var-pattern
                            (make-term a-signature 'foo (list a-B a-B)))
-  (check-no-substitution a-signature a-double-var-pattern))
+  (check-no-substitution a-signature a-double-var-pattern)
+
+  (define Uvar-X (make-uvar truth-sorts 'X))
+  (define Uvar-Y (make-uvar truth-sorts 'Y))
+  (define true-term (make-term truth-signature 'true empty))
+  (define an-equality-pattern (make-term truth-signature
+                                         '== (list Uvar-X Uvar-Y)))
+  (define an-equality-term (make-term truth-signature
+                                      '== (list true-term true-term)))
+  (check-single-match truth-signature an-equality-pattern an-equality-term
+                      (merge-substitutions
+                       (substitution 'X true-term)
+                       (substitution 'Y true-term))))
 
 ;
 ; Make a variable or an operator-defined term. The result is a pattern
