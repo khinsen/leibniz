@@ -8,9 +8,9 @@
   [add-op           (signature? symbol? (listof sort-constraint?) sort?
                      . -> . signature?)]
   [merge-signatures (signature? signature? . -> . signature?)]
-  [lookup-op        (signature? symbol? (listof sort?)
+  [lookup-op        (signature? symbol? (listof (or/c #f sort?))
                      . -> .
-                     (or/c #f (cons/c (listof sort-or-kind?) sort-or-kind?)))]))
+                     (or/c #f (cons/c (listof sort-constraint?) sort-or-kind?)))]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -382,8 +382,15 @@
 
   (define (lookup-op symbol arity)
     (define op (hash-ref operators symbol #f))
-    (and op
-         (lookup-rank op arity)))
+    (or
+     (and op
+          (lookup-rank op arity))
+     ; A somewhat hacky special case: if the signature includes the
+     ; *truth* builtin, it includes == for equality of arbitrary terms.
+     (and (set-member? builtins '*truth*)
+          (equal? symbol '==)
+          (= (length arity) 2)
+          '((#f #f) . Boolean))))
 
   (define (preregular?)
     (for/and ([op (hash-values operators)])

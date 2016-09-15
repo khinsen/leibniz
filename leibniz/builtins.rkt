@@ -35,7 +35,7 @@
       (add-sort 'Boolean)))
 
 (define truth-signature
-  (~> (empty-signature truth-sorts)
+  (~> (empty-signature truth-sorts #:builtins (set '*truth*))
       (add-op 'true empty 'Boolean)
       (add-op 'false empty 'Boolean)))
 
@@ -131,7 +131,8 @@
   (check-equal? (sort-of-numarg-term integer-signature '< (list 0 1)) 'Boolean)
   (check-equal? (sort-of-numarg-term integer-signature '> (list 0 1)) 'Boolean)
   (check-equal? (sort-of-numarg-term integer-signature '<= (list 0 1)) 'Boolean)
-  (check-equal? (sort-of-numarg-term integer-signature '>= (list 0 1)) 'Boolean))
+  (check-equal? (sort-of-numarg-term integer-signature '>= (list 0 1)) 'Boolean)
+  (check-equal? (sort-of-numarg-term integer-signature '== (list 0 1)) 'Boolean))
 
 ;
 ; Rationals and their subsets
@@ -194,7 +195,9 @@
   (check-equal? (sort-of-numarg-term exact-number-signature
                                      '<= (list 1/2 2/3)) 'Boolean)
   (check-equal? (sort-of-numarg-term exact-number-signature
-                                     '>= (list 1/2 2/3)) 'Boolean))
+                                     '>= (list 1/2 2/3)) 'Boolean)
+  (check-equal? (sort-of-numarg-term exact-number-signature
+                                     '== (list 1/2 2/3)) 'Boolean))
 
 ;
 ; IEEE binary floating-point formats
@@ -263,7 +266,9 @@
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '<= (list #x1s1 #x3s1)) 'Boolean)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '>= (list #x1s1 #x3s1)) 'Boolean))
+                                     '>= (list #x1s1 #x3s1)) 'Boolean)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '== (list #x1s1 #x3s1)) 'Boolean))
 
 ;
 ; Functions common to all number types
