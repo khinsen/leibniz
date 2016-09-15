@@ -11,18 +11,41 @@
 (require "./builtins.rkt"
          "./terms.rkt"
          "./equations.rkt"
-         "./context-syntax.rkt"
-         (only-in "./contexts.rkt" context? builtin-context))
+         (only-in "./contexts.rkt" context? define-context builtin-context)
+         rackjure/threading)
 
 (module+ test
-  (require chk))
+  (require chk
+           "./context-syntax.rkt"))
 
 ;
 ; Truth
 ;
 (define truth
-  (builtin-context truth-sorts truth-signature
-                   (empty-varset truth-sorts) empty-rulelist))
+  (builtin-context
+   truth-sorts truth-signature
+   (empty-varset truth-sorts)
+   (~> empty-rulelist
+       (add-rule
+        (make-rule truth-signature
+                   (make-term truth-signature
+                              '== (list (make-uvar truth-sorts 'X)
+                                        (make-uvar truth-sorts 'Y)))
+                   #f
+                   (λ (signature pattern condition substitution)
+                     (let ((x (substitution-value substitution 'X))
+                           (y (substitution-value substitution 'Y)))
+                       (make-term signature
+                                  (if (equal? x y) 'true 'false)
+                                  empty))))))))
+
+(module+ test
+  (with-context truth
+    (chk
+     #:= (RT (== true false)) (T false)
+     #:= (RT (== true true)) (T true)
+     #:= (RT (== false true)) (T false)
+     #:= (RT (== false false)) (T true))))
 
 ;
 ; Boolean algebra
@@ -87,7 +110,11 @@
      #:= (RT (=> true true))    (T true)
      #:= (RT (=> true false))   (T false)
      #:= (RT (=> false true))   (T true)
-     #:= (RT (=> false false))  (T true))))
+     #:= (RT (=> false false))  (T true)
+     #:= (RT (== true true))    (T true)
+     #:= (RT (== true false))   (T false)
+     #:= (RT (== false true))   (T false)
+     #:= (RT (== false false))  (T true))))
 
 ;
 ; Symbols and strings (to be completed)
@@ -127,6 +154,7 @@
 
 (define-context integers
   (include integer*)
+  (include truth)
   (-> #:vars ([X Integer] [Y Integer])
       (+ X Y) (binary-op integer? +))
   (-> #:vars ([X Integer] [Y Integer])
@@ -159,14 +187,17 @@
      #:= (RT (<= 2 3)) (T true)
      #:= (RT (>= 2 3)) (T false)
      #:= (RT (<= 3 3)) (T true)
-     #:= (RT (>= 3 3)) (T true))))
+     #:= (RT (>= 3 3)) (T true)
+     #:= (RT (== 3 3)) (T true)
+     #:= (RT (== 3 1)) (T false))))
 
-(define exact-number*
+(define exact-numbers*
   (builtin-context exact-number-sorts exact-number-signature
                    (empty-varset exact-number-sorts) empty-rulelist))
 
 (define-context exact-numbers
-  (include exact-number*)
+  (include exact-numbers*)
+  (include truth)
   (-> #:vars ([X Rational] [Y Rational])
       (+ X Y) (binary-op exact? +))
   (-> #:vars ([X Rational] [Y Rational])
@@ -206,7 +237,9 @@
      #:= (RT (<= 1/3 1/2)) (T true)
      #:= (RT (>= 1/3 1/2)) (T false)
      #:= (RT (<= 1/3 1/3)) (T true)
-     #:= (RT (>= 1/3 1/3)) (T true))))
+     #:= (RT (>= 1/3 1/3)) (T true)
+     #:= (RT (== 1/3 1/3)) (T true)
+     #:= (RT (== 1/3 2/3)) (T false))))
 
 (define IEEE-float*
   (builtin-context IEEE-float-sorts IEEE-float-signature
@@ -214,6 +247,7 @@
 
 (define-context IEEE-floating-point
   (include IEEE-float*)
+  (include truth)
   (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
       (+ X Y) (binary-op single-flonum? +))
   (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
@@ -269,4 +303,6 @@
      #:= (RT (<= #x1l0 #x2l0)) (T true)
      #:= (RT (>= #x1l0 #x2l0)) (T false)
      #:= (RT (<= #x1l0 #x1l0)) (T true)
-     #:= (RT (>= #x1l0 #x1l0)) (T true))))
+     #:= (RT (>= #x1l0 #x1l0)) (T true)
+     #:= (RT (== #x1l0 #x1l0)) (T true)
+     #:= (RT (== #x1l0 #x2l0)) (T false))))
