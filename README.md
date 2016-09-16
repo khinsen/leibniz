@@ -104,16 +104,16 @@ following libraries:
 
 To install Leibniz and its dependencies, type:
 ```bash
-   raco pkg install git://github.com/khinsen/leibniz?path=leibniz
+   raco pkg install git://github.com/khinsen/leibniz\?path=leibniz
 ```
 
 To run the Leibniz test suite, type
 ```bash
-   raco test leibniz
+   raco test -c leibniz
 ```
-in the main project directory (where this file resides). You can run an individual module's tests by typing
+You can run an individual library module's tests by typing
 ```bash
-   raco test leibniz/sorts.rkt
+   raco test l-l eibniz/sorts
 ```
 etc.
 
