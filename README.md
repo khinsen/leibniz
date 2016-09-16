@@ -102,9 +102,9 @@ following libraries:
    modified [fork](https://github.com/khinsen/chk) that fixes an
    installation problem on recent Racket versions)
 
-To install these libraries, type:
+To install Leibniz and its dependencies, type:
 ```bash
-   raco pkg install rackjure chk
+   raco pkg install git://github.com/khinsen/leibniz?path=leibniz
 ```
 
 To run the Leibniz test suite, type
