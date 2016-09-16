@@ -5,7 +5,8 @@
   [truth context?]
   [boolean context?]
   [integers context?]
-  [rationals context?]
+  [rational-numbers context?]
+  [real-numbers context?]
   [IEEE-floating-point context?]))
 
 (require "./builtins.rkt"
@@ -128,7 +129,7 @@
                    (empty-varset string-sorts) empty-rulelist))
 
 ;
-; Integers and exact numbers
+; Integers and rational numbers
 ;
 (define (binary-op predicate proc)
   (λ (signature pattern condition substitution)
@@ -195,7 +196,7 @@
   (builtin-context rational-sorts rational-signature
                    (empty-varset rational-sorts) empty-rulelist))
 
-(define-context rationals
+(define-context rational-numbers
   (include rationals*)
   (include truth)
   (-> #:vars ([X Rational] [Y Rational])
@@ -220,7 +221,7 @@
       (rem X Y) (binary-op integer? remainder)))
 
 (module+ test
-  (with-context rationals
+  (with-context rational-numbers
     (chk
      #:= (RT (+ 2 3)) (T 5)
      #:= (RT (+ 1/2 -1/2)) (T 0)
@@ -241,6 +242,37 @@
      #:= (RT (== 1/3 1/3)) (T true)
      #:= (RT (== 1/3 2/3)) (T false))))
 
+;
+; Real numbers
+;
+(define-context real-numbers
+  (include rational-numbers)
+  (sort Real)
+  (subsort Rational Real)
+  (sort NonZeroReal)
+  (subsort NonZeroReal Real)
+  (subsort NonZeroRational NonZeroReal)
+  (sort PositiveReal)
+  (subsort PositiveReal NonZeroReal)
+  (subsort PositiveRational PositiveReal)
+  (op (+ Real Real) Real)
+  (op (+ PositiveReal PositiveReal) PositiveReal)
+  (op (- Real Real) Real)
+  (op (* Real Real) Real)
+  (op (* PositiveReal PositiveReal) PositiveReal)
+  (op (* Zero Real) Zero)
+  (op (* Real Zero) Zero)
+  (op (/ Real NonZeroReal) Real)
+  (op (/ PositiveReal NonZeroReal) PositiveReal)
+  (op (/ Zero NonZeroReal) Zero)
+  (op (< Real Real) Boolean)
+  (op (> Real Real) Boolean)
+  (op (<= Real Real) Boolean)
+  (op (>= Real Real) Boolean))
+
+;
+; Floating-point numbers (IEEE binary32 and binary64)
+;
 (define IEEE-float*
   (builtin-context IEEE-float-sorts IEEE-float-signature
                    (empty-varset IEEE-float-sorts) empty-rulelist))
