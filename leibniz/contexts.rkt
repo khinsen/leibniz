@@ -83,8 +83,8 @@
              (empty-varset integer-sorts) empty-rulelist))
 
   (define basic-rational-context
-    (context exact-number-sorts exact-number-signature
-             (empty-varset exact-number-sorts) empty-rulelist))
+    (context rational-sorts rational-signature
+             (empty-varset rational-sorts) empty-rulelist))
 
   (check-equal? (merge-contexts basic-truth-context basic-string-context)
                 (merge-contexts basic-string-context basic-truth-context))

@@ -5,7 +5,7 @@
   [truth context?]
   [boolean context?]
   [integers context?]
-  [exact-numbers context?]
+  [rationals context?]
   [IEEE-floating-point context?]))
 
 (require "./builtins.rkt"
@@ -191,12 +191,12 @@
      #:= (RT (== 3 3)) (T true)
      #:= (RT (== 3 1)) (T false))))
 
-(define exact-numbers*
-  (builtin-context exact-number-sorts exact-number-signature
-                   (empty-varset exact-number-sorts) empty-rulelist))
+(define rationals*
+  (builtin-context rational-sorts rational-signature
+                   (empty-varset rational-sorts) empty-rulelist))
 
-(define-context exact-numbers
-  (include exact-numbers*)
+(define-context rationals
+  (include rationals*)
   (include truth)
   (-> #:vars ([X Rational] [Y Rational])
       (+ X Y) (binary-op exact? +))
@@ -220,7 +220,7 @@
       (rem X Y) (binary-op integer? remainder)))
 
 (module+ test
-  (with-context exact-numbers
+  (with-context rationals
     (chk
      #:= (RT (+ 2 3)) (T 5)
      #:= (RT (+ 1/2 -1/2)) (T 0)

@@ -45,7 +45,7 @@
                   (call-with-values (thunk b) list)))
   ; Define a simple sort graph and signature for testing
   (define sorts
-    (~> exact-number-sorts
+    (~> rational-sorts
         (add-sort 'A) (add-sort 'B)
         (add-subsort-relation 'B 'A)
         (add-sort 'X) (add-sort 'Y)

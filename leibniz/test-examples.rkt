@@ -9,7 +9,7 @@
          rackjure/threading)
 
 (define sorts
-  (~> (merge-sort-graphs exact-number-sorts truth-sorts)
+  (~> (merge-sort-graphs rational-sorts truth-sorts)
       (add-sort 'A) (add-sort 'B)
       (add-subsort-relation 'B 'A)
       (add-sort 'X) (add-sort 'Y)
@@ -17,7 +17,7 @@
 
 (define a-signature
   (~>  (foldl merge-signatures (empty-signature sorts)
-              (list exact-number-signature truth-signature))
+              (list rational-signature truth-signature))
       (add-op 'an-A empty 'A)
       (add-op 'a-B empty 'B)
       (add-op 'an-X empty 'X)

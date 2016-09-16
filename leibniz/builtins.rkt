@@ -5,7 +5,7 @@
          symbol-sorts symbol-signature
          string-sorts string-signature
          integer-sorts integer-signature
-         exact-number-sorts exact-number-signature
+         rational-sorts rational-signature
          IEEE-float-sorts IEEE-float-signature)
 
 (require "./sorts.rkt"
@@ -137,7 +137,7 @@
 ;
 ; Rationals and their subsets
 ;
-(define exact-number-sorts
+(define rational-sorts
   (~> integer-sorts
       ; Rational numbers
       (add-sort 'Rational)
@@ -149,8 +149,8 @@
       (add-subsort-relation 'PositiveRational 'NonZeroRational)
       (add-subsort-relation 'NonZeroNatural 'PositiveRational)))
 
-(define exact-number-signature
-  (~> (empty-signature exact-number-sorts #:builtins (set '*rational*))
+(define rational-signature
+  (~> (empty-signature rational-sorts #:builtins (set '*rational*))
       (merge-signatures integer-signature)
       (add-op '+ (list 'Rational 'Rational) 'Rational)
       (add-op '+ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
@@ -169,34 +169,34 @@
       (add-op '>= (list 'Rational 'Rational) 'Boolean)))
 
 (module+ test
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '+ (list 1/2 2/3)) 'PositiveRational)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '+ (list 1/2 -2/3)) 'Rational)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '- (list 1/2 -2/3)) 'Rational)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '* (list 1/2 2/3)) 'PositiveRational)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '* (list 0 2/3)) 'Zero)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '* (list 1/2 -2/3)) 'NonZeroRational)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '/ (list 1/2 -2/3)) 'Rational)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '/ (list 1/2 2/3)) 'PositiveRational)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '/ (list 1/2 0))
-                (kind exact-number-sorts 'Rational))
-  (check-equal? (sort-of-numarg-term exact-number-signature
+                (kind rational-sorts 'Rational))
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '< (list 1/2 2/3)) 'Boolean)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '> (list 1/2 2/3)) 'Boolean)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '<= (list 1/2 2/3)) 'Boolean)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '>= (list 1/2 2/3)) 'Boolean)
-  (check-equal? (sort-of-numarg-term exact-number-signature
+  (check-equal? (sort-of-numarg-term rational-signature
                                      '== (list 1/2 2/3)) 'Boolean))
 
 ;
