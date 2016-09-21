@@ -3,8 +3,9 @@
 (provide
  (struct-out rule)
  (contract-out
-  [make-rule (signature? term? (or/c #f term?) (or/c term? procedure?)
-              . -> . rule?)]
+  [make-rule ((signature? term? (or/c #f term?) (or/c term? procedure?))
+              ((or/c #f symbol?))
+              . ->* . rule?)]
   [valid-rule? (signature? any/c . -> . boolean?)]
   [rulelist? (any/c . -> . boolean?)]
   [empty-rulelist rulelist?]
@@ -27,10 +28,13 @@
 ;
 ; Rules
 ;
-(struct rule (pattern condition replacement)
+(struct rule (pattern condition replacement label)
         #:transparent)
 
-(define (make-rule signature pattern condition replacement)
+(define (make-rule signature pattern condition replacement [label #f])
+  (when (and label
+             (not (symbol? label)))
+    (error (format "Rule label not a symbol: ~s" label)))
   (unless (allowed-term? signature pattern)
     (error (format "Pattern ~s not allowed within signature" pattern)))
   (when (and condition (not (allowed-term? signature condition)))
@@ -61,7 +65,7 @@
                             (term.sort replacement) (term.sort pattern)))
     (error (format "Term ~s must be of sort ~s"
                    replacement (term.sort pattern))))
-  (rule pattern condition replacement))
+  (rule pattern condition replacement label))
 
 (define (valid-rule? signature rule)
   (and (rule? rule)
@@ -69,16 +73,18 @@
        (or (not (rule-condition rule))
            (valid-term? signature (rule-condition rule)))
        (or (procedure? (rule-replacement rule))
-           (valid-term? signature (rule-replacement rule)))))
+           (valid-term? signature (rule-replacement rule)))
+       (or (not (rule-label rule))
+           (symbol? (rule-label rule)))))
 
 (module+ test
   (with-sig-and-vars a-signature a-varset
     (check-equal? (make-rule a-signature (T IntVar) #f (T 2))
-                  (rule (T IntVar) #f (T 2)))
+                  (rule (T IntVar) #f (T 2) #f))
     (check-equal? (make-rule a-signature (T IntVar) (T true) (T 2))
-                  (rule (T IntVar) (T true) (T 2)))
-    (check-true (valid-rule? a-signature (rule (T IntVar) #f (T 2))))
-    (check-true (valid-rule? a-signature (rule (T IntVar) (T true) (T 2))))
+                  (rule (T IntVar) (T true) (T 2) #f))
+    (check-true (valid-rule? a-signature (rule (T IntVar) #f (T 2) #f)))
+    (check-true (valid-rule? a-signature (rule (T IntVar) (T true) (T 2) #f)))
     ; Term 'bar not allowed in signature
     (check-exn exn:fail? (thunk (make-rule a-signature 'bar #f (T 2))))
     (check-exn exn:fail? (thunk (make-rule a-signature (T Avar) 'bar (T 2))))
@@ -106,7 +112,8 @@
              (let ([r (rule-replacement rule)])
                (if (procedure? r)
                    r
-                   (term.in-signature r signature))) ))
+                   (term.in-signature r signature)))
+             (rule-label rule)))
 
 (module+ test
   (define larger-signature

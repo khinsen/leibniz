@@ -148,12 +148,16 @@
     #:description "rule declaration"
     (pattern ((~literal =>)
               (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
+              (~optional (~seq #:label label-symbol:id))
               pattern replacement
               (~optional (~seq #:if condition)))
              #:with vars (if (attribute var-name)
                              #'(list (cons (quote var-name)
                                            (quote var-sort)) ...)
                              #'empty)
+             #:with label (if (attribute label-symbol)
+                              #'(quote label-symbol)
+                              #'#f)
              #:with p-term #`(ts:pattern #,sig-var #,vars-var pattern)
              #:with r-term #`(ts:pattern #,sig-var #,vars-var replacement)
              #:with c-term (if (attribute condition)
@@ -161,12 +165,16 @@
                                #'#f))
     (pattern ((~literal ->)
               (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
+              (~optional (~seq #:label label-symbol:id))
               pattern replacement:expr
               (~optional (~seq #:if condition)))
              #:with vars (if (attribute var-name)
                              #'(list (cons (quote var-name)
                                            (quote var-sort)) ...)
                              #'empty)
+             #:with label (if (attribute label-symbol)
+                              #'(quote label-symbol)
+                              #'#f)
              #:with p-term #`(ts:pattern #,sig-var #,vars-var pattern)
              #:with r-term #'replacement
              #:with c-term (if (attribute condition)
@@ -198,7 +206,8 @@
                             (make-rule signature
                                        rule-defs.p-term
                                        rule-defs.c-term
-                                       rule-defs.r-term)))
+                                       rule-defs.r-term
+                                       rule-defs.label)))
                          ...)])
          (context sorts signature varset rules))]))
 
@@ -256,7 +265,7 @@
     (op (foo B) A)
     (op (foo A) B)
     (var X B)
-    (=> (foo an-A) a-B)
+    (=> #:label a-rule (foo an-A) a-B)
     (=> (foo X) an-A
         #:if true))
 
@@ -273,7 +282,7 @@
     (op a-B B)
     (op (foo B) A)
     (op (foo A) B)
-    (=> (foo an-A) a-B)
+    (=> #:label a-rule (foo an-A) a-B)
     (=> #:vars ([X B])
         (foo X) an-A
         #:if true))
