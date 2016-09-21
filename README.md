@@ -130,3 +130,7 @@ utility and feasibility of ideas for improvements and new features.
 Each branch has a short note in this place that explains its reason
 for being. This branch (master) always contains the version currently
 considered most useful.
+
+Note that all branches except master may be rebased, or modified in
+other ways. If you want to fork this repository, please don't rely
+on any branch other than master.
