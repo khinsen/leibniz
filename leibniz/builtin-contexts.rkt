@@ -38,7 +38,8 @@
                            (y (substitution-value substitution 'Y)))
                        (make-term signature
                                   (if (equal? x y) 'true 'false)
-                                  empty))))))))
+                                  empty))))))
+   empty-equationset))
 
 (module+ test
   (with-context truth
@@ -122,11 +123,11 @@
 ;
 (define symbol*
   (builtin-context symbol-sorts symbol-signature
-                   (empty-varset symbol-sorts) empty-rulelist))
+                   (empty-varset symbol-sorts) empty-rulelist empty-equationset))
 
 (define string*
   (builtin-context string-sorts string-signature
-                   (empty-varset string-sorts) empty-rulelist))
+                   (empty-varset string-sorts) empty-rulelist empty-equationset))
 
 ;
 ; Integers and rational numbers
@@ -151,7 +152,8 @@
 
 (define integer*
   (builtin-context integer-sorts integer-signature
-                   (empty-varset integer-sorts) empty-rulelist))
+                   (empty-varset integer-sorts)
+                   empty-rulelist empty-equationset))
 
 (define-context integers
   (include integer*)
@@ -194,7 +196,8 @@
 
 (define rationals*
   (builtin-context rational-sorts rational-signature
-                   (empty-varset rational-sorts) empty-rulelist))
+                   (empty-varset rational-sorts)
+                   empty-rulelist empty-equationset))
 
 (define-context rational-numbers
   (include rationals*)
@@ -275,7 +278,8 @@
 ;
 (define IEEE-float*
   (builtin-context IEEE-float-sorts IEEE-float-signature
-                   (empty-varset IEEE-float-sorts) empty-rulelist))
+                   (empty-varset IEEE-float-sorts)
+                   empty-rulelist empty-equationset))
 
 (define-context IEEE-floating-point
   (include IEEE-float*)
