@@ -4,6 +4,7 @@
  (contract-out
   [term?               (any/c . -> . boolean?)]
   [term.sort           (term? . -> . sort-or-kind?)]
+  [term.has-vars?      (term? . -> . boolean?)]
   [term.vars           (term? . -> . set?)]
   [term.key            (term? . -> . symbol?)]
   [term.builtin-type   (term? . -> . symbol?)]

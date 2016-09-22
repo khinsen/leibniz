@@ -12,7 +12,15 @@
   [in-rules (rulelist? . -> . stream?)]
   [add-rule (rulelist? rule? . -> . rulelist?)]
   [lookup-rules (rulelist? term? . -> . list?)]
-  [merge-rulelists (signature? rulelist? rulelist? . -> . rulelist?)]))
+  [merge-rulelists (signature? rulelist? rulelist? . -> . rulelist?)]
+  [make-equation ((signature? term? (or/c #f term?) term?) ((or/c #f symbol?))
+                  . ->* . equation?)]
+  [valid-equation? (signature? any/c . -> . boolean?)]
+  [equationset? (any/c . -> . boolean?)]
+  [empty-equationset equationset?]
+  [in-equations (equationset? . -> . stream?)]
+  [add-equation (equationset? equation? . -> . equationset?)]
+  [merge-equationsets (signature? equationset? equationset? . -> . equationset?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -26,45 +34,53 @@
            rackjure/threading))
 
 ;
-; Rules
+; Rules and equations
 ;
 (struct rule (pattern condition replacement label)
         #:transparent)
 
-(define (make-rule signature pattern condition replacement [label #f])
+(struct equation (left condition right label)
+        #:transparent)
+
+(define (check-term signature term)
+  (unless (allowed-term? signature term)
+    (error (format "Term ~s not allowed within signature" term))))
+
+(define (check-label label)
   (when (and label
              (not (symbol? label)))
-    (error (format "Rule label not a symbol: ~s" label)))
-  (unless (allowed-term? signature pattern)
-    (error (format "Pattern ~s not allowed within signature" pattern)))
-  (when (and condition (not (allowed-term? signature condition)))
-    (error (format "Term ~s not allowed within signature" condition)))
-  (unless (or (procedure? replacement)
-              (allowed-term? signature replacement))
-    (error (format "Term ~s not allowed within signature" replacement)))
-  (define pattern-vars (term.vars pattern))
-  (define condition-vars (and condition (term.vars condition)))
-  (define replacement-vars (if (procedure? replacement)
-                               (set)
-                               (term.vars replacement)))
-  (define sort-graph (signature-sort-graph signature))
+    (error (format "Rule label not a symbol: ~s" label))))
+
+(define (check-condition signature condition allowed-vars)
   (when condition
+    (define sort-graph (signature-sort-graph signature))
+    (define condition-vars (term.vars condition))
+    (check-term signature condition)
     (unless (conforms-to? sort-graph (term.sort condition) 'Boolean)
       (error (format "Condition ~s not of sort Boolean" condition)))
     (unless (and (lookup-op signature 'true empty)
                  (lookup-op signature 'false empty))
       (error "signature does not contain true and false"))
     (unless (set-empty?
-             (set-subtract condition-vars pattern-vars))
-      (error (format "Condition ~s contains variables that are not in the rule pattern" condition))))
-  (unless (set-empty?
-           (set-subtract replacement-vars pattern-vars))
-    (error (format "Term ~s contains variables that are not in the rule pattern" replacement)))
-  (unless (or (procedure? replacement)
-              (conforms-to? sort-graph
-                            (term.sort replacement) (term.sort pattern)))
-    (error (format "Term ~s must be of sort ~s"
-                   replacement (term.sort pattern))))
+             (set-subtract condition-vars allowed-vars))
+      (error (format "Condition ~s contains variables that are not used elsewhere" condition)))))
+
+(define (make-rule signature pattern condition replacement [label #f])
+  (define sort-graph (signature-sort-graph signature))
+  (check-term signature pattern)
+  (check-label label)
+  (check-condition signature condition (term.vars pattern))
+  (unless (procedure? replacement)
+    (check-term signature replacement)
+    (define pattern-vars (term.vars pattern))
+    (define replacement-vars (term.vars replacement))
+    (unless (set-empty?
+             (set-subtract replacement-vars pattern-vars))
+      (error (format "Term ~s contains variables that are not in the rule pattern" replacement)))
+    (unless (conforms-to? sort-graph
+                          (term.sort replacement) (term.sort pattern))
+      (error (format "Term ~s must be of sort ~s"
+                     replacement (term.sort pattern)))))
   (rule pattern condition replacement label))
 
 (define (valid-rule? signature rule)
@@ -100,6 +116,59 @@
     ; Replacement doesn't match sort of pattern
     (check-exn exn:fail?
                (thunk (make-rule a-signature (T IntVar) #f (T (foo a-B)))))))
+
+(define (make-equation signature left condition right [label #f])
+  (define sort-graph (signature-sort-graph signature))
+  (check-term signature left)
+  (check-term signature right)
+  (check-label label)
+  (check-condition signature condition
+                   (set-union (term.vars left) (term.vars right)))
+  (define left-sort-or-kind
+    (if (term.has-vars? left)
+        (kind sort-graph (term.sort left))
+        (term.sort left)))
+  (define right-sort-or-kind
+    (if (term.has-vars? right)
+        (kind sort-graph (term.sort right))
+        (term.sort right)))
+  (unless (or (conforms-to? sort-graph left-sort-or-kind right-sort-or-kind)
+              (conforms-to? sort-graph right-sort-or-kind left-sort-or-kind))
+    (error "Left and right terms have incompatible sorts"))
+  (equation left condition right label))
+
+(define (valid-equation? signature equation)
+  (and (equation? equation)
+       (valid-term? signature (equation-left equation))
+       (valid-term? signature (equation-right equation))
+       (or (not (equation-condition equation))
+           (valid-term? signature (equation-condition equation)))
+       (or (not (equation-label equation))
+           (symbol? (equation-label equation)))))
+
+(module+ test
+  (with-sig-and-vars a-signature a-varset
+    (check-equal? (make-equation a-signature (T IntVar) #f (T 2))
+                  (equation (T IntVar) #f (T 2) #f))
+    (check-equal? (make-equation a-signature (T IntVar) (T true) (T 2))
+                  (equation (T IntVar) (T true) (T 2) #f))
+    (check-true (valid-equation? a-signature (equation (T IntVar) #f (T 2) #f)))
+    (check-true (valid-equation? a-signature (equation (T IntVar) (T true) (T 2) #f)))
+    ; Term 'bar not allowed in signature
+    (check-exn exn:fail? (thunk (make-equation a-signature 'bar #f (T 2))))
+    (check-exn exn:fail? (thunk (make-equation a-signature (T Avar) 'bar (T 2))))
+    (check-exn exn:fail? (thunk (make-equation a-signature (T IntVar) #f 'bar)))
+    ; Condition not a boolean
+    (check-exn exn:fail? (thunk (make-equation a-signature (T IntVar) (T 0) (T 2))))
+    ; Variable in condition but not in either term
+    (check-exn exn:fail?
+               (thunk (make-equation a-signature (T IntVar) (T BoolVar) (T 2))))
+    ; Variable in replacement but not in either term
+    (check-exn exn:fail?
+               (thunk (make-equation a-signature (T IntVar) #f (T BoolVar))))
+    ; Term sorts do not match
+    (check-exn exn:fail?
+               (thunk (make-equation a-signature (T IntVar) #f (T (foo a-B)))))))
 
 ; Convert a rule to a new (larger) signature. Used for merging contexts.
 (define (in-signature rule signature)
@@ -182,3 +251,51 @@
                   some-rules)
     (check-equal? (merge-rulelists a-signature some-rules empty-rulelist)
                   some-rules)))
+
+;
+; Equation sets
+; For now, plain sets. Once it is clear how equations will be used,
+; this choice may be revised.
+;
+(define (equationset? x)
+  (set? x))
+
+(define empty-equationset
+  (set))
+
+(define (add-equation equationset equation)
+  (set-add equationset equation))
+
+(define (in-equations equationset)
+  (set->stream equationset))
+
+(define (merge-equationsets merged-signature el1 el2)
+  (for/set ([equation (stream-append (in-equations el1) (in-equations el2))])
+    (make-equation merged-signature
+                   (term.in-signature (equation-left equation) merged-signature)
+                   (let ([c (equation-condition equation)])
+                     (if c
+                         (term.in-signature c merged-signature)
+                         c))
+                   (term.in-signature (equation-right equation) merged-signature)
+                   (equation-label equation))))
+
+(module+ test
+  (with-sig-and-vars a-signature a-varset
+    (define equation1 (make-equation a-signature (T IntVar) #f (T 2)))
+    (define equation2 (make-equation a-signature (T (foo Bvar)) #f (T Bvar)))
+    (define equation3 (make-equation a-signature (T (foo Avar Bvar)) #f (T (foo Bvar))))
+    (define some-equations
+      (~> empty-equationset
+          (add-equation equation1)
+          (add-equation equation2)
+          (add-equation equation1)
+          (add-equation equation3)))
+    (check-equal? (set-count some-equations) 3)
+    (check-equal? (stream-length (in-equations some-equations)) 3)
+    (check-equal? (list->set (stream->list (in-equations some-equations)))
+                  some-equations)
+    (check-equal? (merge-equationsets a-signature empty-equationset some-equations)
+                  some-equations)
+    (check-equal? (merge-equationsets a-signature some-equations empty-equationset)
+                  some-equations)))
