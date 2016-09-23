@@ -25,6 +25,7 @@
   (syntax-parse stx
     [(_ class-name:id
         ((~literal field) field-name:id ...)
+        (~optional (~seq #:write-proc my-write-proc:expr))
         ((~literal define)
          (method-name:id method-arg:id ...) body:expr ...) ...)
      (with-syntax* ([obj-arg
@@ -38,29 +39,36 @@
                     [this (datum->syntax stx 'this)]
                     [(ext-method-name ...)
                      (generate-temporaries #'(method-name ...))])
-       #'(begin
-           (struct class-name [field-name ...] #:transparent
-             #:methods gen:lightweight-object
-             [(define (send-msg object symbol . args)
-                (apply (case symbol
-                         [(method-name) method-name] ...)
-                       (list* object args)))])
-           (define (method-name obj-arg temp-arg ...)
-             (let ([this obj-arg]
-                   [field-name (accessor obj-arg)] ...)
-               (let ([ext-method-name method-name] ...)
-                 (let ([method-name (λ (method-arg ...)
-                                      (method-name obj-arg method-arg ...))]
-                       ...)
-                   (let ([method-arg temp-arg] ...)
-                     body ...)))))
-           ...))]))
+       (let ([custom-write-impl
+              (if (attribute my-write-proc)
+                  #'(#:methods gen:custom-write
+                     [(define write-proc my-write-proc)])
+                  #'())])
+         #`(begin
+             (define (method-name obj-arg temp-arg ...)
+               (let ([this obj-arg]
+                     [field-name (accessor obj-arg)] ...)
+                 (let ([ext-method-name method-name] ...)
+                   (let ([method-name (λ (method-arg ...)
+                                        (method-name obj-arg method-arg ...))]
+                         ...)
+                     (let ([method-arg temp-arg] ...)
+                       body ...)))))
+             ...
+             (struct class-name [field-name ...] #:transparent
+               #:methods gen:lightweight-object
+               [(define (send-msg object symbol . args)
+                  (apply (case symbol
+                           [(method-name) method-name] ...)
+                         (list* object args)))]
+               #,@custom-write-impl))))]))
 
 (module* test #f
   (require rackunit)
   
   (define-class foo
     (field a b)
+    #:write-proc *write*
     (define (bar x)
       (* a b x))
     (define (baz)
@@ -74,7 +82,10 @@
     (define (id2 this)
       this)
     (define (add-as other)
-      (+ a (send other get-a))))
+      (+ a (send other get-a)))
+    (define (*write* p w)
+      (write-string (format "<foo ~a ~a>" a b) p)))
+
 
   (define a-foo (foo 2 3))
   (define another-foo (foo 10 20))
