@@ -40,6 +40,9 @@
         [(define (write-proc context port mode)
            (write-string "(context" port)
            (write-signature (context-signature context) 2 port)
+           (write-string "\n  ; variables" port)
+           (for ([(symbol sort) (all-vars (context-vars context))])
+             (write-string (format "\n  (var ~s ~s)" symbol sort) port))
            (write-string "\n  ; rules" port)
            (for ([rule (in-rules (context-rules context))])
              (write-string "\n  " port)
@@ -345,4 +348,5 @@
   (check-equal? (context-sort-graph test1) (context-sort-graph test2))
   (check-equal? (context-signature test1) (context-signature test2))
   ; context-vars must be different
-  (check-equal? (context-rules test1) (context-rules test2)))
+  (check-equal? (context-rules test1) (context-rules test2))
+  (check-equal? (context-equations test1) (context-equations test2)))

@@ -38,12 +38,27 @@
 ;
 ; Rules and equations
 ;
+
+(define (write-label label port)
+  (when label
+    (write-string "#:label " port)
+    (write label port)
+    (write-char #\space port)))
+
+(define (write-vars vars port)
+  (unless (set-empty? vars)
+    (write-string
+     (string-join (for/list ([var (in-set vars)])
+                    (format "[~s ~s]" (var-name var) (var-sort var)))
+                  " "
+                  #:before-first "#:vars ("
+                  #:after-last ")  ")
+     port)))
+
 (define (write-rule rule port [mode #f])
   (write-string "(=> " port)
-  (when (rule-label rule)
-    (write-string "#:label " port)
-    (write (rule-label rule) port)
-    (write-char #\space port))
+  (write-label (rule-label rule) port)
+  (write-vars (term.vars (rule-pattern rule)) port)
   (write (rule-pattern rule) port)
   (write-char #\space port)
   (write (rule-replacement rule) port)
@@ -59,10 +74,10 @@
 
 (define (write-equation equation port [mode #f])
   (write-string "(eq " port)
-  (when (equation-label equation)
-    (write-string "#:label " port)
-    (write (equation-label equation) port)
-    (write-char #\space port))
+  (write-label (equation-label equation) port)
+  (write-vars (set-union (term.vars (equation-left equation))
+                         (term.vars (equation-right equation)))
+              port)
   (write (equation-left equation) port)
   (write-char #\space port)
   (write (equation-right equation) port)

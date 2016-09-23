@@ -23,11 +23,14 @@
   [empty-varset        (sort-graph? . -> . varset?)]
   [varset-sort-graph   (varset? . -> . sort-graph?)]
   [add-var             (varset? symbol? sort? . -> . varset?)]
+  [all-vars            (varset? . -> . hash?)]
   [merge-varsets       (varset? varset? . -> . varset?)]
   [var?                (any/c . -> . boolean?)]
   [make-var            (varset? symbol? . -> . (or/c #f var?))]
   [make-var-or-term    (signature? varset? symbol? . -> . term?)]
   [make-uvar           (sort-graph? symbol? . -> . var?)]
+  [var-name            (var? . -> . symbol?)]
+  [var-sort            (var? . -> . (or/c #f symbol?))]
   [write-term          ((term? output-port?) (any/c) . ->* . void?)]))
 
 (require "./lightweight-class.rkt"
@@ -346,6 +349,9 @@
 
   (define (lookup-var symbol)
     (hash-ref vars symbol #f))
+
+  (define (all-vars)
+    vars)
 
   (define (merge-varsets other)
     (define merged-sort-graph
