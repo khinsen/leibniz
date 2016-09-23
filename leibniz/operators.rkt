@@ -10,7 +10,8 @@
   [merge-signatures (signature? signature? . -> . signature?)]
   [lookup-op        (signature? symbol? (listof (or/c #f sort?))
                      . -> .
-                     (or/c #f (cons/c (listof sort-constraint?) sort-or-kind?)))]))
+                     (or/c #f (cons/c (listof sort-constraint?) sort-or-kind?)))]
+  [write-signature  (signature? natural-number/c output-port? . -> . void?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -369,6 +370,8 @@
   ; builtins: the builtin special term types included in this signature
   ;           (a set of symbols)
 
+  #:write-proc *write*
+
   (define (add-op symbol arity sort)
     (for ([arg arity])
       (validate-sort-constraint sort-graph arg))
@@ -417,7 +420,33 @@
         ; are represented as sets of sorts, the original kind representation
         ; is no longer a valid sort.
         (error "kind arguments not yet implemented"))
-      (send sig add-op symbol (car rank) (cdr rank)))))
+      (send sig add-op symbol (car rank) (cdr rank))))
+
+  (define (write-signature indentation port)
+    (define prefix (make-string indentation #\space))
+    (unless (set-empty? builtins)
+      (write-string " #:builtins " port)
+      (print builtins port))
+    (write-sort-graph sort-graph indentation port)
+    (newline port)
+    (write-string prefix port)
+    (write-string "; operators" port)
+    (for ([(symbol rank) (all-ops)])
+      (newline port)
+      (write-string prefix port)
+      (write-string "(op " port)
+      (if (empty? (car rank))
+          (write symbol port)
+          (write (cons symbol (car rank)) port))
+      (write-string " " port)
+      (write (cdr rank) port)
+      (write-string ")" port))
+    )
+
+  (define (*write* port mode)
+    (write-string "(signature" port)
+    (write-signature 2 port)
+    (write-string ")\n" port)))
 
 (define (empty-signature sort-graph #:builtins [builtins (set)])
   (signature sort-graph (hash) builtins))

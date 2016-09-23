@@ -27,7 +27,9 @@
   [conforms-to?             (sort-graph? sort-constraint? sort-constraint?
                                          . -> . boolean?)]
   [conforming-sorts         (sort-graph? sort-constraint? . -> . set?)]
-  [constraint->string       (sort-graph? sort-constraint? . -> . string?)]))
+  [constraint->string       (sort-graph? sort-constraint? . -> . string?)]
+  [write-sort-graph         (sort-graph? natural-number/c output-port?
+                                         . -> . void?)]))
 
 (require "./lightweight-class.rkt")
 
@@ -68,6 +70,8 @@
   ; directed graph); each hash can be created from the other. The set
   ; of kinds can also be computed from the subsort relations. All
   ; three are stored explicitly for more efficient lookup.
+
+  #:write-proc *write*
 
   (define (has-sort? sort)
     (hash-has-key? subsorts sort))
@@ -207,7 +211,36 @@
        (format "[~a]"
                (string-join (map symbol->string
                                  (set->list (maximal-sorts constraint)))
-                            ","))])))
+                            ","))]))
+
+  (define (write-sort-graph indentation port)
+    (define prefix (make-string indentation #\space))
+    (for ([k (list->set (hash-values kinds))])
+      (write-string prefix port)
+      (write-string "\n; kind " port)
+      (write-string (constraint->string k) port)
+      (write-string "\n" port)
+      (write-string prefix port)
+      (write-string "(sorts" port)
+      (for ([sort (in-set k)])
+        (write-char #\space port)
+        (write sort port)) 
+      (write-string ")\n" port)
+      (write-string prefix port)
+      (write-string "(subsorts" port)
+      (for* ([sort (in-set k)]
+             [subsort (hash-ref subsorts sort)])
+        (write-string " [" port)
+        (write subsort port)
+        (write-string " " port)
+        (write sort port)
+        (write-string "]" port)) 
+      (write-string ")" port)))
+
+  (define (*write* port mode)
+    (write-string "(sort-graph" port)
+    (write-sort-graph 2 port)
+    (write-string ")\n" port)))
 
 (define empty-sort-graph
   (sort-graph (hash) (hash) (hash)))

@@ -13,6 +13,7 @@
   [add-rule (rulelist? rule? . -> . rulelist?)]
   [lookup-rules (rulelist? term? . -> . list?)]
   [merge-rulelists (signature? rulelist? rulelist? . -> . rulelist?)]
+  [write-rule (rule? output-port? . -> . void?)]
   [make-equation ((signature? term? (or/c #f term?) term?) ((or/c #f symbol?))
                   . ->* . equation?)]
   [valid-equation? (signature? any/c . -> . boolean?)]
@@ -20,7 +21,8 @@
   [empty-equationset equationset?]
   [in-equations (equationset? . -> . stream?)]
   [add-equation (equationset? equation? . -> . equationset?)]
-  [merge-equationsets (signature? equationset? equationset? . -> . equationset?)]))
+  [merge-equationsets (signature? equationset? equationset? . -> . equationset?)]
+  [write-equation (equation? output-port? . -> . void?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -36,12 +38,47 @@
 ;
 ; Rules and equations
 ;
+(define (write-rule rule port [mode #f])
+  (write-string "(=> " port)
+  (when (rule-label rule)
+    (write-string "#:label " port)
+    (write (rule-label rule) port)
+    (write-char #\space port))
+  (write (rule-pattern rule) port)
+  (write-char #\space port)
+  (write (rule-replacement rule) port)
+  (when (rule-condition rule)
+    (write-string " #:if " port)
+    (write (rule-condition rule) port))
+  (write-string ")" port))
+
 (struct rule (pattern condition replacement label)
-        #:transparent)
+        #:transparent
+        #:methods gen:custom-write
+        [(define write-proc write-rule)])
+
+(define (write-equation equation port [mode #f])
+  (write-string "(eq " port)
+  (when (equation-label equation)
+    (write-string "#:label " port)
+    (write (equation-label equation) port)
+    (write-char #\space port))
+  (write (equation-left equation) port)
+  (write-char #\space port)
+  (write (equation-right equation) port)
+  (when (equation-condition equation)
+    (write-string " #:if " port)
+    (write (equation-condition equation) port))
+  (write-string ")" port))
 
 (struct equation (left condition right label)
-        #:transparent)
+        #:transparent
+        #:methods gen:custom-write
+        [(define write-proc write-equation)])
 
+;
+; Construct rules and equations after checking arguments
+;
 (define (check-term signature term)
   (unless (allowed-term? signature term)
     (error (format "Term ~s not allowed within signature" term))))
