@@ -42,11 +42,11 @@
            (write-signature (context-signature context) 2 port)
            (write-string "\n  ; rules" port)
            (for ([rule (in-rules (context-rules context))])
-             (newline port)
+             (write-string "\n  " port)
              (write rule port))
            (write-string "\n  ; equations" port)
            (for ([eq (in-equations (context-equations context))])
-             (newline port)
+             (write-string "\n  " port)
              (write eq port))
            (write-string ")\n" port))])
 
