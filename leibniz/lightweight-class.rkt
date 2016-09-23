@@ -38,11 +38,7 @@
                     [this (datum->syntax stx 'this)]
                     [(ext-method-name ...)
                      (generate-temporaries #'(method-name ...))])
-       #'(splicing-let ([call-method
-                         (λ (symbol args)
-                           (apply (case symbol
-                                    [(method-name) method-name] ...)
-                                  args))])
+       #'(begin
            (struct class-name [field-name ...] #:transparent
              #:methods gen:lightweight-object
              [(define (send-msg object symbol . args)
