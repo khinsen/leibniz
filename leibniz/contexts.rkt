@@ -169,8 +169,8 @@
   (define-syntax-class (rule-or-eq sig-var vars-var)
     #:description "rule or equation declaration"
     (pattern ((~literal =>)
-              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
               (~optional (~seq #:label label-symbol:id))
+              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
               pattern replacement
               (~optional (~seq #:if condition)))
              #:with type #'(quote rule)
@@ -187,8 +187,8 @@
                                #`(ts:pattern #,sig-var #,vars-var condition)
                                #'#f))
     (pattern ((~literal ->)
-              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
               (~optional (~seq #:label label-symbol:id))
+              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
               pattern replacement:expr
               (~optional (~seq #:if condition)))
              #:with type #'(quote rule)
@@ -205,8 +205,8 @@
                                #`(ts:pattern #,sig-var #,vars-var condition)
                                #'#f))
     (pattern ((~literal eq)
-              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
               (~optional (~seq #:label label-symbol:id))
+              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
               left right
               (~optional (~seq #:if condition)))
              #:with type #'(quote equation)
