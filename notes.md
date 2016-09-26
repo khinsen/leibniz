@@ -24,7 +24,13 @@ bottom):
    term algebra and a list of rules for term simplification.
    
  - `rewrite.rkt` implements term rewriting.
-   
+
+ - `context-syntax.rkt` implements convenience syntax for doing computations
+   inside a context.
+
+ - `builtin-contexts.rkt` implements a few built-in contexts
+   (truth, boolean, numbers).
+
 Three modules are not part of this stack:
 
  - `condd.rkt` and `lightweight-class.rkt` provide generic utilities
@@ -44,3 +50,7 @@ particular needs to be defined properly.
 
 Merging signatures or varsets implies merging their sort graphs, which
 ends up getting done twice when contexts are merged.
+
+### Labels in rules and equations
+
+Labels are not required to be unique, which may turn out to be a bad choice.
