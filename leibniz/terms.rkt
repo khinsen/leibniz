@@ -2,36 +2,38 @@
 
 (provide
  (contract-out
-  [term?               (any/c . -> . boolean?)]
-  [term.sort           (term? . -> . sort-or-kind?)]
-  [term.has-vars?      (term? . -> . boolean?)]
-  [term.vars           (term? . -> . set?)]
-  [term.key            (term? . -> . symbol?)]
-  [term.builtin-type   (term? . -> . symbol?)]
-  [term.op-and-args    (term? . -> . (values (or/c #f symbol?)
-                                             (or/c #f list?)))]
-  [term.in-signature (term? signature? . -> . term?)]
-  [term.match          (signature? term? term? . -> . sequence?)]
-  [term.substitute     (signature? term? substitution? . -> . term?)]
-  [substitution?       (any/c . -> . boolean?)]
-  [empty-substitution  substitution?]
-  [substitution-value  (substitution? symbol? . -> . term?)]
-  [allowed-term?       (signature? term? . -> . boolean?)]
-  [valid-term?         (signature? any/c . -> . boolean?)]
-  [make-term           (signature? symbol? list? . -> . term?)]
-  [make-term*          (signature? symbol? list? . -> . (or/c #f term?))]
-  [empty-varset        (sort-graph? . -> . varset?)]
-  [varset-sort-graph   (varset? . -> . sort-graph?)]
-  [add-var             (varset? symbol? sort? . -> . varset?)]
-  [all-vars            (varset? . -> . hash?)]
-  [merge-varsets       (varset? varset? . -> . varset?)]
-  [var?                (any/c . -> . boolean?)]
-  [make-var            (varset? symbol? . -> . (or/c #f var?))]
-  [make-var-or-term    (signature? varset? symbol? . -> . term?)]
-  [make-uvar           (sort-graph? symbol? . -> . var?)]
-  [var-name            (var? . -> . symbol?)]
-  [var-sort            (var? . -> . (or/c #f symbol?))]
-  [write-term          ((term? output-port?) (any/c) . ->* . void?)]))
+  [term?                  (any/c . -> . boolean?)]
+  [term.sort              (term? . -> . sort-or-kind?)]
+  [term.has-vars?         (term? . -> . boolean?)]
+  [term.vars              (term? . -> . set?)]
+  [term.key               (term? . -> . symbol?)]
+  [term.builtin-type      (term? . -> . symbol?)]
+  [term.op-and-args       (term? . -> . (values (or/c #f symbol?)
+                                                (or/c #f list?)))]
+  [term.in-signature      (term? signature? . -> . term?)]
+  [term.match             (signature? term? term? . -> . sequence?)]
+  [term.substitute        (signature? term? substitution? . -> . term?)]
+  [substitution?          (any/c . -> . boolean?)]
+  [empty-substitution     substitution?]
+  [substitution-value     (substitution? symbol? . -> . term?)]
+  [allowed-term?          (signature? term? . -> . boolean?)]
+  [valid-term?            (signature? any/c . -> . boolean?)]
+  [make-term              (signature? symbol? list? . -> . term?)]
+  [make-term*             (signature? symbol? list? . -> . (or/c #f term?))]
+  [empty-varset           (sort-graph? . -> . varset?)]
+  [varset-sort-graph      (varset? . -> . sort-graph?)]
+  [add-var                (varset? symbol? sort? . -> . varset?)]
+  [all-vars               (varset? . -> . hash?)]
+  [merge-varsets          (varset? varset? . -> . varset?)]
+  [var?                   (any/c . -> . boolean?)]
+  [make-var               (varset? symbol? . -> . (or/c #f var?))]
+  [make-var-or-term       (signature? varset? symbol? . -> . term?)]
+  [make-uvar              (sort-graph? symbol? . -> . var?)]
+  [var-name               (var? . -> . symbol?)]
+  [var-sort               (var? . -> . (or/c #f symbol?))]
+  [display-vars           (set? output-port? . -> . void?)]
+  [display-term-with-vars ((term? output-port?) (any/c) . ->* . void?)]
+  [display-term           ((term? output-port?) (any/c) . ->* . void?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -238,29 +240,54 @@
 ;
 ; Readable output for terms
 ;
-(define (write-term term port [mode #f])
+(define (display-vars vars port)
+  (unless (set-empty? vars)
+    (display
+     (string-join (for/list ([var (in-set vars)])
+                    (format "[~s ~s]" (var-name var) (var-sort var)))
+                  " "
+                  #:before-first "#:vars ("
+                  #:after-last ")  ")
+     port)))
+
+(define (display-term term port [mode #f])
   (cond
-    [(op-term? term)
+    [(or (op-term? term)
+         (op-pattern? term))
      (if (empty? (op-term-args term))
-         (write (op-term-op term) port)
+         (display (op-term-op term) port)
          (begin
-           (write-string "(" port)
-           (write (op-term-op term) port)
+           (display "(" port)
+           (display (op-term-op term) port)
            (for ([arg (op-term-args term)])
-             (write-string " " port)
-             (write-term arg port mode))
-           (write-string ")" port)))]
+             (display " " port)
+             (display-term arg port mode))
+           (display ")" port)))]
+    [(var? term)
+     (display (var-name term) port)]
     [(symbol? term)
      (begin
-       (write-string "'" port)
-       (write term port))]
+       (display "'" port)
+       (display term port))]
+    [(string? term)
+     (write term port)]
     [else
-     (write term port)]))
+     (display term port)]))
+
+(define (display-term-with-vars term port [mode #f])
+  (define vars (term.vars term))
+  (if (set-empty? vars)
+      (display-term term port mode)
+      (begin
+        (display "(pattern " port)
+        (display-vars vars port)
+        (display-term term port)
+        (display ")" port))))
 
 (module+ test
   (define (term->string term)
     (let ([o (open-output-string)])
-      (write-term term o)
+      (display-term term o)
       (get-output-string o)))
   (check-equal? (term->string 2) "2")
   (check-equal? (term->string 'foo) "'foo")
@@ -282,7 +309,7 @@
    (define (term.in-signature term signature)
      (op-term-in-signature term signature))]
   #:methods gen:custom-write
-  [(define write-proc write-term)])
+  [(define write-proc display-term-with-vars)])
 
 (module+ test
   (define an-A (make-term a-signature 'an-A empty))
@@ -407,8 +434,7 @@
      (define sorts (signature-sort-graph signature))
      (var sorts (var-name x) (var-sort x)))]
   #:methods gen:custom-write
-  [(define (write-proc var port mode)
-     (write (var-name var) port))])
+  [(define write-proc display-term-with-vars)])
 
 (define (make-var varset symbol)
   (define sort (lookup-var varset symbol))
@@ -511,7 +537,7 @@
    (define (term.vars pattern)
      (foldl set-union (set) (map generic-vars (op-term-args pattern))))]
   #:methods gen:custom-write
-  [(define write-proc write-term)])
+  [(define write-proc display-term-with-vars)])
 
 (module+ test
   (define a-one-var-pattern (make-term a-signature 'foo (list B-var)))

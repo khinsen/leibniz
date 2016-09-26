@@ -2,6 +2,7 @@
 
 (provide
  (struct-out rule)
+ (struct-out equation)
  (contract-out
   [make-rule ((signature? term? (or/c #f term?) (or/c term? procedure?))
               ((or/c #f symbol?))
@@ -13,7 +14,7 @@
   [add-rule (rulelist? rule? . -> . rulelist?)]
   [lookup-rules (rulelist? term? . -> . list?)]
   [merge-rulelists (signature? rulelist? rulelist? . -> . rulelist?)]
-  [write-rule (rule? output-port? . -> . void?)]
+  [display-rule (rule? output-port? . -> . void?)]
   [make-equation ((signature? term? (or/c #f term?) term?) ((or/c #f symbol?))
                   . ->* . equation?)]
   [valid-equation? (signature? any/c . -> . boolean?)]
@@ -22,7 +23,7 @@
   [in-equations (equationset? . -> . stream?)]
   [add-equation (equationset? equation? . -> . equationset?)]
   [merge-equationsets (signature? equationset? equationset? . -> . equationset?)]
-  [write-equation (equation? output-port? . -> . void?)]))
+  [display-equation (equation? output-port? . -> . void?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -39,57 +40,49 @@
 ; Rules and equations
 ;
 
-(define (write-label label port)
+(define (display-label label port)
   (when label
-    (write-string "#:label " port)
+    (display "#:label " port)
     (write label port)
-    (write-char #\space port)))
+    (display #\space port)))
 
-(define (write-vars vars port)
-  (unless (set-empty? vars)
-    (write-string
-     (string-join (for/list ([var (in-set vars)])
-                    (format "[~s ~s]" (var-name var) (var-sort var)))
-                  " "
-                  #:before-first "#:vars ("
-                  #:after-last ")  ")
-     port)))
-
-(define (write-rule rule port [mode #f])
-  (write-string "(=> " port)
-  (write-label (rule-label rule) port)
-  (write-vars (term.vars (rule-pattern rule)) port)
-  (write (rule-pattern rule) port)
-  (write-char #\space port)
-  (write (rule-replacement rule) port)
+(define (display-rule rule port [mode #f])
+  (display "(=> " port)
+  (display-label (rule-label rule) port)
+  (display-vars (term.vars (rule-pattern rule)) port)
+  (display-term (rule-pattern rule) port)
+  (display #\space port)
+  (if (procedure? (rule-replacement rule))
+      (display-term "<procedure>" port)
+      (display-term (rule-replacement rule) port))
   (when (rule-condition rule)
-    (write-string " #:if " port)
-    (write (rule-condition rule) port))
-  (write-string ")" port))
+    (display " #:if " port)
+    (display-term (rule-condition rule) port))
+  (display ")" port))
 
 (struct rule (pattern condition replacement label)
         #:transparent
         #:methods gen:custom-write
-        [(define write-proc write-rule)])
+        [(define write-proc display-rule)])
 
-(define (write-equation equation port [mode #f])
-  (write-string "(eq " port)
-  (write-label (equation-label equation) port)
-  (write-vars (set-union (term.vars (equation-left equation))
-                         (term.vars (equation-right equation)))
-              port)
-  (write (equation-left equation) port)
-  (write-char #\space port)
-  (write (equation-right equation) port)
+(define (display-equation equation port [mode #f])
+  (display "(eq " port)
+  (display-label (equation-label equation) port)
+  (display-vars (set-union (term.vars (equation-left equation))
+                           (term.vars (equation-right equation)))
+                port)
+  (display-term (equation-left equation) port)
+  (display #\space port)
+  (display-term (equation-right equation) port)
   (when (equation-condition equation)
-    (write-string " #:if " port)
-    (write (equation-condition equation) port))
-  (write-string ")" port))
+    (display " #:if " port)
+    (display-term (equation-condition equation) port))
+  (display ")" port))
 
 (struct equation (left condition right label)
         #:transparent
         #:methods gen:custom-write
-        [(define write-proc write-equation)])
+        [(define write-proc display-equation)])
 
 ;
 ; Construct rules and equations after checking arguments
