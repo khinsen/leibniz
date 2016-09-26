@@ -31,8 +31,8 @@
            rackjure/threading))
 
 ;
-; A context combines a sort-graph, a signature, a varset, and a rulelist.
-; (Equations to be added later)
+; A context combines a sort-graph, a signature, a varset, a rulelist,
+; and an equationset.
 ;
 (struct context (sort-graph signature vars rules equations)
         #:transparent
@@ -138,23 +138,23 @@
 
   (define-syntax-class include
     #:description "include declaration"
-    (pattern ((~literal include) context:expr)))
+    (pattern ((~datum include) context:expr)))
 
   (define-syntax-class sort-or-subsort
     #:description "sort or subsort declaration"
-    (pattern ((~literal sort) sort-name:id)
+    (pattern ((~datum sort) sort-name:id)
              #:with value
              #'(add-sort (quote sort-name)))
-    (pattern ((~literal subsort) sort1:id sort2:id)
+    (pattern ((~datum subsort) sort1:id sort2:id)
              #:with value
              #'(add-subsort-relation (quote sort1) (quote sort2))))
 
   (define-syntax-class operator
     #:description "operator declaration"
-    (pattern ((~literal op) op-name:id sort:id)
+    (pattern ((~datum op) op-name:id sort:id)
              #:with value
              #'(add-op (quote op-name) empty (quote sort)))
-    (pattern ((~literal op) (op-name:id arg-sort:id ...) sort:id)
+    (pattern ((~datum op) (op-name:id arg-sort:id ...) sort:id)
              #:with value
              #'(add-op (quote op-name)
                        (list (quote arg-sort) ...)
@@ -162,66 +162,92 @@
 
   (define-syntax-class variable
     #:description "variable declaration"
-    (pattern ((~literal var) var-name:id sort:id)
+    (pattern ((~datum var) var-name:id sort:id)
              #:with value
              #'(add-var (quote var-name) (quote sort))))
 
+                                        ; Rules and equations
+
+  (define-splicing-syntax-class opt-label
+    #:description "optional label in a rule or equation"
+    (pattern (~seq #:label a-symbol:id)
+             #:with expr #'(quote a-symbol))
+    (pattern (~seq)
+             #:with expr #'#f))
+
+  (define-splicing-syntax-class opt-vars
+    #:description "optional variable declaration in a rule or equation"
+    (pattern (~seq #:vars ([var-name:id var-sort:id] ...))
+             #:with expr #'(list (cons (quote var-name)
+                                       (quote var-sort)) ...))
+    (pattern (~seq)
+             #:with expr #'empty))
+
+  (define-splicing-syntax-class (embedded-pattern sig-var vars-var)
+    #:description "embedded pattern in a rule or equation"
+    (pattern p:expr
+             #:with expr #`(ts:pattern #,sig-var #,vars-var p)))
+
+  (define-splicing-syntax-class (opt-condition sig-var vars-var)
+    #:description "optional condition in a rule or equation"
+    (pattern (~seq #:if (~var condition (embedded-pattern sig-var vars-var)))
+             #:with expr #'condition.expr)
+    (pattern (~seq)
+             #:with expr #'#f))
+
+  (define-syntax-class (pattern-rule sig-var vars-var)
+    #:description "pattern rule declaration"
+    (pattern ((~datum =>)
+              a-label:opt-label
+              local-vars:opt-vars
+              (~var pattern (embedded-pattern sig-var vars-var))
+              (~var replacement (embedded-pattern sig-var vars-var))
+              (~var condition (opt-condition sig-var vars-var)))
+             #:with type #'(quote rule)
+             #:with args #'(list pattern.expr condition.expr replacement.expr
+                                 a-label.expr)
+             #:with vars #'local-vars.expr))
+
+  (define-syntax-class (fn-rule sig-var vars-var)
+    #:description "function rule declaration"
+    (pattern ((~datum ->)
+              a-label:opt-label
+              local-vars:opt-vars
+              (~var pattern (embedded-pattern sig-var vars-var))
+              replacement:expr
+              (~var condition (opt-condition sig-var vars-var)))
+             #:with type #'(quote rule)
+             #:with args #'(list pattern.expr condition.expr replacement
+                                 a-label.expr)
+             #:with vars #'local-vars.expr))
+
+  (define-syntax-class (equation sig-var vars-var)
+    #:description "equation declaration"
+    (pattern ((~datum eq)
+              a-label:opt-label
+              local-vars:opt-vars
+              (~var left (embedded-pattern sig-var vars-var))
+              (~var right (embedded-pattern sig-var vars-var))
+              (~var condition (opt-condition sig-var vars-var)))
+             #:with type #'(quote equation)
+             #:with args #'(list left.expr condition.expr right.expr
+                                 a-label.expr)
+             #:with vars #'local-vars.expr))
+
   (define-syntax-class (rule-or-eq sig-var vars-var)
     #:description "rule or equation declaration"
-    (pattern ((~literal =>)
-              (~optional (~seq #:label label-symbol:id))
-              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
-              pattern replacement
-              (~optional (~seq #:if condition)))
+    (pattern (~var pr (pattern-rule sig-var vars-var))
              #:with type #'(quote rule)
-             #:with vars (if (attribute var-name)
-                             #'(list (cons (quote var-name)
-                                           (quote var-sort)) ...)
-                             #'empty)
-             #:with label (if (attribute label-symbol)
-                              #'(quote label-symbol)
-                              #'#f)
-             #:with l-term #`(ts:pattern #,sig-var #,vars-var pattern)
-             #:with r-term #`(ts:pattern #,sig-var #,vars-var replacement)
-             #:with c-term (if (attribute condition)
-                               #`(ts:pattern #,sig-var #,vars-var condition)
-                               #'#f))
-    (pattern ((~literal ->)
-              (~optional (~seq #:label label-symbol:id))
-              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
-              pattern replacement:expr
-              (~optional (~seq #:if condition)))
+             #:with args #'pr.args
+             #:with vars #'pr.vars)
+    (pattern (~var fr (fn-rule sig-var vars-var))
              #:with type #'(quote rule)
-             #:with vars (if (attribute var-name)
-                             #'(list (cons (quote var-name)
-                                           (quote var-sort)) ...)
-                             #'empty)
-             #:with label (if (attribute label-symbol)
-                              #'(quote label-symbol)
-                              #'#f)
-             #:with l-term #`(ts:pattern #,sig-var #,vars-var pattern)
-             #:with r-term #'replacement
-             #:with c-term (if (attribute condition)
-                               #`(ts:pattern #,sig-var #,vars-var condition)
-                               #'#f))
-    (pattern ((~literal eq)
-              (~optional (~seq #:label label-symbol:id))
-              (~optional (~seq #:vars ([var-name:id var-sort:id] ...)))
-              left right
-              (~optional (~seq #:if condition)))
+             #:with args #'fr.args
+             #:with vars #'fr.vars)
+    (pattern (~var e (equation sig-var vars-var))
              #:with type #'(quote equation)
-             #:with vars (if (attribute var-name)
-                             #'(list (cons (quote var-name)
-                                           (quote var-sort)) ...)
-                             #'empty)
-             #:with label (if (attribute label-symbol)
-                              #'(quote label-symbol)
-                              #'#f)
-             #:with l-term #`(ts:pattern #,sig-var #,vars-var left)
-             #:with r-term #`(ts:pattern #,sig-var #,vars-var right)
-             #:with c-term (if (attribute condition)
-                               #`(ts:pattern #,sig-var #,vars-var condition)
-                               #'#f))))
+             #:with args #'e.args
+             #:with vars #'e.vars)))
 
 (define (add-vars* varset var-defs)
   (foldl (λ (vd vs) (add-var vs (car vd) (cdr vd))) varset var-defs))
@@ -233,10 +259,10 @@
     [(equation) (cons (car ruleqs)
                       (add-equation (cdr ruleqs) rule-or-eq))]))
 
-(define (make-rule-or-eq signature type l-term c-term r-term label)
+(define (make-rule-or-eq type)
   (case type
-    [(rule) (make-rule signature l-term c-term r-term label)]
-    [(equation) (make-equation signature l-term c-term r-term label)]))
+    [(rule) make-rule]
+    [(equation) make-equation]))
 
 (define-syntax (context- stx)
   (syntax-parse stx
@@ -244,7 +270,7 @@
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
         var-defs:variable ...
-        (~var ruleq-defs (rule-or-eq #'signature #'r-varset)) ...)
+        (~var ruleq-defs (rule-or-eq #'signature #'varset*)) ...)
      #`(let* ([initial (foldl merge-contexts empty-context
                               (list included-contexts.context ...))]
               [sorts (~> (context-sort-graph initial) sort-defs.value ...)]
@@ -257,13 +283,9 @@
               [ruleqs (~> (cons (context-rules initial)
                                 (context-equations initial))
                           (add-rule-or-eq ruleq-defs.type
-                           (let ([r-varset (add-vars* varset ruleq-defs.vars)])
-                             (make-rule-or-eq signature
-                                              ruleq-defs.type
-                                              ruleq-defs.l-term
-                                              ruleq-defs.c-term
-                                              ruleq-defs.r-term
-                                              ruleq-defs.label)))
+                           (let ([varset* (add-vars* varset ruleq-defs.vars)])
+                             (apply (make-rule-or-eq ruleq-defs.type)
+                                    (list* signature ruleq-defs.args))))
                           ...)])
          (context sorts signature varset (car ruleqs) (cdr ruleqs)))]))
 
