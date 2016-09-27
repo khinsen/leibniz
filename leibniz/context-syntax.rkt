@@ -1,7 +1,9 @@
 #lang racket
 
 (provide with-context R T RT
-         (rename-out [c:define-context define-context]))
+         (rename-out [c:define-context define-context]
+                     [c:eq eq]
+                     [c:=> =>]))
 
 (require (prefix-in c: "./contexts.rkt")
          "./term-syntax.rkt"

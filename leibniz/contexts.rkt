@@ -4,7 +4,7 @@
  (rename-out [context builtin-context]
              [context- context])
  define-context
- with-context
+ with-context eq =>
  (contract-out
   [context?             (any/c . -> . boolean?)]
   [context-signature    (context? . -> . signature?)]
@@ -170,7 +170,7 @@
              #:with value
              #'(add-var (quote var-name) (quote sort))))
 
-                                        ; Rules and equations
+  ; Rules and equations
 
   (define-splicing-syntax-class opt-label
     #:description "optional label in a rule or equation"
@@ -210,7 +210,6 @@
               (~var pattern (embedded-pattern sig-var vars-var))
               (~var replacement (embedded-pattern sig-var vars-var))
               (~var condition (opt-condition sig-var vars-var)))
-             #:with type #'(quote rule)
              #:with args #'(list pattern.expr condition.expr replacement.expr
                                  a-label.expr)
              #:with vars #'local-vars.expr))
@@ -223,7 +222,6 @@
               (~var pattern (embedded-pattern sig-var vars-var))
               replacement:expr
               (~var condition (opt-condition sig-var vars-var)))
-             #:with type #'(quote rule)
              #:with args #'(list pattern.expr condition.expr replacement
                                  a-label.expr)
              #:with vars #'local-vars.expr))
@@ -236,7 +234,6 @@
               (~var left (embedded-pattern sig-var vars-var))
               (~var right (embedded-pattern sig-var vars-var))
               (~var condition (opt-condition sig-var vars-var)))
-             #:with type #'(quote equation)
              #:with args #'(list left.expr condition.expr right.expr
                                  a-label.expr)
              #:with vars #'local-vars.expr))
@@ -310,12 +307,6 @@
                    op-defs ...
                    var-defs ...
                    ruleq-defs ...))]))
-
-(define-syntax (with-context stx)
-  (syntax-parse stx
-    [(_ c:expr body ...)
-     #'(ts:with-sig-and-vars (context-signature c) (context-vars c)
-         body ...)]))
 
 (module+ test
   (define a-context
@@ -408,3 +399,49 @@
         (error (format "No equation with label ~a" label))
         (error (format "More than one equation with label ~a" label))))
   (set-first all))
+
+;
+; Definition of terms, rules, and equations inside with-context
+;
+(define-syntax-parameter eq
+  (λ (stx)
+    (raise-syntax-error 'eq "eq keyword used outside with-context" stx)))
+
+(define-syntax-parameter =>
+  (λ (stx)
+    (raise-syntax-error '=> "=> keyword used outside with-context" stx)))
+
+(define-syntax (with-context stx)
+  (syntax-parse stx
+    [(_ c:expr body ...)
+     #'(syntax-parameterize
+           ([eq (λ (stx)
+                  (syntax-parse stx
+                    [(~var eqn (equation #'(context-signature c)
+                                         #'(context-vars c)))
+                     #'(let ([varset* (add-vars* (context-vars c) eqn.vars)])
+                         (apply make-equation 
+                                (list* (context-signature c) eqn.args)))]
+                    [(_ label:id)
+                     #'(equation-by-label c (quote label))]))]
+            [=> (λ (stx)
+                  (syntax-parse stx
+                    [(~var pr (pattern-rule #'(context-signature c)
+                                            #'(context-vars c)))
+                     #'(let ([varset* (add-vars* (context-vars c) pr.vars)])
+                         (apply make-rule 
+                                (list* (context-signature c) pr.args)))]
+                    [(_ label:id)
+                     #'(rule-by-label c (quote label))]))])
+         (ts:with-sig-and-vars (context-signature c) (context-vars c)
+                               body ...))]))
+
+(module+ test
+  (with-context test1
+    (check-equal? (eq an-equation)
+                  (eq #:label an-equation an-A (foo a-B)))
+    (check-equal? (=> a-rule)
+                  (=> #:label a-rule (foo an-A) a-B)))
+  (check-equal? (equations-by-label test1 'foo) (set))
+  (check-equal? (rules-by-label test1 'foo) empty))
+
