@@ -8,7 +8,11 @@
  (contract-out
   [context?             (any/c . -> . boolean?)]
   [context-signature    (context? . -> . signature?)]
-  [context-rules        (context? . -> . rulelist?)]))
+  [context-rules        (context? . -> . rulelist?)]
+  [rules-by-label       (context? symbol? . -> . list?)]
+  [rule-by-label        (context? symbol? . -> . rule?)]
+  [equations-by-label   (context? symbol? . -> . set?)]
+  [equation-by-label   (context? symbol? . -> . equation?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -375,3 +379,32 @@
   ; context-vars must be different
   (check-equal? (context-rules test1) (context-rules test2))
   (check-equal? (context-equations test1) (context-equations test2)))
+
+;
+; Lookup rules and equations by label
+;
+(define (rules-by-label context label)
+  (for/list ([rule (in-rules (context-rules context))]
+             #:when (equal? label (rule-label rule)))
+    rule))
+
+(define (rule-by-label context label)
+  (define all (rules-by-label context label))
+  (unless (equal? (length all) 1)
+    (if (empty? all)
+        (error (format "No rule with label ~a" label))
+        (error (format "More than one rule with label ~a" label))))
+  (first all))
+
+(define (equations-by-label context label)
+  (for/set ([equation (in-equations (context-equations context))]
+             #:when (equal? label (equation-label equation)))
+    equation))
+
+(define (equation-by-label context label)
+  (define all (equations-by-label context label))
+  (unless (equal? (set-count all) 1)
+    (if (set-empty? all)
+        (error (format "No equation with label ~a" label))
+        (error (format "More than one equation with label ~a" label))))
+  (set-first all))
