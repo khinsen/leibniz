@@ -180,6 +180,9 @@
     (pattern (~seq #:vars ([var-name:id var-sort:id] ...))
              #:with expr #'(list (cons (quote var-name)
                                        (quote var-sort)) ...))
+    (pattern (~seq #:var [var-name:id var-sort:id])
+             #:with expr #'(list (cons (quote var-name)
+                                       (quote var-sort))))
     (pattern (~seq)
              #:with expr #'empty))
 
@@ -362,7 +365,7 @@
     (op (foo B) A)
     (op (foo A) B)
     (=> #:label a-rule (foo an-A) a-B)
-    (=> #:vars ([X B])
+    (=> #:var [X B]
         (foo X) an-A
         #:if true)
     (eq #:label an-equation an-A (foo a-B)))
