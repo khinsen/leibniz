@@ -190,83 +190,75 @@
     (pattern (~seq)
              #:with expr #'empty))
 
-  (define-splicing-syntax-class (embedded-pattern sig-var vars-var)
+  (define-splicing-syntax-class (embedded-pattern sig varset)
     #:description "embedded pattern in a rule or equation"
     (pattern p:expr
-             #:with expr #`(ts:pattern #,sig-var #,vars-var p)))
+             #:with expr #`(ts:pattern #,sig #,varset p)))
 
-  (define-splicing-syntax-class (opt-condition sig-var vars-var)
+  (define-splicing-syntax-class (opt-condition sig varset)
     #:description "optional condition in a rule or equation"
-    (pattern (~seq #:if (~var condition (embedded-pattern sig-var vars-var)))
+    (pattern (~seq #:if (~var condition (embedded-pattern sig varset)))
              #:with expr #'condition.expr)
     (pattern (~seq)
              #:with expr #'#f))
 
-  (define-syntax-class (pattern-rule sig-var vars-var)
+  (define-syntax-class (pattern-rule sig varset)
     #:description "pattern rule declaration"
     (pattern ((~datum =>)
               a-label:opt-label
               local-vars:opt-vars
-              (~var pattern (embedded-pattern sig-var vars-var))
-              (~var replacement (embedded-pattern sig-var vars-var))
-              (~var condition (opt-condition sig-var vars-var)))
-             #:with args #'(list pattern.expr condition.expr replacement.expr
-                                 a-label.expr)
+              (~var pattern (embedded-pattern sig varset))
+              (~var replacement (embedded-pattern sig varset))
+              (~var condition (opt-condition sig varset)))
+             #:with expr #`(make-rule #,sig pattern.expr condition.expr
+                                      replacement.expr a-label.expr)
              #:with vars #'local-vars.expr))
 
-  (define-syntax-class (fn-rule sig-var vars-var)
+  (define-syntax-class (fn-rule sig varset)
     #:description "function rule declaration"
     (pattern ((~datum ->)
               a-label:opt-label
               local-vars:opt-vars
-              (~var pattern (embedded-pattern sig-var vars-var))
+              (~var pattern (embedded-pattern sig varset))
               replacement:expr
-              (~var condition (opt-condition sig-var vars-var)))
-             #:with args #'(list pattern.expr condition.expr replacement
-                                 a-label.expr)
+              (~var condition (opt-condition sig varset)))
+             #:with expr #`(make-rule #,sig pattern.expr condition.expr
+                                      replacement a-label.expr)
              #:with vars #'local-vars.expr))
 
-  (define-syntax-class (equation sig-var vars-var)
+  (define-syntax-class (equation sig varset)
     #:description "equation declaration"
     (pattern ((~datum eq)
               a-label:opt-label
               local-vars:opt-vars
-              (~var left (embedded-pattern sig-var vars-var))
-              (~var right (embedded-pattern sig-var vars-var))
-              (~var condition (opt-condition sig-var vars-var)))
-             #:with args #'(list left.expr condition.expr right.expr
-                                 a-label.expr)
+              (~var left (embedded-pattern sig varset))
+              (~var right (embedded-pattern sig varset))
+              (~var condition (opt-condition sig varset)))
+             #:with expr #`(make-equation #,sig left.expr condition.expr
+                                          right.expr a-label.expr)
              #:with vars #'local-vars.expr))
 
-  (define-syntax-class (rule-or-eq sig-var vars-var)
+  (define-syntax-class (rule-or-eq sig varset)
     #:description "rule or equation declaration"
-    (pattern (~var pr (pattern-rule sig-var vars-var))
-             #:with type #'(quote rule)
-             #:with args #'pr.args
+    (pattern (~var pr (pattern-rule sig varset))
+             #:with expr #'pr.expr
              #:with vars #'pr.vars)
-    (pattern (~var fr (fn-rule sig-var vars-var))
-             #:with type #'(quote rule)
-             #:with args #'fr.args
+    (pattern (~var fr (fn-rule sig varset))
+             #:with expr #'fr.expr
              #:with vars #'fr.vars)
-    (pattern (~var e (equation sig-var vars-var))
-             #:with type #'(quote equation)
-             #:with args #'e.args
+    (pattern (~var e (equation sig varset))
+             #:with expr #'e.expr
              #:with vars #'e.vars)))
 
-(define (add-vars* varset var-defs)
+(define (add-vars varset var-defs)
   (foldl (λ (vd vs) (add-var vs (car vd) (cdr vd))) varset var-defs))
 
-(define (add-rule-or-eq ruleqs type rule-or-eq)
-  (case type
-    [(rule) (cons (add-rule (car ruleqs) rule-or-eq)
-                  (cdr ruleqs))]
-    [(equation) (cons (car ruleqs)
-                      (add-equation (cdr ruleqs) rule-or-eq))]))
-
-(define (make-rule-or-eq type)
-  (case type
-    [(rule) make-rule]
-    [(equation) make-equation]))
+(define (add-rule-or-eq ruleqs rule-or-eq)
+  (if (rule? rule-or-eq)
+      (cons (add-rule (car ruleqs) rule-or-eq)
+                (cdr ruleqs))
+      (cons (car ruleqs)
+            (add-equation (cdr ruleqs) rule-or-eq))))
 
 (define-syntax (context- stx)
   (syntax-parse stx
@@ -286,10 +278,9 @@
                           var-defs.value ...)]
               [ruleqs (~> (cons (context-rules initial)
                                 (context-equations initial))
-                          (add-rule-or-eq ruleq-defs.type
-                           (let ([varset* (add-vars* varset ruleq-defs.vars)])
-                             (apply (make-rule-or-eq ruleq-defs.type)
-                                    (list* signature ruleq-defs.args))))
+                          (add-rule-or-eq
+                           (let ([varset* (add-vars varset ruleq-defs.vars)])
+                             ruleq-defs.expr))
                           ...)])
          (context sorts signature varset (car ruleqs) (cdr ruleqs)))]))
 
@@ -418,19 +409,17 @@
            ([eq (λ (stx)
                   (syntax-parse stx
                     [(~var eqn (equation #'(context-signature c)
-                                         #'(context-vars c)))
-                     #'(let ([varset* (add-vars* (context-vars c) eqn.vars)])
-                         (apply make-equation 
-                                (list* (context-signature c) eqn.args)))]
+                                         #'varset*))
+                     #'(let ([varset* (add-vars (context-vars c) eqn.vars)])
+                         eqn.expr)]
                     [(_ label:id)
                      #'(equation-by-label c (quote label))]))]
             [=> (λ (stx)
                   (syntax-parse stx
                     [(~var pr (pattern-rule #'(context-signature c)
-                                            #'(context-vars c)))
-                     #'(let ([varset* (add-vars* (context-vars c) pr.vars)])
-                         (apply make-rule 
-                                (list* (context-signature c) pr.args)))]
+                                            #'varset*))
+                     #'(let ([varset* (add-vars (context-vars c) pr.vars)])
+                         pr.expr)]
                     [(_ label:id)
                      #'(rule-by-label c (quote label))]))])
          (ts:with-sig-and-vars (context-signature c) (context-vars c)
@@ -441,7 +430,17 @@
     (check-equal? (eq an-equation)
                   (eq #:label an-equation an-A (foo a-B)))
     (check-equal? (=> a-rule)
-                  (=> #:label a-rule (foo an-A) a-B)))
+                  (=> #:label a-rule (foo an-A) a-B))
+    (check-equal? (set-count
+                   (term.vars
+                    (equation-left
+                     (eq #:label another-equation #:var (Foo A) (foo Foo) a-B))))
+                  1)
+    (check-equal? (set-count
+                   (term.vars
+                    (rule-pattern
+                     (=> #:label another-rule #:var (Foo A) (foo Foo) a-B))))
+                  1))
   (check-equal? (equations-by-label test1 'foo) (set))
   (check-equal? (rules-by-label test1 'foo) empty))
 
