@@ -2,7 +2,9 @@
 
 (provide
  (contract-out
-  [reduce (context? term? . -> . term?)]))
+  [reduce (context? term? . -> . term?)]
+  [reduce-equation ((context? equation?) ((or/c #f symbol?))
+                    . ->* . equation?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -29,7 +31,9 @@
     (=> (not true) false)
     (=> (not false) true)
     (=> foo (not true) #:if false)
-    (=> foo (not false) #:if true))
+    (=> foo (not false) #:if true)
+    (eq #:label an-equation
+        foo true))
 
   (define-context test-with-var
     (sort Boolean)
@@ -207,5 +211,18 @@
                   (T true))))
 
 ;
-; Introspection and debugging utilities
+; Reduction of equations: reduce left and right
 ;
+(define (reduce-equation context equation [new-label #f])
+  (make-equation (context-signature context)
+                 (reduce context (equation-left equation))
+                 (equation-condition equation)
+                 (reduce context (equation-right equation))
+                 new-label))
+
+(module+ test
+  (with-context test-context
+    (check-equal? (reduce-equation test-context (eq an-equation))
+                  (eq true true))
+    (check-equal? (reduce-equation test-context (eq an-equation) 'new-equation)
+                  (eq #:label new-equation true true))))

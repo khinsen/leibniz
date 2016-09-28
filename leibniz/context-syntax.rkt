@@ -6,15 +6,18 @@
                      [c:=> =>]))
 
 (require (prefix-in c: "./contexts.rkt")
+         "./terms.rkt"
          "./term-syntax.rkt"
+         "./equations.rkt"
          "./rewrite.rkt"
          racket/stxparam
          (for-syntax syntax/parse
                      racket/stxparam))
 
 (module+ test
-  (require chk)
-  (c:define-context test-context
+  (require chk
+           (only-in "./contexts.rkt" define-context eq =>))
+  (define-context test-context
     (sort Boolean)
     (op true Boolean)
     (op false Boolean)
@@ -24,6 +27,15 @@
     (=> (not false) true)
     (=> foo (not true) #:if false)
     (=> foo (not false) #:if true)))
+
+(define (reduce-anything context x [opt-label #f])
+  (cond
+    [(term? x)
+     (reduce context x)]
+    [(equation? x)
+     (reduce-equation context x opt-label)]
+    [else
+     (error (format "cannot reduce ~s" x))]))
 
 (define-syntax-parameter R
   (λ (stx)
@@ -39,8 +51,12 @@
      #'(syntax-parameterize
            ([R (λ (stx)
                  (syntax-parse stx
-                   [(_ term:expr)
-                    #'(reduce context term)]))]
+                   [(_ arg:expr)
+                    #'(reduce-anything context arg)]
+                   [(_ arg:expr (~seq #:label label:id))
+                    #'(reduce-anything context arg (quote label))]
+                   [(_ (~seq #:label label:id) arg:expr)
+                    #'(reduce-anything context arg (quote label))]))]
             [RT (λ (stx)
                   (syntax-parse stx
                     [(_ term)
@@ -51,7 +67,12 @@
 (module+ test
   (with-context test-context
     (chk
-     #:= (RT (not true))        (T false)
-     #:= (RT (not false))       (T true)
-     #:= (RT (not (not false))) (T false)
-     #:= (R (T foo))            (T true))))
+     #:= (RT (not true))         (T false)
+     #:= (RT (not false))        (T true)
+     #:= (RT (not (not false)))  (T false)
+     #:= (R (T foo))             (T true)
+     #:= (R (eq foo true))       (eq true true)
+     #:= (R (eq foo true) #:label label)
+         (eq #:label label true true)
+     #:= (R #:label label (eq foo true))
+         (eq #:label label true true))))
