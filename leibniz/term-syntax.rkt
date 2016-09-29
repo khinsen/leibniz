@@ -47,6 +47,17 @@
              #`(make-term #,sig-var (quote symbol)
                           (list arg-terms.value ...))))
 
+  (define-splicing-syntax-class opt-vars
+    #:description "optional local variable declaration"
+    (pattern (~seq #:vars ([var-name:id var-sort:id] ...))
+             #:with expr #'(list (cons (quote var-name)
+                                       (quote var-sort)) ...))
+    (pattern (~seq #:var [var-name:id var-sort:id])
+             #:with expr #'(list (cons (quote var-name)
+                                       (quote var-sort))))
+    (pattern (~seq)
+             #:with expr #'empty))
+
   (define-syntax-class (term-pattern sig-var vars-var)
     #:description "pattern"
     #:attributes (value)
@@ -65,11 +76,15 @@
      #'(let ([sig signature])
          t.value)]))
 
+(define (add-vars varset var-defs)
+  (foldl (λ (vd vs) (add-var vs (car vd) (cdr vd))) varset var-defs))
+
 (define-syntax (pattern stx)
   (syntax-parse stx
-    [(_ signature:expr varset:expr (~var p (term-pattern #'sig #'vars)))
+    [(_ signature:expr varset:expr ov:opt-vars
+        (~var p (term-pattern #'sig #'vars)))
      #'(let ([sig signature]
-             [vars varset])
+             [vars (add-vars varset ov.expr)])
          p.value)]))
 
 (module+ test
@@ -87,6 +102,15 @@
   (check-exn exn:fail? (thunk (term a-signature "foo")))
   (check-equal? (pattern a-signature a-varset Avar)
                 (make-var a-varset 'Avar))
+  (check-equal? (pattern a-signature a-varset #:var (Xvar Integer) Xvar)
+                (make-var (add-vars a-varset (list (cons 'Xvar 'Integer)))
+                          'Xvar))
+  (check-equal? (pattern a-signature a-varset
+                         #:vars ([Xvar A] [Yvar B])
+                         (foo Xvar Yvar))
+                (pattern a-signature
+                         (add-vars a-varset '((Xvar . A) (Yvar . B)))
+                         (foo Xvar Yvar)))
   (check-equal? (pattern a-signature a-varset (foo Bvar))
                 (make-term a-signature 'foo
                            (list (make-var a-varset 'Bvar)))))
@@ -117,8 +141,9 @@
          (syntax-parameterize
            ([T (λ (stx)
                  (syntax-parse stx
-                   [(_ (~var p (term-pattern #'sig #'vars)))
-                    #'p.value]))])
+                   [(_ ov:opt-vars (~var p (term-pattern #'sig #'vars)))
+                    #'(let ([vars (add-vars vars ov.expr)])
+                        p.value)]))])
            body ...))]))
 
 (module+ test
@@ -133,4 +158,6 @@
   (with-sig-and-vars a-signature a-varset
     (check-equal? (T 2) 2)
     (check-equal? (T (foo Bvar))
-                  (pattern a-signature a-varset (foo Bvar)))))
+                  (pattern a-signature a-varset (foo Bvar)))
+    (check-equal? (T #:var (Xvar B) (foo Xvar))
+                  (pattern a-signature a-varset #:var (Xvar B) (foo Xvar)))))
