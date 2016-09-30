@@ -275,6 +275,14 @@
      (display term port)]))
 
 (define (display-term-with-vars term port [mode #f])
+  (define sort (term.sort term))
+  (if (kind? sort)
+      (begin
+        (display "[" port)
+        (display (set-first sort) port)
+        (display "]" port))
+      (display sort port))
+  (display ":" port)
   (define vars (term.vars term))
   (if (set-empty? vars)
       (display-term term port mode)
@@ -287,11 +295,17 @@
 (module+ test
   (define (term->string term)
     (let ([o (open-output-string)])
-      (display-term term o)
+      (display-term-with-vars term o)
       (get-output-string o)))
-  (check-equal? (term->string 2) "2")
-  (check-equal? (term->string 'foo) "'foo")
-  (check-equal? (term->string "foo") "\"foo\""))
+  (check-equal? (term->string 2) "NonZeroNatural:2")
+  (check-equal? (term->string 'foo) "Symbol:'foo")
+  (check-equal? (term->string "foo") "String:\"foo\"")
+  (check-equal? (term->string (make-term a-signature 'a-B empty))
+                "B:a-B")
+  (check-equal? (term->string
+                 (make-term a-signature 'foo
+                            (list (make-term a-signature 'an-A empty))))
+                "[A]:(foo an-A)"))
 
 ;
 ; Operator-defined terms
@@ -673,7 +687,7 @@
   (define ss-test (make-term simple-signature 'foo (list ss-an-A ss-a-B)))
 
   (check-equal? (term.sort ss-test) 'B)
-  (check-equal? (term->string ss-test) "(foo (foo foo) foo)")
+  (check-equal? (term->string ss-test) "B:(foo (foo foo) foo)")
   (check-true (valid-term? simple-signature ss-a-B))
   (check-true (valid-term? simple-signature ss-an-A))
   (check-true (valid-term? simple-signature ss-test))
