@@ -4,7 +4,7 @@
  (rename-out [context builtin-context]
              [context- context])
  define-context
- with-context eq =>
+ with-context eq tr
  (contract-out
   [context?             (any/c . -> . boolean?)]
   [context-signature    (context? . -> . signature?)]
@@ -170,7 +170,7 @@
              #:with value
              #'(add-var (quote var-name) (quote sort))))
 
-  ; Rules and equations
+                                        ; Rules and equations
 
   (define-splicing-syntax-class opt-label
     #:description "optional label in a rule or equation"
@@ -202,17 +202,22 @@
     (pattern (~seq)
              #:with expr #'#f))
 
+  (define-splicing-syntax-class (rule-hp sig varset)
+    (pattern  (~seq a-label:opt-label
+                    local-vars:opt-vars
+                    (~var pattern (embedded-pattern sig varset))
+                    (~var replacement (embedded-pattern sig varset))
+                    (~var condition (opt-condition sig varset)))
+              #:with args #`(list #,sig pattern.expr condition.expr
+                                  replacement.expr a-label.expr)
+              #:with vars #'local-vars.expr))
+
   (define-syntax-class (pattern-rule sig varset)
     #:description "pattern rule declaration"
     (pattern ((~datum =>)
-              a-label:opt-label
-              local-vars:opt-vars
-              (~var pattern (embedded-pattern sig varset))
-              (~var replacement (embedded-pattern sig varset))
-              (~var condition (opt-condition sig varset)))
-             #:with expr #`(make-rule #,sig pattern.expr condition.expr
-                                      replacement.expr a-label.expr)
-             #:with vars #'local-vars.expr))
+              (~var prhp (rule-hp sig varset)))
+             #:with expr #`(apply make-rule (append prhp.args '(#t)))
+             #:with vars #'prhp.vars))
 
   (define-syntax-class (fn-rule sig varset)
     #:description "function rule declaration"
@@ -223,7 +228,7 @@
               replacement:expr
               (~var condition (opt-condition sig varset)))
              #:with expr #`(make-rule #,sig pattern.expr condition.expr
-                                      replacement a-label.expr)
+                                      replacement a-label.expr #f)
              #:with vars #'local-vars.expr))
 
   (define-syntax-class (equation sig varset)
@@ -391,6 +396,10 @@
         (error (format "More than one equation with label ~a" label))))
   (set-first all))
 
+(module+ test
+  (check-equal? (equations-by-label test1 'foo) (set))
+  (check-equal? (rules-by-label test1 'foo) empty))
+
 ;
 ; Definition of terms, rules, and equations inside with-context
 ;
@@ -398,9 +407,9 @@
   (λ (stx)
     (raise-syntax-error 'eq "eq keyword used outside with-context" stx)))
 
-(define-syntax-parameter =>
+(define-syntax-parameter tr
   (λ (stx)
-    (raise-syntax-error '=> "=> keyword used outside with-context" stx)))
+    (raise-syntax-error 'tr "tr keyword used outside with-context" stx)))
 
 (define-syntax (with-context stx)
   (syntax-parse stx
@@ -414,14 +423,14 @@
                          eqn.expr)]
                     [(_ label:id)
                      #'(equation-by-label c (quote label))]))]
-            [=> (λ (stx)
+            [tr (λ (stx)
                   (syntax-parse stx
-                    [(~var pr (pattern-rule #'(context-signature c)
-                                            #'varset*))
+                    [(_  (~var pr (rule-hp #'(context-signature c)
+                                           #'varset*)))
                      #'(let ([varset* (add-vars (context-vars c) pr.vars)])
-                         pr.expr)]
-                    [(_ label:id)
-                     #'(rule-by-label c (quote label))]))])
+                         (make-transformation
+                          (context-signature c)
+                          (apply make-rule (append pr.args '(#f)))))]))])
          (ts:with-sig-and-vars (context-signature c) (context-vars c)
                                body ...))]))
 
@@ -429,8 +438,6 @@
   (with-context test1
     (check-equal? (eq an-equation)
                   (eq #:label an-equation an-A (foo a-B)))
-    (check-equal? (=> a-rule)
-                  (=> #:label a-rule (foo an-A) a-B))
     (check-equal? (set-count
                    (term.vars
                     (equation-left
@@ -439,8 +446,8 @@
     (check-equal? (set-count
                    (term.vars
                     (rule-pattern
-                     (=> #:label another-rule #:var (Foo A) (foo Foo) a-B))))
-                  1))
-  (check-equal? (equations-by-label test1 'foo) (set))
-  (check-equal? (rules-by-label test1 'foo) empty))
+                     (transformation-converted-rule
+                      (tr #:label a-transformation #:var (Foo A)
+                          (foo Foo) a-B)))))
+                  1)))
 

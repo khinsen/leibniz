@@ -3,10 +3,11 @@
 (provide
  (struct-out rule)
  (struct-out equation)
+ (struct-out transformation)
  (contract-out
-  [make-rule ((signature? term? (or/c #f term?) (or/c term? procedure?))
-              ((or/c #f symbol?))
-              . ->* . rule?)]
+  [make-rule (signature? term? (or/c #f term?) (or/c term? procedure?)
+                         (or/c #f symbol?) boolean?
+              . -> . rule?)]
   [valid-rule? (signature? any/c . -> . boolean?)]
   [rulelist? (any/c . -> . boolean?)]
   [empty-rulelist rulelist?]
@@ -23,7 +24,8 @@
   [in-equations (equationset? . -> . stream?)]
   [add-equation (equationset? equation? . -> . equationset?)]
   [merge-equationsets (signature? equationset? equationset? . -> . equationset?)]
-  [display-equation (equation? output-port? . -> . void?)]))
+  [display-equation (equation? output-port? . -> . void?)]
+  [make-transformation (signature? rule? . -> . transformation?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -46,8 +48,7 @@
     (write label port)
     (display #\space port)))
 
-(define (display-rule rule port [mode #f])
-  (display "(=> " port)
+(define (display-rule* rule port)
   (display-label (rule-label rule) port)
   (display-vars (term.vars (rule-pattern rule)) port)
   (display-term (rule-pattern rule) port)
@@ -59,6 +60,10 @@
     (display " #:if " port)
     (display-term (rule-condition rule) port))
   (display ")" port))
+
+(define (display-rule rule port [mode #f])
+  (display "(=> " port)
+  (display-rule* rule port))
 
 (struct rule (pattern condition replacement label)
         #:transparent
@@ -110,7 +115,7 @@
              (set-subtract condition-vars allowed-vars))
       (error (format "Condition ~s contains variables that are not used elsewhere" condition)))))
 
-(define (make-rule signature pattern condition replacement [label #f])
+(define (make-rule signature pattern condition replacement label check-sort?)
   (define sort-graph (signature-sort-graph signature))
   (check-term signature pattern)
   (check-label label)
@@ -122,10 +127,11 @@
     (unless (set-empty?
              (set-subtract replacement-vars pattern-vars))
       (error (format "Term ~s contains variables that are not in the rule pattern" replacement)))
-    (unless (conforms-to? sort-graph
-                          (term.sort replacement) (term.sort pattern))
-      (error (format "Term ~s must be of sort ~s"
-                     replacement (term.sort pattern)))))
+    (when check-sort?
+      (unless (conforms-to? sort-graph
+                            (term.sort replacement) (term.sort pattern))
+        (error (format "Term ~s must be of sort ~s"
+                       replacement (term.sort pattern))))))
   (rule pattern condition replacement label))
 
 (define (valid-rule? signature rule)
@@ -140,27 +146,27 @@
 
 (module+ test
   (with-sig-and-vars a-signature a-varset
-    (check-equal? (make-rule a-signature (T IntVar) #f (T 2))
+    (check-equal? (make-rule a-signature (T IntVar) #f (T 2) #f #t)
                   (rule (T IntVar) #f (T 2) #f))
-    (check-equal? (make-rule a-signature (T IntVar) (T true) (T 2))
+    (check-equal? (make-rule a-signature (T IntVar) (T true) (T 2) #f #t)
                   (rule (T IntVar) (T true) (T 2) #f))
     (check-true (valid-rule? a-signature (rule (T IntVar) #f (T 2) #f)))
     (check-true (valid-rule? a-signature (rule (T IntVar) (T true) (T 2) #f)))
     ; Term 'bar not allowed in signature
-    (check-exn exn:fail? (thunk (make-rule a-signature 'bar #f (T 2))))
-    (check-exn exn:fail? (thunk (make-rule a-signature (T Avar) 'bar (T 2))))
-    (check-exn exn:fail? (thunk (make-rule a-signature (T IntVar) #f 'bar)))
+    (check-exn exn:fail? (thunk (make-rule a-signature 'bar #f (T 2) #f #t)))
+    (check-exn exn:fail? (thunk (make-rule a-signature (T Avar) 'bar (T 2) #f #t)))
+    (check-exn exn:fail? (thunk (make-rule a-signature (T IntVar) #f 'bar #f #t)))
     ; Condition not a boolean
-    (check-exn exn:fail? (thunk (make-rule a-signature (T IntVar) (T 0) (T 2))))
+    (check-exn exn:fail? (thunk (make-rule a-signature (T IntVar) (T 0) (T 2) #f #t)))
     ; Variable in condition but not in pattern
     (check-exn exn:fail?
-               (thunk (make-rule a-signature (T IntVar) (T BoolVar) (T 2))))
+               (thunk (make-rule a-signature (T IntVar) (T BoolVar) (T 2) #f #t)))
     ; Variable in replacement but not in pattern
     (check-exn exn:fail?
-               (thunk (make-rule a-signature (T IntVar) #f (T BoolVar))))
+               (thunk (make-rule a-signature (T IntVar) #f (T BoolVar) #f #t)))
     ; Replacement doesn't match sort of pattern
     (check-exn exn:fail?
-               (thunk (make-rule a-signature (T IntVar) #f (T (foo a-B)))))))
+               (thunk (make-rule a-signature (T IntVar) #f (T (foo a-B)) #f #t)))))
 
 (define (make-equation signature left condition right [label #f])
   (define sort-graph (signature-sort-graph signature))
@@ -227,7 +233,8 @@
                (if (procedure? r)
                    r
                    (term.in-signature r signature)))
-             (rule-label rule)))
+             (rule-label rule)
+             #t))
 
 (module+ test
   (define larger-signature
@@ -236,11 +243,11 @@
   (with-sig-and-vars a-signature a-varset
     (check-true
      (valid-rule? larger-signature
-                  (in-signature (make-rule a-signature (T foo) #f (T foo))
+                  (in-signature (make-rule a-signature (T foo) #f (T foo) #f #t)
                                 larger-signature)))
     (check-true
      (valid-rule? larger-signature
-                  (in-signature (make-rule a-signature (T IntVar) #f (T 2))
+                  (in-signature (make-rule a-signature (T IntVar) #f (T 2) #f #t)
                                 larger-signature)))))
 
 ;
@@ -277,9 +284,9 @@
 
 (module+ test
   (with-sig-and-vars a-signature a-varset
-    (define rule1 (make-rule a-signature (T IntVar) #f (T 2)))
-    (define rule2 (make-rule a-signature (T (foo Bvar)) #f (T Bvar)))
-    (define rule3 (make-rule a-signature (T (foo Avar Bvar)) #f (T (foo Bvar))))
+    (define rule1 (make-rule a-signature (T IntVar) #f (T 2) #f #t))
+    (define rule2 (make-rule a-signature (T (foo Bvar)) #f (T Bvar) #f #t))
+    (define rule3 (make-rule a-signature (T (foo Avar Bvar)) #f (T (foo Bvar)) #f #t))
     (define some-rules
       (~> empty-rulelist
           (add-rule rule1)
@@ -344,3 +351,44 @@
                   some-equations)
     (check-equal? (merge-equationsets a-signature some-equations empty-equationset)
                   some-equations)))
+
+;
+; Transformations are rewrite rules that are applied explicitly to
+; arbitrary terms or equations, rather than being used in the process of
+; context-based reduction.
+;
+; Since transformations can be applied to patterns containing variables,
+; their own variables are replaced to gensym-based variables to avoid
+; accidental name clashes.
+;
+(define (display-transformation tr port [mode #f])
+  (display "(tr " port)
+  (display-rule* (transformation-rule tr) port))
+
+(struct transformation (rule converted-rule)
+        #:transparent
+        #:methods gen:custom-write
+        [(define write-proc display-transformation)])
+
+(define (make-transformation signature rule)
+  (define sorts (signature-sort-graph signature))
+  (define pattern (rule-pattern rule))
+  (define condition (rule-condition rule))
+  (define replacement (rule-replacement rule))
+  (define var-substitution
+    (for/fold ([s empty-substitution])
+              ([var (term.vars pattern)])
+      (merge-substitutions
+       s
+       (one-match signature var
+                  (make-unique-var sorts (var-name var) (var-sort var))))))
+  (transformation
+   rule
+   (make-rule signature
+              (term.substitute signature pattern var-substitution)
+              (if condition
+                  (term.substitute signature condition var-substitution)
+                  #f)
+              (term.substitute signature replacement var-substitution)
+              #f
+              #f)))

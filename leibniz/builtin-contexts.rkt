@@ -38,7 +38,8 @@
                            (y (substitution-value substitution 'Y)))
                        (make-term signature
                                   (if (equal? x y) 'true 'false)
-                                  empty))))))
+                                  empty)))
+                   #f #f)))
    empty-equationset))
 
 (module+ test

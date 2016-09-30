@@ -4,7 +4,10 @@
  (contract-out
   [reduce (context? term? . -> . term?)]
   [reduce-equation ((context? equation?) ((or/c #f symbol?))
-                    . ->* . equation?)]))
+                    . ->* . equation?)]
+  [transform (context? transformation? term? . -> . term?)]
+  [transform-equation ((context? transformation? equation?) ((or/c #f symbol?))
+                       . ->* . equation?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -40,6 +43,8 @@
     (op true Boolean)
     (op false Boolean)
     (op (not Boolean) Boolean)
+    (op foo Boolean)
+    (op bar Boolean)
     (var X Boolean)
     (=> (not true) false)
     (=> (not false) true)
@@ -95,31 +100,34 @@
   (with-context test-context
     (define signature (context-signature test-context))
     (check-equal? (all-matching-rules test-context (T (not true)) #f)
-                  (list (cons (make-rule signature (T (not true)) #f (T false))
+                  (list (cons (make-rule signature (T (not true)) #f (T false) #f #t)
                               empty-substitution)))
     (check-equal? (all-matching-rules test-context (T foo) #f)
                   (list (cons (make-rule signature
-                                         (T foo) (T false) (T (not true)))
+                                         (T foo) (T false) (T (not true)) #f #t)
                               empty-substitution)
                         (cons (make-rule signature
-                                         (T foo) (T true) (T (not false)))
+                                         (T foo) (T true) (T (not false)) #f #t)
                               empty-substitution)))
     (check-equal? (all-matching-rules test-context (T foo) #t)
                   (list (cons (make-rule signature
-                                         (T foo) (T true) (T (not false)))
+                                         (T foo) (T true) (T (not false)) #f #t)
                               empty-substitution)))))
+
+(define (substitute signature rule substitution)
+  (define replacement (rule-replacement rule))
+  (if (procedure? replacement)
+      (with-handlers ([exn:fail? (lambda (v) #f)])
+        (replacement signature
+                     (rule-pattern rule)
+                     (rule-condition rule)
+                     substitution))
+      (term.substitute signature replacement substitution)))
 
 (define (rewrite-head-once context term)
   (define signature (context-signature context))
   (or (for/first ([(rule substitution) (in-matching-rules context term #t)])
-        (let ([replacement (rule-replacement rule)])
-          (if (procedure? replacement)
-              (with-handlers ([exn:fail? (lambda (v) #f)])
-                  (replacement signature
-                               (rule-pattern rule)
-                               (rule-condition rule)
-                               substitution))
-              (term.substitute signature replacement substitution))))
+        (substitute signature rule substitution))
       term))
 
 (module+ test
@@ -226,3 +234,42 @@
                   (eq true true))
     (check-equal? (reduce-equation test-context (eq an-equation) 'new-equation)
                   (eq #:label new-equation true true))))
+
+;
+; Transformations of terms and equations
+;
+(define (transform context transformation term)
+  (define signature (context-signature context))
+  (define rule (transformation-converted-rule transformation))
+  (reduce context
+          (substitute signature rule
+                      (one-match signature (rule-pattern rule) term))))
+
+(define (transform-equation context transformation equation [new-label #f])
+  (make-equation (context-signature context)
+                 (transform context transformation (equation-left equation))
+                 (equation-condition equation)
+                 (transform context transformation (equation-right equation))
+                 new-label))
+
+(module+ test
+  (with-context test-with-var
+    (define transformation (tr #:var (X Boolean) X (not X)))
+    (check-equal? (transform test-with-var transformation (T foo))
+                  (T (not foo)))
+    (check-equal? (transform test-with-var transformation (T X))
+                  (T (not X)))
+    (check-equal? (transform test-with-var transformation (T (not X)))
+                  (T X))
+    (check-equal? (transform-equation test-with-var transformation
+                                      (eq foo bar))
+                  (eq (not foo) (not bar)))
+    (check-equal? (transform-equation test-with-var transformation
+                                      (eq #:label original foo bar)
+                                      'negated)
+                  (eq #:label negated (not foo) (not bar))))
+  (with-context test-context
+    (define transformation (tr #:var (X Boolean) X (not X)))
+    (check-equal? (transform-equation test-context transformation
+                                      (eq an-equation))
+                  (eq false false))))

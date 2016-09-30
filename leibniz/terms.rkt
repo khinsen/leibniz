@@ -11,11 +11,14 @@
   [term.op-and-args       (term? . -> . (values (or/c #f symbol?)
                                                 (or/c #f list?)))]
   [term.in-signature      (term? signature? . -> . term?)]
-  [term.match             (signature? term? term? . -> . sequence?)]
-  [term.substitute        (signature? term? substitution? . -> . term?)]
   [substitution?          (any/c . -> . boolean?)]
   [empty-substitution     substitution?]
   [substitution-value     (substitution? symbol? . -> . term?)]
+  [merge-substitutions    (substitution? substitution?  . -> . substitution?)]
+  [term.match             (signature? term? term? . -> . sequence?)]
+  [all-matches            (signature? term? term? . -> . list?)]
+  [one-match              (signature? term? term? . -> . substitution?)]
+  [term.substitute        (signature? term? substitution? . -> . term?)]
   [allowed-term?          (signature? term? . -> . boolean?)]
   [valid-term?            (signature? any/c . -> . boolean?)]
   [make-term              (signature? symbol? list? . -> . term?)]
@@ -29,6 +32,7 @@
   [make-var               (varset? symbol? . -> . (or/c #f var?))]
   [make-var-or-term       (signature? varset? symbol? . -> . term?)]
   [make-uvar              (sort-graph? symbol? . -> . var?)]
+  [make-unique-var        (sort-graph? symbol? sort? . -> . var?)]
   [var-name               (var? . -> . symbol?)]
   [var-sort               (var? . -> . (or/c #f symbol?))]
   [display-vars           (set? output-port? . -> . void?)]
@@ -218,6 +222,12 @@
 
 (define (all-matches signature pattern term)
   (sequence->list (term.match signature pattern term)))
+
+(define (one-match signature pattern term)
+  (define matches (all-matches signature pattern term))
+  (unless (equal? (length matches) 1)
+    (error "number of matches != 1"))
+  (first matches))
 
 (module+ test
   (define-simple-check (check-no-match signature pattern term)
@@ -457,6 +467,9 @@
 
 (define (make-uvar sort-graph symbol)
   (var sort-graph symbol #f))
+
+(define (make-unique-var sort-graph symbol sort)
+  (var sort-graph (gensym symbol) sort))
 
 (module+ test
   (define a-varset
