@@ -83,7 +83,7 @@
   (define signature (context-signature context))
   (define rules (lookup-rules (context-rules context) term))
   (unless (allowed-term? signature term)
-    (error (format "term not allowed by the context")))
+    (error (format "term ~s not allowed by context\n~s" term context)))
   (in-generator #:arity 2
    (for* ([rule rules]
           [s (term.match signature (rule-pattern rule) term)])
