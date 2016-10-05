@@ -272,17 +272,28 @@
         op-defs:operator ...
         var-defs:variable ...
         (~var ruleq-defs (rule-or-eq #'signature #'varset*)) ...)
-     #`(let* ([initial (foldl merge-contexts empty-context
-                              (list included-contexts.context ...))]
-              [sorts (~> (context-sort-graph initial) sort-defs.value ...)]
-              [signature (~> (merge-signatures (empty-signature sorts)
-                                               (context-signature initial))
+     #`(let* ([sorts (~> (foldl merge-sort-graphs empty-sort-graph
+                                (list (context-sort-graph
+                                       included-contexts.context) ...))
+                         sort-defs.value ...)]
+              [signature (~> (foldl merge-signatures (empty-signature sorts)
+                                    (list (context-signature
+                                           included-contexts.context) ...))
                              op-defs.value ...)]
-              [varset (~> (merge-varsets (empty-varset sorts)
-                                         (context-vars initial))
+              [varset (~> (foldl merge-varsets (empty-varset sorts)
+                                 (list (context-vars
+                                        included-contexts.context) ...))
                           var-defs.value ...)]
-              [ruleqs (~> (cons (context-rules initial)
-                                (context-equations initial))
+              [rules (foldl (λ (rl1 rl2) (merge-rulelists signature  rl1 rl2))
+                            empty-rulelist
+                            (list (context-rules
+                                   included-contexts.context) ...))]
+              [equations (foldl (λ (es1 es2) (merge-equationsets
+                                              signature es1 es2))
+                                empty-equationset
+                                (list (context-equations
+                                       included-contexts.context) ...))]
+              [ruleqs (~> (cons rules equations)
                           (add-rule-or-eq
                            (let ([varset* (add-vars varset ruleq-defs.vars)])
                              ruleq-defs.expr))
