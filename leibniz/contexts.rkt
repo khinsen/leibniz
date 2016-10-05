@@ -81,11 +81,14 @@
   (check-true (valid-context? empty-context)))
 
 (define (merge-contexts context1 context2)
-  (let* ([signature (merge-signatures (context-signature context1)
-                                      (context-signature context2))]
+  (let* ([sorts (merge-sort-graphs (context-sort-graph context1)
+                                   (context-sort-graph context2))]
+         [signature (merge-signatures (context-signature context1)
+                                      (context-signature context2)
+                                      sorts)]
          [vars (merge-varsets (context-vars context1)
-                              (context-vars context2))]
-         [sorts (signature-sort-graph signature)]
+                              (context-vars context2)
+                              sorts)]
          [rules (merge-rulelists signature
                                  (context-rules context1)
                                  (context-rules context2))]
@@ -276,11 +279,13 @@
                                 (list (context-sort-graph
                                        included-contexts.context) ...))
                          sort-defs.value ...)]
-              [signature (~> (foldl merge-signatures (empty-signature sorts)
+              [signature (~> (foldl (λ (s1 s2) (merge-signatures s1 s2 sorts))
+                                    (empty-signature sorts)
                                     (list (context-signature
                                            included-contexts.context) ...))
                              op-defs.value ...)]
-              [varset (~> (foldl merge-varsets (empty-varset sorts)
+              [varset (~> (foldl (λ (v1 v2) (merge-varsets v1 v2 sorts))
+                                 (empty-varset sorts)
                                  (list (context-vars
                                         included-contexts.context) ...))
                           var-defs.value ...)]

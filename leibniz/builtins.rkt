@@ -91,7 +91,7 @@
 
 (define integer-signature
   (~> (empty-signature integer-sorts #:builtins (set '*integer*))
-      (merge-signatures truth-signature)
+      (merge-signatures truth-signature #f)
       (add-op '+ (list 'Integer 'Integer) 'Integer)
       (add-op '+ (list 'Natural 'Natural) 'Natural)
       (add-op '+ (list 'NonZeroNatural 'Natural) 'NonZeroNatural)
@@ -151,7 +151,7 @@
 
 (define rational-signature
   (~> (empty-signature rational-sorts #:builtins (set '*rational*))
-      (merge-signatures integer-signature)
+      (merge-signatures integer-signature #f)
       (add-op '+ (list 'Rational 'Rational) 'Rational)
       (add-op '+ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
       (add-op '- (list 'Rational 'Rational) 'Rational)
@@ -212,7 +212,7 @@
 
 (define IEEE-float-signature
   (~> (empty-signature IEEE-float-sorts #:builtins (set '*IEEE-floating-point*))
-      (merge-signatures truth-signature)
+      (merge-signatures truth-signature #f)
       (add-op '+ (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '- (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '* (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)

@@ -16,7 +16,8 @@
       (add-subsort-relation 'Y 'X)))
 
 (define a-signature
-  (~>  (foldl merge-signatures (empty-signature sorts)
+  (~>  (foldl (λ (s1 s2) (merge-signatures s1 s2 #f))
+              (empty-signature sorts)
               (list rational-signature truth-signature))
       (add-op 'an-A empty 'A)
       (add-op 'a-B empty 'B)

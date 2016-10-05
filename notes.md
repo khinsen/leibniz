@@ -46,11 +46,6 @@ Three modules are not part of this stack:
 The API for term creation is far from definitive. Error handling in
 particular needs to be defined properly.
 
-### Merging
-
-Merging signatures or varsets implies merging their sort graphs, which
-ends up getting done twice when contexts are merged.
-
 ### Labels in rules and equations
 
 Labels are not required to be unique, which may turn out to be a bad choice.

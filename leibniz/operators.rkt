@@ -7,7 +7,8 @@
   [empty-signature  ((sort-graph?) (#:builtins set?) . ->* . signature?)]
   [add-op           (signature? symbol? (listof sort-constraint?) sort?
                      . -> . signature?)]
-  [merge-signatures (signature? signature? . -> . signature?)]
+  [merge-signatures (signature? signature? (or/c #f sort-graph?)
+                     . -> . signature?)]
   [lookup-op        (signature? symbol? (listof (or/c #f sort-or-kind?))
                      . -> .
                      (or/c #f (cons/c (listof sort-constraint?) sort-or-kind?)))]
@@ -405,9 +406,10 @@
             [rank (all-ranks op)])
        (yield symbol rank))))
 
-  (define (merge-signatures other)
+  (define (merge-signatures other new-sort-graph)
     (define merged-sort-graph
-      (merge-sort-graphs sort-graph (signature-sort-graph other)))
+      (or new-sort-graph
+          (merge-sort-graphs sort-graph (signature-sort-graph other))))
     (define merged-builtins (set-union builtins (signature-builtins other)))
     (for/fold ([sig (empty-signature merged-sort-graph
                                      #:builtins merged-builtins)])
@@ -463,22 +465,25 @@
                 (set (cons empty 'B) (cons (list 'A 'B) 'A)))
   (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X)))
   (check-equal? (merge-signatures (empty-signature sorts)
-                                  (empty-signature sorts))
+                                  (empty-signature sorts)
+                                  #f)
                 (empty-signature sorts))
   (check-equal? (merge-signatures (empty-signature sorts #:builtins (set 'foo))
-                                  (empty-signature sorts #:builtins (set 'bar)))
+                                  (empty-signature sorts #:builtins (set 'bar))
+                                  #f)
                 (empty-signature sorts  #:builtins (set 'foo 'bar)))
-  (check-equal? (merge-signatures a-signature (empty-signature sorts))
+  (check-equal? (merge-signatures a-signature (empty-signature sorts) #f)
                 a-signature)
-  (check-equal? (merge-signatures a-signature (empty-signature sorts))
+  (check-equal? (merge-signatures a-signature (empty-signature sorts) #f)
                 a-signature)
-  (check-equal? (merge-signatures a-signature a-signature)
+  (check-equal? (merge-signatures a-signature a-signature #f)
                 a-signature)
   (check-equal? (merge-signatures a-signature
                                   (~> (empty-signature
                                        (~> sorts
                                            (add-subsort-relation 'X 'B)))
-                                      (add-op 'bar empty 'X)))
+                                      (add-op 'bar empty 'X))
+                                  #f)
                 (~> (empty-signature
                      (~> sorts
                          (add-subsort-relation 'X 'B)))

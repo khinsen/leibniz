@@ -27,7 +27,7 @@
   [varset-sort-graph      (varset? . -> . sort-graph?)]
   [add-var                (varset? symbol? sort? . -> . varset?)]
   [all-vars               (varset? . -> . hash?)]
-  [merge-varsets          (varset? varset? . -> . varset?)]
+  [merge-varsets          (varset? varset? (or/c #f sort-graph?) . -> . varset?)]
   [var?                   (any/c . -> . boolean?)]
   [make-var               (varset? symbol? . -> . (or/c #f var?))]
   [make-var-or-term       (signature? varset? symbol? . -> . term?)]
@@ -404,9 +404,10 @@
   (define (all-vars)
     vars)
 
-  (define (merge-varsets other)
+  (define (merge-varsets other new-sort-graph)
     (define merged-sort-graph
-      (merge-sort-graphs sort-graph (varset-sort-graph other)))
+      (or new-sort-graph
+          (merge-sort-graphs sort-graph (varset-sort-graph other))))
     (for/fold ([vars (empty-varset merged-sort-graph)])
               ([(symbol sort)
                 (stream-append (sequence->stream vars)
@@ -423,9 +424,9 @@
   (check-equal? (add-var some-varset 'X 'A) some-varset)
   (check-equal? (lookup-var some-varset 'X) 'A)
   (check-false (lookup-var some-varset 'foo))
-  (check-equal? (merge-varsets some-varset some-varset) some-varset)
-  (check-equal? (merge-varsets (empty-varset sorts) some-varset) some-varset)
-  (check-equal? (merge-varsets some-varset (empty-varset sorts)) some-varset)
+  (check-equal? (merge-varsets some-varset some-varset #f) some-varset)
+  (check-equal? (merge-varsets (empty-varset sorts) some-varset #f) some-varset)
+  (check-equal? (merge-varsets some-varset (empty-varset sorts) #f) some-varset)
   (check-exn exn:fail? (thunk (add-var some-varset 'X 'X)))
   (check-exn exn:fail? (thunk (add-var some-varset 'Z 'Z))))
 
