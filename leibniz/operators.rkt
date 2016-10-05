@@ -8,7 +8,7 @@
   [add-op           (signature? symbol? (listof sort-constraint?) sort?
                      . -> . signature?)]
   [merge-signatures (signature? signature? . -> . signature?)]
-  [lookup-op        (signature? symbol? (listof (or/c #f sort?))
+  [lookup-op        (signature? symbol? (listof (or/c #f sort-or-kind?))
                      . -> .
                      (or/c #f (cons/c (listof sort-constraint?) sort-or-kind?)))]
   [display-signature (signature? natural-number/c output-port? . -> . void?)]))
@@ -111,7 +111,7 @@
   (define (is-subarity? arity1 arity2)
     (and (= (length arity1) (length arity2))
          (for/and ([s1 arity1] [s2 arity2])
-           (is-subsort? sort-graph s1 s2))))
+           (conforms-to? sort-graph s1 s2))))
 
   (define (add arity sort)
 
