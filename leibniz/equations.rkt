@@ -14,7 +14,7 @@
   [in-rules (rulelist? . -> . stream?)]
   [add-rule (rulelist? rule? . -> . rulelist?)]
   [lookup-rules (rulelist? term? . -> . list?)]
-  [merge-rulelists (signature? rulelist? rulelist? . -> . rulelist?)]
+  [merge-rulelists (rulelist? rulelist? signature? . -> . rulelist?)]
   [display-rule (rule? output-port? . -> . void?)]
   [make-equation ((signature? term? (or/c #f term?) term?) ((or/c #f symbol?))
                   . ->* . equation?)]
@@ -23,7 +23,7 @@
   [empty-equationset equationset?]
   [in-equations (equationset? . -> . stream?)]
   [add-equation (equationset? equation? . -> . equationset?)]
-  [merge-equationsets (signature? equationset? equationset? . -> . equationset?)]
+  [merge-equationsets (equationset? equationset? signature? . -> . equationset?)]
   [display-equation (equation? output-port? . -> . void?)]
   [make-transformation (signature? rule? . -> . transformation?)]))
 
@@ -277,7 +277,7 @@
                 [rule rules])
      rule))
 
-(define (merge-rulelists merged-signature rl1 rl2)
+(define (merge-rulelists rl1 rl2 merged-signature)
   (for/fold ([rules empty-rulelist])
             ([rule (stream-append (in-rules rl1) (in-rules rl2))])
     (add-rule rules (in-signature rule merged-signature))))
@@ -299,9 +299,9 @@
     (check-equal? (stream-length (in-rules some-rules)) 3)
     (check-equal? (list->set (stream->list (in-rules some-rules)))
                   (set rule1 rule2 rule3))
-    (check-equal? (merge-rulelists a-signature empty-rulelist some-rules)
+    (check-equal? (merge-rulelists empty-rulelist some-rules a-signature)
                   some-rules)
-    (check-equal? (merge-rulelists a-signature some-rules empty-rulelist)
+    (check-equal? (merge-rulelists some-rules empty-rulelist a-signature)
                   some-rules)))
 
 ;
@@ -321,7 +321,7 @@
 (define (in-equations equationset)
   (set->stream equationset))
 
-(define (merge-equationsets merged-signature el1 el2)
+(define (merge-equationsets el1 el2 merged-signature)
   (for/set ([equation (stream-append (in-equations el1) (in-equations el2))])
     (make-equation merged-signature
                    (term.in-signature (equation-left equation) merged-signature)
@@ -347,9 +347,9 @@
     (check-equal? (stream-length (in-equations some-equations)) 3)
     (check-equal? (list->set (stream->list (in-equations some-equations)))
                   some-equations)
-    (check-equal? (merge-equationsets a-signature empty-equationset some-equations)
+    (check-equal? (merge-equationsets empty-equationset some-equations a-signature)
                   some-equations)
-    (check-equal? (merge-equationsets a-signature some-equations empty-equationset)
+    (check-equal? (merge-equationsets some-equations empty-equationset  a-signature)
                   some-equations)))
 
 ;

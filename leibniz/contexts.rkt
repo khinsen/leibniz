@@ -89,12 +89,12 @@
          [vars (merge-varsets (context-vars context1)
                               (context-vars context2)
                               sorts)]
-         [rules (merge-rulelists signature
-                                 (context-rules context1)
-                                 (context-rules context2))]
-         [equations (merge-equationsets signature
-                                        (context-equations context1)
-                                        (context-equations context2))])
+         [rules (merge-rulelists (context-rules context1)
+                                 (context-rules context2)
+                                 signature)]
+         [equations (merge-equationsets (context-equations context1)
+                                        (context-equations context2)
+                                        signature)])
     (context sorts signature vars rules equations)))
 
 (module+ test
@@ -275,29 +275,30 @@
         op-defs:operator ...
         var-defs:variable ...
         (~var ruleq-defs (rule-or-eq #'signature #'varset*)) ...)
-     #`(let* ([sorts (~> (foldl merge-sort-graphs empty-sort-graph
-                                (list (context-sort-graph
-                                       included-contexts.context) ...))
+     #`(let* ([sorts (~> (for/fold ([ms empty-sort-graph])
+                                   ([s (list (context-sort-graph
+                                              included-contexts.context) ...)])
+                           (merge-sort-graphs ms s))
                          sort-defs.value ...)]
-              [signature (~> (foldl (λ (s1 s2) (merge-signatures s1 s2 sorts))
-                                    (empty-signature sorts)
-                                    (list (context-signature
-                                           included-contexts.context) ...))
+              [signature (~> (for/fold ([msig (empty-signature sorts)])
+                                       ([sig (list (context-signature
+                                                    included-contexts.context)
+                                                   ...)])
+                               (merge-signatures msig sig sorts))
                              op-defs.value ...)]
-              [varset (~> (foldl (λ (v1 v2) (merge-varsets v1 v2 sorts))
-                                 (empty-varset sorts)
-                                 (list (context-vars
-                                        included-contexts.context) ...))
+              [varset (~> (for/fold ([mv (empty-varset sorts)])
+                                    ([v (list (context-vars
+                                               included-contexts.context) ...)])
+                            (merge-varsets mv v sorts))
                           var-defs.value ...)]
-              [rules (foldl (λ (rl1 rl2) (merge-rulelists signature  rl1 rl2))
-                            empty-rulelist
-                            (list (context-rules
-                                   included-contexts.context) ...))]
-              [equations (foldl (λ (es1 es2) (merge-equationsets
-                                              signature es1 es2))
-                                empty-equationset
-                                (list (context-equations
-                                       included-contexts.context) ...))]
+              [rules (for/fold ([mrl empty-rulelist])
+                               ([rl (list (context-rules
+                                           included-contexts.context) ...)])
+                       (merge-rulelists mrl rl signature))]
+              [equations (for/fold ([mes empty-equationset])
+                                   ([es (list (context-equations
+                                               included-contexts.context) ...)])
+                           (merge-equationsets mes es signature))]
               [ruleqs (~> (cons rules equations)
                           (add-rule-or-eq
                            (let ([varset* (add-vars varset ruleq-defs.vars)])
