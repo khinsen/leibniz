@@ -22,12 +22,18 @@ at [Guaana](https://www.guaana.com/).
 
 ## Status
 
-At this time, there are no examples for scientific models in Leibniz
-yet.  I am still working on the support code, which is what this
-repository currently contains. See the file `notes.md` for an overview
-of the code structure. Readers not interested in implementation
-details should check again later. I will announce any significant
-progress on my
+The support code for Leibniz is now sufficiently advanced that first
+examples for digital scientific knowledge can be developed. They
+are located (no surprise) under `examples`. For a first contact
+with Leibniz, I suggest looking at `examples/quantities/mass.rkt`,
+which shows how physical quantities and units can be defined. In
+`examples/quick-guide.md` you can find essential background information
+for understanding this example.
+
+Readers interested in the implementation should start by looking at
+the file `notes.md` for an overview of the code structure.
+
+I will announce any significant progress on my
 [Guaana project](https://www.guaana.com/projects/scientific-notations-for-the-digital-era).
 
 ## Background
@@ -102,6 +108,12 @@ following libraries:
    modified [fork](https://github.com/khinsen/chk) that fixes an
    installation problem on recent Racket versions)
 
+The examples also use
+
+ - [sweet-exp](http://github.com/takikawa/sweet-racket)
+
+for better readability.
+
 To install Leibniz and its dependencies, type:
 ```bash
    raco pkg install git://github.com/khinsen/leibniz\?path=leibniz
@@ -113,7 +125,7 @@ To run the Leibniz test suite, type
 ```
 You can run an individual library module's tests by typing
 ```bash
-   raco test l-l eibniz/sorts
+   raco test -l leibniz/sorts
 ```
 etc.
 
@@ -125,12 +137,6 @@ by the [CRAPL](http://matt.might.net/articles/crapl/) license.
 
 ## Branch notes
 
-Most branches of this repository contain experiments that test the
-utility and feasibility of ideas for improvements and new features.
-Each branch has a short note in this place that explains its reason
-for being. This branch (master) always contains the version currently
-considered most useful.
-
-Note that all branches except master may be rebased, or modified in
-other ways. If you want to fork this repository, please don't rely
-on any branch other than master.
+This branch is dedicated to experiments with simple application
+examples. The main goal is usability testing, but the examples
+should also help explain what Leibniz was created for.
