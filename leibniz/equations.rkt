@@ -115,7 +115,7 @@
              (set-subtract condition-vars allowed-vars))
       (error (format "Condition ~s contains variables that are not used elsewhere" condition)))))
 
-(define (make-rule signature pattern condition replacement label check-sort?)
+(define (make-rule signature pattern condition replacement label check-equationality?)
   (define sort-graph (signature-sort-graph signature))
   (check-term signature pattern)
   (check-label label)
@@ -124,10 +124,10 @@
     (check-term signature replacement)
     (define pattern-vars (term.vars pattern))
     (define replacement-vars (term.vars replacement))
-    (unless (set-empty?
-             (set-subtract replacement-vars pattern-vars))
-      (error (format "Term ~s contains variables that are not in the rule pattern" replacement)))
-    (when check-sort?
+    (when check-equationality?
+      (unless (set-empty?
+               (set-subtract replacement-vars pattern-vars))
+        (error (format "Term ~s contains variables that are not in the rule pattern" replacement)))
       (unless (conforms-to? sort-graph
                             (term.sort replacement) (term.sort pattern))
         (error (format "Term ~s must be of sort ~s"

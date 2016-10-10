@@ -40,11 +40,13 @@
 
   (define-context test-with-var
     (sort Boolean)
+    (sort FooBar)
     (op true Boolean)
     (op false Boolean)
     (op (not Boolean) Boolean)
     (op foo Boolean)
     (op bar Boolean)
+    (op foo-bar FooBar)
     (var X Boolean)
     (=> (not true) false)
     (=> (not false) true)
@@ -241,6 +243,23 @@
 (define (transform context transformation term)
   (define signature (context-signature context))
   (define rule (transformation-converted-rule transformation))
+  ; Check if the transformation introduced new vars that are in
+  ; conflict with existing ones.
+  (define new-vars (set-subtract (term.vars (rule-replacement rule))
+                                 (term.vars (rule-pattern rule))))
+  (define term-vars (term.vars term))
+  (unless (or (set-empty? new-vars)
+              (set-empty? term-vars))
+    (define (var-hash vars)
+      (make-hash (for/list ([v vars])
+                   (cons (var-name v) (var-sort v)))))
+    (define tvars-as-hash (var-hash term-vars))
+    (for/first ([v new-vars]
+                #:when (not (equal? (var-sort v)
+                                    (hash-ref tvars-as-hash (var-name v)
+                                              (var-sort v)))))
+      (error (format "Var ~s has sort ~s in transformation but sort ~s in the term to be transformed" (var-name v) (var-sort v) (hash-ref tvars-as-hash (var-name v))))))
+  ; Apply the transformation
   (reduce context
           (substitute signature rule
                       (one-match signature (rule-pattern rule) term))))
@@ -268,6 +287,11 @@
                                       (eq #:label original foo bar)
                                       'negated)
                   (eq #:label negated (not foo) (not bar))))
+  (with-context test-with-var
+    (define transformation (tr #:vars ([% Boolean] [Y FooBar]) % Y))
+    (check-exn exn:fail?
+               (thunk (transform test-with-var transformation
+                                 (T #:var (Y Boolean) (not Y))))))
   (with-context test-context
     (define transformation (tr #:var (X Boolean) X (not X)))
     (check-equal? (transform-equation test-context transformation
