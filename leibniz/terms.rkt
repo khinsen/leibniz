@@ -23,6 +23,7 @@
   [valid-term?            (signature? any/c . -> . boolean?)]
   [make-term              (signature? symbol? list? . -> . term?)]
   [make-term*             (signature? symbol? list? . -> . (or/c #f term?))]
+  [varset?                (any/c . -> . boolean?)]
   [empty-varset           (sort-graph? . -> . varset?)]
   [varset-sort-graph      (varset? . -> . sort-graph?)]
   [add-var                (varset? symbol? sort? . -> . varset?)]

@@ -9,6 +9,7 @@
   [context?             (any/c . -> . boolean?)]
   [context-signature    (context? . -> . signature?)]
   [context-rules        (context? . -> . rulelist?)]
+  [context-vars         (context? . -> . varset?)]
   [rules-by-label       (context? symbol? . -> . list?)]
   [rule-by-label        (context? symbol? . -> . rule?)]
   [equations-by-label   (context? symbol? . -> . set?)]
