@@ -7,7 +7,10 @@
                     . ->* . equation?)]
   [transform (context? transformation? term? . -> . term?)]
   [transform-equation ((context? transformation? equation?) ((or/c #f symbol?))
-                       . ->* . equation?)]))
+                       . ->* . equation?)]
+  [substitute (context? transformation? term? . -> . term?)]
+  [substitute-equation ((context? transformation? equation?) ((or/c #f symbol?))
+                        . ->* . equation?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -31,6 +34,7 @@
     (op false Boolean)
     (op (not Boolean) Boolean)
     (op foo Boolean)
+    (op bar Boolean)
     (=> (not true) false)
     (=> (not false) true)
     (=> foo (not true) #:if false)
@@ -116,7 +120,7 @@
                                          (T foo) (T true) (T (not false)) #f #t)
                               empty-substitution)))))
 
-(define (substitute signature rule substitution)
+(define (apply-substitution signature rule substitution)
   (define replacement (rule-replacement rule))
   (if (procedure? replacement)
       (with-handlers ([exn:fail? (lambda (v) #f)])
@@ -129,7 +133,7 @@
 (define (rewrite-head-once context term)
   (define signature (context-signature context))
   (or (for/first ([(rule substitution) (in-matching-rules context term #t)])
-        (substitute signature rule substitution))
+        (apply-substitution signature rule substitution))
       term))
 
 (module+ test
@@ -240,11 +244,7 @@
 ;
 ; Transformations of terms and equations
 ;
-(define (transform context transformation term)
-  (define signature (context-signature context))
-  (define rule (transformation-converted-rule transformation))
-  ; Check if the transformation introduced new vars that are in
-  ; conflict with existing ones.
+(define (check-var-conflicts rule term)
   (define new-vars (set-subtract (term.vars (rule-replacement rule))
                                  (term.vars (rule-pattern rule))))
   (define term-vars (term.vars term))
@@ -258,11 +258,18 @@
                 #:when (not (equal? (var-sort v)
                                     (hash-ref tvars-as-hash (var-name v)
                                               (var-sort v)))))
-      (error (format "Var ~s has sort ~s in transformation but sort ~s in the term to be transformed" (var-name v) (var-sort v) (hash-ref tvars-as-hash (var-name v))))))
-  ; Apply the transformation
+      (error (format "Var ~s has sort ~s in transformation but sort ~s in the term to be transformed" (var-name v) (var-sort v) (hash-ref tvars-as-hash (var-name v)))))))
+
+(define (transform* signature rule term)
+  (apply-substitution signature rule
+                      (one-match signature (rule-pattern rule) term)))
+
+(define (transform context transformation term)
+  (define signature (context-signature context))
+  (define rule (transformation-converted-rule transformation))
+  (check-var-conflicts rule term)
   (reduce context
-          (substitute signature rule
-                      (one-match signature (rule-pattern rule) term))))
+          (transform* signature rule term)))
 
 (define (transform-equation context transformation equation [new-label #f])
   (make-equation (context-signature context)
@@ -297,3 +304,50 @@
     (check-equal? (transform-equation test-context transformation
                                       (eq an-equation))
                   (eq false false))))
+
+;
+; Substitutions in terms and equations
+;
+(define (substitute* signature rule term)
+  (or (for/first ([s (term.match signature (rule-pattern rule) term)])
+        (apply-substitution signature rule s))
+      term))
+
+(define (substitute*-leftmost-innermost signature rule term)
+  (define-values (op args) (term.op-and-args term))
+  (if op
+      (let* ([tr-args (for/list ([arg args])
+                        (substitute*-leftmost-innermost
+                         signature rule arg))]
+             [with-tr-args (make-term* signature op tr-args)])
+        (substitute* signature rule with-tr-args))
+      (substitute* signature rule term)))
+
+(define (substitute context transformation term)
+  (define signature (context-signature context))
+  (define rule (transformation-converted-rule transformation))
+  (check-var-conflicts rule term)
+  (reduce context
+          (substitute*-leftmost-innermost signature rule term)))
+
+(define (substitute-equation context transformation equation [new-label #f])
+  (make-equation (context-signature context)
+                 (substitute context transformation (equation-left equation))
+                 (equation-condition equation)
+                 (substitute context transformation (equation-right equation))
+                 new-label))
+
+(module+ test
+  (with-context test-context
+    (check-equal? (substitute test-context
+                              (tr bar (not bar))
+                              (T (not bar)))
+                  (T (not (not bar))))
+    (check-equal? (substitute test-context
+                              (tr foo (not foo))
+                              (T (not foo)))
+                  (T true))
+    (check-equal? (substitute-equation test-context
+                                       (tr foo (not bar))
+                                       (eq foo bar))
+                  (eq (not bar) bar))))
