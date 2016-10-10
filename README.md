@@ -137,6 +137,6 @@ by the [CRAPL](http://matt.might.net/articles/crapl/) license.
 
 ## Branch notes
 
-This branch is dedicated to experiments with simple application
-examples. The main goal is usability testing, but the examples
-should also help explain what Leibniz was created for.
+Most branches of this repository contain experiments that test the utility and feasibility of ideas for improvements and new features. Each branch has a short note in this place that explains its reason for being. This branch (master) always contains the version currently considered most useful.
+
+Note that all branches except master may be rebased, or modified in other ways. If you want to fork this repository, please don't rely on any branch other than master.
