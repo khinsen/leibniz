@@ -1,7 +1,11 @@
 #lang sweet-exp racket
 
+provide (all-defined-out)
+
 require leibniz
         "../quantities/mass.rkt"
+        "../quantities/space.rkt"
+        "../quantities/time.rkt"
 
 module+ test
   require rackunit
@@ -57,8 +61,8 @@ module+ test
 define-context point-mass-configuration
   ;
   include point-mass-system
+  include space
   ;
-  sort Position
   sort Positions
   ;
   op {Positions of PointMass} Position
@@ -72,6 +76,9 @@ define-context point-mass-dynamic-state
   ;
   sort Velocity
   sort Velocities
+  sort DynamicState
+  ;
+  op State(Positions Velocities) DynamicState
   ;
   op {Velocities of PointMass} Velocity
 
@@ -94,8 +101,8 @@ define-context point-mass-accelerations
 define-context point-mass-trajectory
   ;
   include point-mass-accelerations
+  include time
   ;
-  sort Time
   sort Trajectory
   sort VelocityTrajectory
   sort AccelerationTrajectory
@@ -104,8 +111,8 @@ define-context point-mass-trajectory
   op {VelocityTrajectory at Time} Velocities
   op {AccelerationTrajectory at Time} Accelerations
   ;
-  op d(Trajectory) VelocityTrajectory
-  op d(VelocityTrajectory) AccelerationTrajectory
+  op 𝒟(Trajectory) VelocityTrajectory
+  op 𝒟(VelocityTrajectory) AccelerationTrajectory
 
 ; Now we can write down Newton's law of motion.
 
@@ -121,12 +128,34 @@ define-context point-mass-law-of-motion
   op {ForceTrajectory at Time} Forces
   ;
   op {Mass * Acceleration} Force
+  op {Force / Mass} Acceleration
+  ;
+  op {Masses * Accelerations} Forces
+  op {Forces / Masses} Accelerations
   ;
   op r Trajectory
   op f ForceTrajectory
   ;
-  ; The variables should be read as "for each PointMass I in the
-  ; system and for each Time T in the trajectory".
-  eq #:vars ([I PointMass] [T Time])
-     {{f at T} of I}
-     {{m of I} * {{d(d(r)) at T} of I}}
+  eq #:label law-of-motion
+     ∀ I : PointMass
+     ∀ T : Time
+     {f at T}
+     {m * {𝒟(𝒟(r)) at T}}
+  ;
+  ; Multiplication between Masses and Accelerations
+  ; is defined per point mass.
+  => ∀ M : Masses
+     ∀ A : Accelerations
+     ∀ I : PointMass
+     {{M * A} of I}
+     {{M of I} * {A of I}}
+  ;
+  ; Simplification rules for force-mass-acceleration
+  => ∀ M : Mass
+     ∀ A : Acceleration
+     {{M * A} / M}
+     A
+  => ∀ M : Mass
+     ∀ F : Force
+     {M * {F / M}}
+     F
