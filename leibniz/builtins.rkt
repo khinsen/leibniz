@@ -10,10 +10,10 @@
 
 (require "./sorts.rkt"
          "./operators.rkt"
-         rackjure/threading)
+         threading)
 
 (module+ test
-  (require rackunit racket/function rackjure/threading)
+  (require rackunit racket/function)
   (define (sort-of-noarg-term signature name)
     (define rank (lookup-op signature name empty))
     (and rank

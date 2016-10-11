@@ -26,7 +26,7 @@
            "./test-examples.rkt"
            rackunit
            racket/function
-           rackjure/threading)
+           threading)
 
   (define-context test-context
     (sort Boolean)

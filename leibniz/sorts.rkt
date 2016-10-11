@@ -34,7 +34,7 @@
 (require "./lightweight-class.rkt")
 
 (module+ test
-  (require rackunit racket/function rackjure/threading))
+  (require rackunit racket/function threading))
 
 ;
 ; Sorts and kinds

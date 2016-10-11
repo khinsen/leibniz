@@ -46,11 +46,11 @@
          "./builtins.rkt"
          "./condd.rkt"
          racket/generic
-         rackjure/threading
-         racket/generator)
+         racket/generator
+         threading)
 
 (module+ test
-  (require rackunit racket/function rackjure/threading)
+  (require rackunit racket/function)
   (define-syntax-rule (check-values-equal? a b)
     (check-equal? (call-with-values (thunk a) list)
                   (call-with-values (thunk b) list)))

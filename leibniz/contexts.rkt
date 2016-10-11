@@ -22,8 +22,8 @@
          (prefix-in ts: "./term-syntax.rkt")
          "./equations.rkt"
          "./condd.rkt"
-         rackjure/threading
          racket/stxparam
+         threading
          (for-syntax (prefix-in ts: "./term-syntax.rkt")
                      syntax/parse
                      racket/stxparam))
@@ -32,8 +32,7 @@
   (require "./term-syntax.rkt"
            "./test-examples.rkt"
            rackunit
-           racket/function
-           rackjure/threading))
+           racket/function))
 
 ;
 ; A context combines a sort-graph, a signature, a varset, a rulelist,

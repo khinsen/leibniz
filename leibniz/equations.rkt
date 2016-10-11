@@ -36,7 +36,7 @@
            "./test-examples.rkt"
            rackunit
            racket/function
-           rackjure/threading))
+           threading))
 
 ;
 ; Rules and equations

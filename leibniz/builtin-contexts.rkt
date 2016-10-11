@@ -13,7 +13,7 @@
          "./terms.rkt"
          "./equations.rkt"
          (only-in "./contexts.rkt" context? define-context builtin-context)
-         rackjure/threading)
+         threading)
 
 (module+ test
   (require chk

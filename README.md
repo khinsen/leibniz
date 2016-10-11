@@ -103,7 +103,7 @@ languages and language extensions is particularly useful for this
 project. In addition to Racket itself, Leibniz depends on the
 following libraries:
 
- - [rackjure](https://github.com/greghendershott/rackjure)
+ - [threading](https://github.com/lexi-lambda/threading)
  - [chk](https://github.com/jeapostrophe/chk) (or rather my slightly
    modified [fork](https://github.com/khinsen/chk) that fixes an
    installation problem on recent Racket versions)

@@ -6,7 +6,7 @@
          "./operators.rkt"
          "./builtins.rkt"
          "./terms.rkt"
-         rackjure/threading)
+         threading)
 
 (define sorts
   (~> (merge-sort-graphs rational-sorts truth-sorts)

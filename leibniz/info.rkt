@@ -1,7 +1,7 @@
 #lang info
 (define collection "leibniz")
 (define deps '("base"
-               "rackjure"
+               "threading"
                "rackunit-lib"
                "chk"
                "sweet-exp-lib"))

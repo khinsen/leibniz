@@ -16,11 +16,11 @@
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
-         rackjure/threading
+         threading
          racket/generator)
 
 (module+ test
-  (require rackunit racket/function rackjure/threading)
+  (require rackunit racket/function)
   ; Define a simple sort graph for testing
   (define sorts
     (~> empty-sort-graph
@@ -302,8 +302,8 @@
   
   (define (lookup-rank arity)
     (define k-arity (kind-arity arity))
-    (some~> (hash-ref ranks-by-k-arity k-arity #f)
-            (smallest-rank-for-arity arity)))
+    (and~> (hash-ref ranks-by-k-arity k-arity #f)
+           (smallest-rank-for-arity arity)))
 
   (define (preregular-op?)
     (for/and ([srl (hash-values ranks-by-k-arity)])
