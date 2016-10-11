@@ -105,9 +105,7 @@
   ; ranks: the partially sorted list of ranks
 
   (define (check-kinds k-arity k-sort)
-    (unless (equal? k-rank (cons k-arity k-sort))
-      (error "operator not monotonic"))
-    this)
+    (equal? k-rank (cons k-arity k-sort)))
 
   (define (is-subarity? arity1 arity2)
     (and (= (length arity1) (length arity2))
@@ -293,9 +291,10 @@
     (define k-arity (kind-arity arity))
     (define k-sort (kind sort-graph sort))
     (define (update ranks)
-      (~> ranks
-          (check-kinds k-arity k-sort)
-          (add arity sort)))
+      (unless (check-kinds ranks k-arity k-sort)
+        (error (format "adding rank (~s -> ~a) makes operator non-monotonic"
+                       arity sort)))
+      (add ranks arity sort))
     (operator sort-graph
               (hash-update ranks-by-k-arity k-arity update
                            (thunk (empty-sorted-ranks sort-graph
