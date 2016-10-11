@@ -25,7 +25,7 @@ bottom):
    
  - `rewrite.rkt` implements term rewriting.
 
- - `context-syntax.rkt` implements convenience syntax for doing computations
+ - `rewrite-syntax.rkt` implements convenience syntax for doing computations
    inside a context.
 
  - `builtin-contexts.rkt` implements a few built-in contexts

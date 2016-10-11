@@ -17,7 +17,7 @@
 
 (module+ test
   (require chk
-           "./context-syntax.rkt"))
+           "./rewrite-syntax.rkt"))
 
 ;
 ; Truth

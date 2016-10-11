@@ -1,6 +1,6 @@
 #lang racket
 
-(require "./context-syntax.rkt"
+(require "./rewrite-syntax.rkt"
          "./builtin-contexts.rkt"
          (only-in "./rewrite.rkt" reduce))
 
