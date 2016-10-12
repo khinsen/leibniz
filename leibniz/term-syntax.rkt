@@ -48,13 +48,27 @@
                           (list arg-terms.value ...))))
 
   (define-splicing-syntax-class opt-vars
-    #:description "optional local variable declaration"
+    #:description "optional variable declaration in a rule or equation"
     (pattern (~seq #:vars ([var-name:id var-sort:id] ...))
              #:with expr #'(list (cons (quote var-name)
                                        (quote var-sort)) ...))
     (pattern (~seq #:var [var-name:id var-sort:id])
              #:with expr #'(list (cons (quote var-name)
                                        (quote var-sort))))
+    ; a more mathematics-like variant
+    (pattern (~seq (~seq (~datum ∀) var-name:id (~datum :) var-sort:id) ...)
+             #:with expr #'(list (cons (quote var-name)
+                                       (quote var-sort)) ...))
+    ; two variants of the former with parentheses for use with sweet-exp
+    (pattern (~seq ((~seq (~datum ∀) var-name:id (~datum :) var-sort:id)) ...)
+             #:with expr #'(list (cons (quote var-name)
+                                       (quote var-sort)) ...))
+    (pattern (~seq (~seq (~datum ∀) var-name-1:id (~datum :) var-sort-1:id)
+                   ((~seq (~datum ∀) var-name:id (~datum :) var-sort:id)) ...)
+             #:with expr #'(list (cons (quote var-name-1)
+                                       (quote var-sort-1))
+                                 (cons (quote var-name)
+                                       (quote var-sort)) ...))
     (pattern (~seq)
              #:with expr #'empty))
 

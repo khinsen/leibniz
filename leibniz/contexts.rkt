@@ -190,6 +190,20 @@
     (pattern (~seq #:var [var-name:id var-sort:id])
              #:with expr #'(list (cons (quote var-name)
                                        (quote var-sort))))
+    ; a more mathematics-like variant
+    (pattern (~seq (~seq (~datum ∀) var-name:id (~datum :) var-sort:id) ...)
+             #:with expr #'(list (cons (quote var-name)
+                                       (quote var-sort)) ...))
+    ; two variants of the former with parentheses for use with sweet-exp
+    (pattern (~seq ((~seq (~datum ∀) var-name:id (~datum :) var-sort:id)) ...)
+             #:with expr #'(list (cons (quote var-name)
+                                       (quote var-sort)) ...))
+    (pattern (~seq (~seq (~datum ∀) var-name-1:id (~datum :) var-sort-1:id)
+                   ((~seq (~datum ∀) var-name:id (~datum :) var-sort:id)) ...)
+             #:with expr #'(list (cons (quote var-name-1)
+                                       (quote var-sort-1))
+                                 (cons (quote var-name)
+                                       (quote var-sort)) ...))
     (pattern (~seq)
              #:with expr #'empty))
 
@@ -373,7 +387,7 @@
     (op (foo B) A)
     (op (foo A) B)
     (=> #:label a-rule (foo an-A) a-B)
-    (=> #:var [X B]
+    (=> ∀ X : B
         (foo X) an-A
         #:if true)
     (eq #:label an-equation an-A (foo a-B)))
