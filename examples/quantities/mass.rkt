@@ -31,6 +31,10 @@ define-context mass
   ; The quotient of two masses is a positive number.
   op {Mass / Mass} PositiveReal
   ;
+  ; Simplify sums of masses with prefactors.
+  => #:vars ( (F1 PositiveReal) (F2 PositiveReal) (M Mass))
+     {{F1 * M} + {F2 * M}}
+     {{F1 + F2} * M}
   ; Reduce terms of type mass to an unreducible mass or to the form
   ; {factor * unreducible mass}.
   => #:vars ( (F1 PositiveReal) (F2 PositiveReal) (M Mass) )
