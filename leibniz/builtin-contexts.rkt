@@ -272,6 +272,7 @@
   (op (* Zero Real) Zero)
   (op (* Real Zero) Zero)
   (op (/ Real NonZeroReal) Real)
+  (op (/ NonZeroReal NonZeroReal) NonZeroReal)
   (op (/ PositiveReal NonZeroReal) PositiveReal)
   (op (/ NonNegativeReal NonZeroReal) NonNegativeReal)
   (op (/ Zero NonZeroReal) Zero)
