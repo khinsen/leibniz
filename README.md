@@ -6,13 +6,15 @@ equations and algorithms. Such models can be published, cited, and
 discussed, in addition to being manipulated by software.
 
 Although Leibniz can express algorithms, it is **not** a programming
-language. It is more similar to a specification language in that it
-allows to express what some program is supposed to compute.
+language. It is more similar to
+a [specification language](https://en.wikipedia.org/wiki/Specification_language) in
+that it allows to express what some program is supposed to compute.
 
 Leibniz is named after
 [Gottfried Wilhelm Leibniz](https://en.wikipedia.org/wiki/Gottfried_Wilhelm_Leibniz),
 who made important contributions to science, mathematics, formal
 logic, and computation, topics that are all relevant to this project.
+He also invented a widely used [notation for calculus](https://en.wikipedia.org/wiki/Leibniz%27s_notation).
 
 If you are interested in the development of digital scientific
 notations, even if your ideas are very different from what I envisage
@@ -28,7 +30,7 @@ are located (no surprise) under `examples`. For a first contact
 with Leibniz, I suggest looking at `examples/quantities/mass.rkt`,
 which shows how physical quantities and units can be defined. In
 `examples/quick-guide.md` you can find essential background information
-for understanding this example.
+for understanding this and other examples.
 
 Readers interested in the implementation should start by looking at
 the file `notes.md` for an overview of the code structure.
@@ -79,8 +81,8 @@ Term rewriting in order-sorted algebras has been implemented in the
 specification languages
 [OBJ](http://cseweb.ucsd.edu/~goguen/sys/obj.html) and its modern
 offshoot [Maude](http://maude.cs.illinois.edu/). For readers familiar
-with these languages, a Leibniz "context" is equivalent to an "object"
-in OBJ or to a
+with these languages, a Leibniz "context" is roughly the same as an "object"
+in OBJ or a
 "[functional module](http://maude.cs.uiuc.edu/maude2-manual/html/maude-manualch4.html)"
 in Maude. Reading the Maude documentation is currently the best
 preparation for understanding Leibniz.
@@ -90,10 +92,10 @@ flexible syntax and its support for non-functional modules.  This is
 due to a very different focus: Maude is a language for writing
 specifications for complex software, whereas Leibniz is a notation for
 scientific models. Scientific models are much simpler than most
-software, but they are processed by a wide range of software. Leibniz
-must therefore be easy to implement in a wide range of software
-packages, whereas reimplementing Maude is of little interest, given
-that its source code is open.
+software, but they can be processed by a wide range of
+software. Leibniz must therefore be easy to implement in a wide range
+of software packages, whereas reimplementing Maude is of little
+interest, given that its source code is open.
 
 ## Required software
 
@@ -137,6 +139,12 @@ by the [CRAPL](http://matt.might.net/articles/crapl/) license.
 
 ## Branch notes
 
-Most branches of this repository contain experiments that test the utility and feasibility of ideas for improvements and new features. Each branch has a short note in this place that explains its reason for being. This branch (master) always contains the version currently considered most useful.
+Most branches of this repository contain experiments that test the
+utility and feasibility of ideas for improvements and new
+features. Each branch has a short note in this place that explains its
+reason for being. This branch (master) always contains the version
+currently considered most useful.
 
-Note that all branches except master may be rebased, or modified in other ways. If you want to fork this repository, please don't rely on any branch other than master.
+Note that all branches except master may be rebased, or modified in
+other ways. If you want to fork this repository, please don't rely on
+any branch other than master.
