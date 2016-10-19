@@ -13,7 +13,7 @@
   [all-subsorts             (sort-graph? sort? . -> . set?)]
   [has-sort?                (sort-graph? symbol? . -> . boolean?)]
   [is-subsort?              (sort-graph? symbol? symbol? . -> . boolean?)]
-  [kind                     (sort-graph? symbol? . -> . set?)]
+  [kind                     (sort-graph? sort-or-kind? . -> . set?)]
   [has-kind?                (sort-graph? set? . -> . boolean?)]
   [maximal-sorts            (sort-graph? set? . -> . set?)]
   [sort?                    (any/c . -> . boolean?)]
@@ -140,9 +140,12 @@
               ([s ss])
       (set-union ss (all-subsorts s))))
 
-  (define (kind sort)
-    (validate-sort sort)
-    (hash-ref kinds sort))
+  (define (kind sort-or-kind)
+    (if (sort? sort-or-kind)
+        (begin
+          (validate-sort sort-or-kind)
+          (hash-ref kinds sort-or-kind))
+        sort-or-kind))
 
   (define (has-kind? x)
     (and (set? x)
