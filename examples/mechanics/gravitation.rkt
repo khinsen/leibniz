@@ -11,56 +11,48 @@ require leibniz
 module+ test
   require rackunit
 
-define-context gravitation-pair-term
+define-context point-mass-pairs
   ;
-  include point-mass-law-of-motion
+  include point-mass-system
   ;
-  sort GravitationalConstant
-  sort MassSquared
-  sort DistanceSquared
-  sort NonZeroDistanceSquared
-  subsort NonZeroDistanceSquared DistanceSquared
-  sort MassSquaredOverDistanceSquared
+  sort PointMassPair
+  sort PointMassPairs
+  subsort PointMassPair PointMassPairs
   ;
-  op radial-pair-force(PointMass PointMass) Force
+  op pair(PointMass PointMass) PointMassPair
   ;
-  op G GravitationalConstant
-  op {Mass * Mass} MassSquared
-  op {NonZeroDistance * NonZeroDistance} NonZeroDistanceSquared
-  op sq(Distance) DistanceSquared
-  op sq(NonZeroDistance) NonZeroDistanceSquared
-  op {MassSquared / DistanceSquared} MassSquaredOverDistanceSquared
-  op {GravitationalConstant * MassSquaredOverDistanceSquared} Force
+  op no-pairs PointMassPairs
+  op {PointMassPairs and PointMassPairs} PointMassPairs
+  op pairs-in(PointMassSystem) PointMassPairs
+  op pairs-with(PointMass PointMassSystem PointMassPairs) PointMassPairs
   ;
-  eq ∀ PM1 : PointMass
+  => pairs-in(empty-space)
+     no-pairs
+  => ∀ PM : PointMass
+     pairs-in(PM)
+     no-pairs
+  => ∀ PM1 : PointMass
      ∀ PM2 : PointMass
-     radial-pair-force(PM1 PM2)
-     {G * {{{m of PM1} * {m of PM2}} / sq(pair-distance(PM1 PM2))}}
-
-define-context gravitation-forces
+     pairs-in({PM1 and PM2})
+     pair(PM1 PM2)
+  => ∀ PM1 : PointMass
+     ∀ PM2 : PointMass
+     ∀ S : PointMassSystem
+     pairs-in{PM1 and {PM2 and S}}
+     {{pair(PM1 PM2) and pairs-in{PM1 and S}} and pairs-in{PM2 and S}}
   ;
-  include gravitation-pair-term
-  ;
-  op no-forces Forces
-  op gravitational-pair-forces(PointMass PointMass) Forces
-  op gravitational-forces(PointMassSystem) Forces
-  ;
-  => ∀ S : PointMassSystem
-     ∀ I : PointMass
-     ∀ J : PointMass
-     gravitational-forces{I and {J and S}}
-     {gravitational-pair-forces(I J) + {gravitational-forces{I and S} + gravitational-forces{J and S}}}
-  => gravitational-forces(empty-space)
-     no-forces
-  => ∀ I : PointMass
-     gravitational-forces{I and empty-space}
-     no-forces
-  => ∀ F : Forces
-     {F + no-forces}
-     F
-  => ∀ F : Forces
-     {no-forces + F}
-     F
+  ; Simplification rules
+  => ∀ P : PointMassPairs
+     {P and no-pairs}
+     P
+  => ∀ P : PointMassPairs
+     {no-pairs and P}
+     P
+  => ∀ P1 : PointMassPairs
+     ∀ P2 : PointMassPairs
+     ∀ P3 : PointMassPairs
+     {{P1 and P2} and P3}
+     {P1 and {P2 and P3}}
 
 module+ test
   ;
@@ -74,19 +66,70 @@ module+ test
     ;
     op solar-system PointMassSystem
     => solar-system
-       {sun and {earth and {moon and empty-space}}}
+       {sun and {earth and moon}}
   ;
-  define-context simple-solar-system-with-gravitation
+  define-context simple-solar-system-pairs
     ;
     include simple-solar-system
-    include gravitation-forces
+    include point-mass-pairs
   ;
-  with-context simple-solar-system-with-gravitation
+  with-context simple-solar-system-pairs
     ;
     check-equal?
-      RT gravitational-forces(solar-system)
-      T  {gravitational-pair-forces(sun earth) +  {gravitational-pair-forces(sun moon) +  gravitational-pair-forces(earth moon)}}
+      RT pairs-in{sun and earth}
+      T  pair(sun earth)
     ;
     check-equal?
-      RT gravitational-forces{sun and {earth and empty-space}}
-      T  gravitational-pair-forces(sun earth)
+      RT pairs-in(solar-system)
+      T  {pair(sun earth) and  {pair(sun moon) and  {pair(earth moon)}}}
+
+
+define-context point-mass-pair-interactions
+  ;
+  include point-mass-forces
+  ;
+  op pair-forces(PointMassSystem Positions) Forces
+  op radial-pair-force(PointMass PointMass Positions) Force
+  ;
+  ; No force between a particle and itself.
+  => ∀ PM : PointMass
+     ∀ R : Positions
+     {pair-forces(PM R) of PM}
+     no-force
+  ; For any other pair, it's the radial part times the direction.
+  => ∀ PM1 : PointMass
+     ∀ PM2 : PointMass
+     ∀ R : Positions
+     {pair-forces(PM1 R) of PM2}
+     {direction({R of PM2} {R of PM1}) *  radial-pair-force(PM1 PM2 R)}
+  ; For composite systems, recurse for both subsystems.
+  => ∀ PM : PointMass
+     ∀ S1 : PointMassSystem
+     ∀ S2 : PointMassSystem
+     ∀ R : Positions
+     {pair-forces({S1 and S2} R) of PM}
+     {{pair-forces(S1 R) of PM} + {pair-forces(S2 R) of PM}}
+
+module+ test
+  ;
+  define-context simple-solar-system-configuration
+    ;
+    include simple-solar-system
+    include point-mass-configuration
+    ;
+    op r Positions
+  ;
+  define-context simple-solar-system-pair-interactions
+    ;
+    include simple-solar-system-configuration
+    include point-mass-pair-interactions
+  ;
+  with-context simple-solar-system-pair-interactions
+    ;
+    check-equal?
+      RT {pair-forces({sun and earth} r) of sun}
+      T  {direction({r of sun} {r of earth}) * radial-pair-force(earth sun r)}
+    ;
+    check-equal?
+      RT {pair-forces(solar-system r) of earth}
+      T  {{direction({r of earth} {r of sun}) * radial-pair-force(sun earth r)} + {direction({r of earth} {r of moon}) * radial-pair-force(moon earth r)}}

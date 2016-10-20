@@ -157,6 +157,9 @@ define-context space
   ; A distance times a vector is a position delta.
   op {Vector * Distance} PositionΔ
   ;
+  ; A direction is a unit vector pointing from one position to another.
+  op direction(Position Position) Vector
+  ;
   ; Simplification rules for positions.
   => ∀ P : Position
      ∀ PD : PositionΔ
