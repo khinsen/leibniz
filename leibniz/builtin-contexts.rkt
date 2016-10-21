@@ -260,6 +260,7 @@
   (subsort PositiveReal NonZeroReal)
   (subsort PositiveRational PositiveReal)
   (sort NonNegativeReal)
+  (subsort NonNegativeReal Real)
   (subsort PositiveReal NonNegativeReal)
   (subsort NonNegativeRational NonNegativeReal)
   (op (+ Real Real) Real)
