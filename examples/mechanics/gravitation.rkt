@@ -39,6 +39,18 @@ define-context point-mass-pair-interactions
 
 module+ test
   ;
+  define-context simple-solar-system
+    ;
+    include point-mass-system
+    ;
+    op sun PointMass
+    op earth PointMass
+    op moon PointMass
+    ;
+    op solar-system PointMassSystem
+    => solar-system
+       {sun and {earth and moon}}
+  ;
   define-context simple-solar-system-configuration
     ;
     include simple-solar-system
@@ -60,3 +72,42 @@ module+ test
     check-equal?
       RT {pair-forces(solar-system r) of earth}
       T  {{direction({r of earth} {r of sun}) * radial-pair-force(sun earth r)} + {direction({r of earth} {r of moon}) * radial-pair-force(moon earth r)}}
+
+define-context point-mass-gravitation
+  ;
+  include point-mass-pair-interactions
+  ;
+  sort GravitationalConstant
+  sort MassSquared
+  sort DistanceSquared
+  sort NonZeroDistanceSquared
+  subsort NonZeroDistanceSquared DistanceSquared
+  sort MassSquaredOverDistanceSquared
+  ;
+  op G GravitationalConstant
+  op {Mass * Mass} MassSquared
+  op {NonZeroDistance * NonZeroDistance} NonZeroDistanceSquared
+  op sq(Distance) DistanceSquared
+  op sq(NonZeroDistance) NonZeroDistanceSquared
+  op {Distance * Distance} DistanceSquared
+  op {NonZeroDistance * NonZeroDistance} NonZeroDistanceSquared
+  op {MassSquared / DistanceSquared} MassSquaredOverDistanceSquared
+  op {GravitationalConstant * MassSquaredOverDistanceSquared} Force
+  ;
+  => ∀ PM1 : PointMass
+     ∀ PM2 : PointMass
+     ∀ R : Positions
+     radial-pair-force(PM1 PM2 R)
+     {G * {{{mass of PM1} * {mass of PM2}} / sq(distance({R of PM1} {R of PM2}))}}
+
+module+ test
+  ;
+  define-context simple-solar-system-gravitation
+    ;
+    include simple-solar-system-configuration
+    include point-mass-gravitation
+  ;
+  with-context simple-solar-system-gravitation
+    ;
+    displayln
+      RT {pair-forces({sun and earth} r) of sun}
