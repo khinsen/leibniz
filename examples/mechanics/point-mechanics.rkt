@@ -36,7 +36,7 @@ define-context point-mass-system
   op {Masses of PointMass} Mass
   ;
   ; The name of the collection of masses.
-  op m Masses
+  op mass Masses
   ;
   ; Simplification rules:
   ; 1) Eliminate empty-space
@@ -55,7 +55,7 @@ define-context point-mass-system
 
 ; As an example for the usage of point-mass-system, here is the
 ; definition of a subset of the solar system.  With this context, the
-; mass of the sun is referred to as {m of sun}. Numerical values can
+; mass of the sun is referred to as {mass of sun}. Numerical values can
 ; be added, here or in a separate context, via rewrite rules.
 
 module+ test
@@ -214,4 +214,4 @@ define-context point-mass-law-of-motion
   eq #:label law-of-motion
      ∀ T : Time
      {f at T}
-     {m * {𝒟(𝒟(r)) at T}}
+     {mass * {𝒟(𝒟(r)) at T}}
