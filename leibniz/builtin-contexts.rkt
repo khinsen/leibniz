@@ -315,6 +315,8 @@
   (op (^ Zero PositiveReal) Zero)
   (op (abs Real) NonNegativeReal)
   (op (abs NonZeroReal) PositiveReal)
+  (op (√ NonNegativeReal) NonNegativeReal)
+  (op (√ PositiveReal) PositiveReal)
   (op (< Real Real) Boolean)
   (op (> Real Real) Boolean)
   (op (<= Real Real) Boolean)

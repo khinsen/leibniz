@@ -156,9 +156,12 @@ define-context space
   ;
   ; A distance times a vector is a position delta.
   op {Vector * Distance} PositionΔ
+  op {PositionΔ / Distance} Vector
   ;
   ; A direction is a unit vector pointing from one position to another.
+  ; A distance is the length of their PositionΔ
   op direction(Position Position) Vector
+  op distance(Position Position) Distance
   ;
   ; Simplification rules for positions.
   => ∀ P : Position
@@ -180,6 +183,10 @@ define-context space
      {-1 * PD}
   ;
   ; Simplification rules for position deltas.
+  => ∀ P1 : PositionΔ
+     ∀ P2 : PositionΔ
+     {P1 - P2}
+     {P1 + {-1 * P2}}
   => ∀ F1 : Real
      ∀ F2 : Real
      ∀ P : PositionΔ
@@ -200,6 +207,27 @@ define-context space
      {P / F}
      {{1 / F} * P}
   ;
+  ; Simplification rules for distances.
+  => ∀ F : Real
+     ∀ V : Vector
+     ∀ D : Distance
+     {F * {V * D}}
+     {{F * V} * D}
+  => ∀ V1 : Vector
+     ∀ V2 : Vector
+     ∀ D : Distance
+     {{V1 * D} + {V2 * D}}
+     {{V1 + V2} * D}
+  => ∀ V : Vector
+     ∀ D : Distance
+     {{V * D} / D}
+     V
+  => ∀ F : NonZeroReal
+     ∀ V : Vector
+     ∀ D : Distance
+     {{V * D} / {F * D}}
+     {V / F}
+  ;
   ; Simplification rules for lengths.
   => ∀ F : Real
      ∀ P : PositionΔ
@@ -209,6 +237,13 @@ define-context space
      ∀ D : Distance
      length{V * D}
      {length(V) * D}
+  ;
+  ; Simplification rules for directions.
+  => ∀ P : Position
+     ∀ PD1 : PositionΔ
+     ∀ PD2 : PositionΔ
+     direction({P + PD1} {P + PD2})
+     {{PD2 - PD1} / length{PD2 - PD1}}
 
 module+ test
   ;

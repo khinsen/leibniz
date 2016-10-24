@@ -19,9 +19,10 @@ define-context vector
   op {Vector + Vector} Vector
   op {Vector - Vector} Vector
   op {Real * Vector} Vector
+  op {Vector / NonZeroReal} Vector
   ;
   op {Vector * Vector} Real
-  op length(Vector) Real
+  op length(Vector) NonNegativeReal
   ;
   ; Simplification rules
   ;
@@ -42,6 +43,10 @@ define-context vector
      ∀ V : Vector
      {V + {F * V}}
      {{F + 1} * V}
+  => ∀ F : NonZeroReal
+     ∀ V : Vector
+     {V / F}
+     {{1 / F} * V}
   ;
   => ∀ V : Vector
      {1 * V}
@@ -73,7 +78,7 @@ define-context vector
   => ∀ F : Real
      ∀ V : Vector
      length{F * V}
-     {F * length(V)}
+     {abs(F) * length(V)}
 
 module+ test
   ;
@@ -133,13 +138,18 @@ define-context vector-3d
   ;
   => ∀ X : Real
      length(V(X 0 0))
-     X
+     abs(X)
   => ∀ Y : Real
      length(V(0 Y 0))
-     Y
+     abs(Y)
   => ∀ Z : Real
      length(V(0 0 Z))
-     Z
+     abs(Z)
+  => ∀ X : Real
+     ∀ Y : Real
+     ∀ Z : Real
+     length(V(X Y Z))
+     √{{X * X} + {{Y * Y} + {Z * Z}}}
 
 module+ test
   ;
