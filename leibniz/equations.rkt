@@ -129,7 +129,8 @@
                (set-subtract replacement-vars pattern-vars))
         (error (format "Term ~s contains variables that are not in the rule pattern" replacement)))
       (unless (conforms-to? sort-graph
-                            (term.sort replacement) (term.sort pattern))
+                            (term.sort replacement)
+                            (kind sort-graph (term.sort pattern)))
         (error (format "Term ~s must be of sort ~s"
                        replacement (term.sort pattern))))))
   (rule pattern condition replacement label))
