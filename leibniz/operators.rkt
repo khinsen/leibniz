@@ -292,7 +292,7 @@
     (define k-sort (kind sort-graph sort))
     (define (update ranks)
       (unless (check-kinds ranks k-arity k-sort)
-        (error (format "adding rank (~s -> ~a) makes operator non-monotonic"
+        (error (format "adding rank ~s -> ~a makes operator non-monotonic"
                        arity sort)))
       (add ranks arity sort))
     (operator sort-graph
@@ -376,12 +376,16 @@
     (for ([arg arity])
       (validate-sort-constraint sort-graph arg))
     (validate-sort sort-graph sort)
-    (signature sort-graph
-               (hash-update operators symbol
-                            (λ (op) (add-rank op arity sort))
-                            (thunk (add-rank (empty-operator sort-graph)
-                                             arity sort)))
-               builtins))
+    (with-handlers ([exn:fail?
+                     (λ (exn) (error (format "op ~a: ~a "
+                                             symbol
+                                             (exn-message exn))))])
+      (signature sort-graph
+                 (hash-update operators symbol
+                              (λ (op) (add-rank op arity sort))
+                              (thunk (add-rank (empty-operator sort-graph)
+                                               arity sort)))
+                 builtins)))
 
   (define (lookup-op symbol arity)
     (define op (hash-ref operators symbol #f))
