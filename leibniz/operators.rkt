@@ -4,6 +4,12 @@
  (struct-out signature)
  (contract-out
   [preregular?      (signature? . -> . boolean?)]
+  [non-preregular-op-example
+                    (signature? . -> .
+                      (or/c #f
+                            (list/c symbol?
+                                    (listof symbol?)
+                                    (listof symbol?))))]
   [empty-signature  ((sort-graph?) (#:builtins set?) . ->* . signature?)]
   [add-op           (signature? symbol? (listof sort-constraint?) sort?
                      . -> . signature?)]
@@ -187,17 +193,22 @@
           #t))
     (monotonic* ranks (length ranks)))
 
-  (define (preregular-rank-list?)
+  (define (non-preregularity-examples-ranks)
     ; Do a brute-force search over all possible argument sorts
-    ; and check that there is always a unique least value sort.
-    ; There is a lot of room for improvement.
-    (for/and ([arg-sorts (cartesian-product
-                          (map (λ (c) (conforming-sorts sort-graph c))
-                               (car k-rank)))])
-      (define value-sorts (map cdr (matching-ranks-for-arity arg-sorts)))
-      (or (< (length value-sorts) 2)
-          (for/and ([vs (rest value-sorts)])
-            (is-subsort? sort-graph (first value-sorts) vs)))))
+    ; and yield those for which there is no unique least value sort.
+    (in-generator #:arity 2
+     (for ([arg-sorts (cartesian-product
+                       (map (λ (c) (conforming-sorts sort-graph c))
+                            (car k-rank)))])
+       (define value-sorts (map cdr (matching-ranks-for-arity arg-sorts)))
+       (unless (or (< (length value-sorts) 2)
+                   (for/and ([vs (rest value-sorts)])
+                     (is-subsort? sort-graph (first value-sorts) vs)))
+         (yield arg-sorts value-sorts)))))
+  
+  (define (preregular-rank-list?)
+    (not (for/first ([(arg-sorts value-sorts) (non-preregularity-examples-ranks)])
+           #t)))
 
   (define (all-ranks-for-k-arity)
     ranks))
@@ -271,6 +282,9 @@
                   (add (list 'B) 'B)
                   (add (list 'C) 'C))])
     (check-false (preregular-rank-list? srl))
+    (for ([(arg-sorts value-sorts) (non-preregularity-examples-ranks srl)])
+      (check-equal? arg-sorts '(A))
+      (check-equal? value-sorts '(B C)))
     (check-true (preregular-rank-list? (~> srl
                                            (add (list 'A) 'A))))))
 
@@ -308,6 +322,12 @@
   (define (preregular-op?)
     (for/and ([srl (hash-values ranks-by-k-arity)])
       (preregular-rank-list? srl)))
+
+  (define (non-preregularity-examples-op)
+    (in-generator #:arity 2
+      (for* ([srl (hash-values ranks-by-k-arity)]
+             [(arg-sorts value-sorts) (non-preregularity-examples-ranks srl)])
+        (yield arg-sorts value-sorts))))
 
   (define (all-ranks)
     (in-generator
@@ -357,6 +377,9 @@
                  (add-rank (list 'B) 'B)
                  (add-rank (list 'C) 'C))])
     (check-false (preregular-op? op))
+    (for ([(arg-sorts value-sorts) (non-preregularity-examples-op op)])
+      (check-equal? arg-sorts '(A))
+      (check-equal? value-sorts '(B C)))
     (check-true (preregular-op? (~> op (add-rank (list 'A) 'A))))))
 
 ;
@@ -402,6 +425,11 @@
   (define (preregular?)
     (for/and ([op (hash-values operators)])
       (preregular-op? op)))
+
+  (define (non-preregular-op-example)
+    (for*/first ([(op-symbol op) operators]
+           [(arg-sorts value-sorts) (non-preregularity-examples-op op)])
+      (list op-symbol arg-sorts value-sorts)))
 
   (define (all-ops)
     (in-generator #:arity 2
@@ -492,4 +520,18 @@
                          (add-subsort-relation 'X 'B)))
                     (add-op 'bar empty 'X)
                     (add-op 'foo empty 'B)
-                    (add-op 'foo (list 'A 'B) 'A))))
+                    (add-op 'foo (list 'A 'B) 'A)))
+  (let* ([sorts (~> empty-sort-graph
+                    (add-sort 'A) (add-sort 'B) (add-sort 'C)
+                    (add-subsort-relation 'A 'B)
+                    (add-subsort-relation 'A 'C))]
+         [signature (~> (empty-signature sorts)
+                        (add-op 'foo (list 'B) 'B)
+                        (add-op 'foo (list 'C) 'C))])
+    (check-false (preregular? signature))
+    (check-equal? (non-preregular-op-example signature)
+                  (list 'foo (list 'A) (list 'B 'C)))
+    (check-equal? (non-preregular-op-example
+                   (add-op signature 'foo (list 'A) 'A))
+                  #f))
+)
