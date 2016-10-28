@@ -41,7 +41,8 @@
 
 (module+ test
   (check-equal? (sort-of-noarg-term truth-signature 'true) 'Boolean)
-  (check-equal? (sort-of-noarg-term truth-signature 'false) 'Boolean))
+  (check-equal? (sort-of-noarg-term truth-signature 'false) 'Boolean)
+  (check-false (non-preregular-op-example truth-signature)))
 
 ;
 ; The remaining built-in term types are special terms in that they
@@ -103,6 +104,7 @@
       (add-op '* (list 'Zero 'Integer) 'Zero)
       (add-op '* (list 'Natural 'Natural) 'Natural)
       (add-op '* (list 'NonZeroNatural 'NonZeroNatural) 'NonZeroNatural)
+      (add-op '* (list 'NonZeroInteger 'NonZeroInteger) 'NonZeroInteger)
       (add-op 'div (list 'Integer 'NonZeroInteger) 'Integer)
       (add-op 'div (list 'Zero 'NonZeroInteger) 'Zero)
       (add-op 'div (list 'Natural 'NonZeroNatural) 'Natural)
@@ -111,6 +113,7 @@
       (add-op 'rem (list 'Natural 'NonZeroNatural) 'Natural)
       (add-op '^ (list 'Integer 'NonZeroNatural) 'Integer)
       (add-op '^ (list 'Natural 'NonZeroNatural) 'Natural)
+      (add-op '^ (list 'Zero 'NonZeroNatural) 'Zero)
       (add-op '^ (list 'NonZeroNatural 'NonZeroNatural) 'NonZeroNatural)
       (add-op '^ (list 'NonZeroInteger 'NonZeroNatural) 'NonZeroInteger)
       (add-op '^ (list 'NonZeroInteger 'Zero) 'NonZeroNatural)
@@ -130,7 +133,7 @@
   (check-equal? (sort-of-numarg-term integer-signature '* (list 1 2)) 'NonZeroNatural)
   (check-equal? (sort-of-numarg-term integer-signature '* (list 0 2)) 'Zero)
   (check-equal? (sort-of-numarg-term integer-signature '* (list -2 0)) 'Zero)
-  (check-equal? (sort-of-numarg-term integer-signature '* (list -2 -2)) 'Integer)
+  (check-equal? (sort-of-numarg-term integer-signature '* (list -2 -2)) 'NonZeroInteger)
   (check-equal? (sort-of-numarg-term integer-signature 'div (list -2 -2)) 'Integer)
   (check-equal? (sort-of-numarg-term integer-signature 'div (list 0 1)) 'Zero)
   (check-equal? (sort-of-numarg-term integer-signature 'rem (list -2 -2)) 'Integer)
@@ -147,7 +150,8 @@
   (check-equal? (sort-of-numarg-term integer-signature '> (list 0 1)) 'Boolean)
   (check-equal? (sort-of-numarg-term integer-signature '<= (list 0 1)) 'Boolean)
   (check-equal? (sort-of-numarg-term integer-signature '>= (list 0 1)) 'Boolean)
-  (check-equal? (sort-of-numarg-term integer-signature '== (list 0 1)) 'Boolean))
+  (check-equal? (sort-of-numarg-term integer-signature '== (list 0 1)) 'Boolean)
+  (check-false (non-preregular-op-example integer-signature)))
 
 ;
 ; Rationals and their subsets
@@ -164,6 +168,7 @@
       (add-subsort-relation 'PositiveRational 'NonZeroRational)
       (add-subsort-relation 'NonZeroNatural 'PositiveRational)
       (add-sort 'NonNegativeRational)
+      (add-subsort-relation 'NonNegativeRational 'Rational)
       (add-subsort-relation 'PositiveRational 'NonNegativeRational)
       (add-subsort-relation 'Natural 'NonNegativeRational)))
 
@@ -180,10 +185,14 @@
       (add-op '* (list 'NonZeroRational 'NonZeroRational) 'NonZeroRational)
       (add-op '* (list 'Zero 'Rational) 'Zero)
       (add-op '* (list 'Rational 'Zero) 'Zero)
+      (add-op '* (list 'NonNegativeRational 'Zero) 'Zero)
+      (add-op '* (list 'Zero 'NonNegativeRational) 'Zero)
       (add-op '/ (list 'Rational 'NonZeroRational) 'Rational)
-      (add-op '/ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
+      (add-op '/ (list 'NonZeroRational 'NonZeroRational) 'NonZeroRational)
       (add-op '/ (list 'NonNegativeRational 'PositiveRational) 'NonNegativeRational)
+      (add-op '/ (list 'PositiveRational 'PositiveRational) 'PositiveRational)
       (add-op '/ (list 'Zero 'NonZeroRational) 'Zero)
+      (add-op '/ (list 'Zero 'PositiveRational) 'Zero)
       (add-op '^ (list 'NonZeroRational 'NonZeroInteger) 'NonZeroRational)
       (add-op '^ (list 'PositiveRational 'NonZeroInteger) 'PositiveRational)
       (add-op '^ (list 'NonZeroRational 'Zero) 'NonZeroNatural)
@@ -208,7 +217,7 @@
   (check-equal? (sort-of-numarg-term rational-signature
                                      '* (list 1/2 -2/3)) 'NonZeroRational)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '/ (list 1/2 -2/3)) 'Rational)
+                                     '/ (list 1/2 -2/3)) 'NonZeroRational)
   (check-equal? (sort-of-numarg-term rational-signature
                                      '/ (list 1/2 2/3)) 'PositiveRational)
   (check-equal? (sort-of-numarg-term rational-signature
@@ -233,7 +242,8 @@
   (check-equal? (sort-of-numarg-term rational-signature
                                      '>= (list 1/2 2/3)) 'Boolean)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '== (list 1/2 2/3)) 'Boolean))
+                                     '== (list 1/2 2/3)) 'Boolean)
+  (check-false (non-preregular-op-example rational-signature)))
 
 ;
 ; IEEE binary floating-point formats
@@ -308,7 +318,8 @@
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '>= (list #x1s1 #x3s1)) 'Boolean)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '== (list #x1s1 #x3s1)) 'Boolean))
+                                     '== (list #x1s1 #x3s1)) 'Boolean)
+  (check-false (non-preregular-op-example IEEE-float-signature)))
 
 ;
 ; Functions common to all number types
