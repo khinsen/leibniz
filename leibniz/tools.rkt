@@ -10,6 +10,14 @@
          racket/function
          threading)
 
+(define node-character-translation
+  (hash "-" "DASH"))
+
+(define (symbol->node symbol)
+  (for/fold ([s (symbol->string symbol)])
+            ([(from to) node-character-translation])
+    (string-replace s from to)))
+
 (define (sort-graph->graphviz file-path s-graph [sort-or-kind #f])
   (define sorts
     (cond
@@ -22,10 +30,15 @@
                      (all-sorts sorts)))
   (with-output-to-file (expand-user-path file-path)
     (thunk (printf "digraph sort_graph {\n")
+           (for ([sort subset])
+             (printf "~a [label=\"~a\"];\n"
+                     (symbol->node sort) (symbol->string sort)))
            (printf "rankdir=BT;\n")
            (for ([ss (all-subsort-relations sorts)]
                  #:when (set-member? subset (car ss)))
-             (printf "~a->~a;\n" (car ss) (cdr ss)))
+             (printf "~a->~a;\n"
+                     (symbol->node (car ss))
+                     (symbol->node (cdr ss))))
            (when sort-or-kind
              (printf "label=\"Sort graph of ~a\";\n"
                      (constraint->string sorts subset))
@@ -45,7 +58,7 @@
   (define ranks (lookup-op-rank-list signature op-symbol arg-sorts))
 
   (define (node-label rank)
-    (apply string-append (map symbol->string (cons (cdr rank) (car rank)))))
+    (apply string-append (map symbol->node (cons (cdr rank) (car rank)))))
 
   (define (rank->string rank)
     (format "~a\n-> ~a" (car rank) (cdr rank)))
@@ -83,7 +96,7 @@
            (printf "}\n"))
     #:mode 'text #:exists 'truncate))
 
-(define character-translation
+(define filename-character-translation
   (hash "/" "SLASH"
         "*" "STAR"
         "=" "EQUAL"
@@ -93,7 +106,7 @@
 
 (define (symbol->path-element symbol)
   (for/fold ([s (symbol->string symbol)])
-            ([(from to) character-translation])
+            ([(from to) filename-character-translation])
     (string-replace s from to)))
 
 (define (signature->graphviz directory-path sig)
