@@ -2,6 +2,7 @@
 *.scrbl~
 compiled/
 doc/
+graphs/
 attic/
 test.rkt
 .projectile
