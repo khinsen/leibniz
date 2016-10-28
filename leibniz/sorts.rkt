@@ -28,7 +28,7 @@
                                          . -> . boolean?)]
   [conforming-sorts         (sort-graph? sort-constraint? . -> . set?)]
   [constraint->string       (sort-graph? sort-constraint? . -> . string?)]
-  [display-sort-graph         (sort-graph? natural-number/c output-port?
+  [display-sort-graph       (sort-graph? natural-number/c output-port?
                                          . -> . void?)]))
 
 (require "./lightweight-class.rkt")
