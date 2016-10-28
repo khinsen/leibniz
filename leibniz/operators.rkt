@@ -18,6 +18,10 @@
   [lookup-op        (signature? symbol? (listof (or/c #f sort-or-kind?))
                      . -> .
                      (or/c #f (cons/c (listof sort-constraint?) sort-or-kind?)))]
+  [lookup-op-rank-list (signature? symbol? (listof (or/c #f sort-or-kind?))
+                        . -> .
+                        (listof (cons/c (listof sort-constraint?) sort-or-kind?)))]
+  [ops-by-kind-arity (signature? . -> . sequence?)]
   [display-signature (signature? natural-number/c output-port? . -> . void?)]))
 
 (require "./lightweight-class.rkt"
@@ -150,8 +154,7 @@
                ; for ensuring monotonicity.
                (if (is-subsort? sort-graph sort s)
                    (insert-rank prefix ranks)
-                   (error "operator not monotonic"))
-               ]
+                   (error "operator not monotonic"))]
               [(and (is-subarity? a arity)
                     (not (is-subsort? sort-graph s sort)))
                ; We hit a sub-arity of the one we want to add,
@@ -178,20 +181,20 @@
         k-rank
         (car after)))
 
-  (define (monotonic?)
+  (define (monotonic-ranks?)
     ; Monotonicity of the rank lists is guaranteed during construction.
     ; This method is only provided for testing.
-    (define (test1 r rs)
-      (for/and ([r2 rs])
-        (if (is-subarity? (car r) (car r2))
-            (is-subsort? sort-graph (cdr r) (cdr r2))
-            #t)))
-    (define (monotonic* rs n)
-      (if (> n 1)
-          (and (test1 (first rs) (rest rs))
-               (monotonic* (rest rs) (- n 1)))
-          #t))
-    (monotonic* ranks (length ranks)))
+    (define (test-first r1 rs)
+      (for/and ([r2 rs]
+                #:when (is-subarity? (car r1) (car r2)))
+        (is-subsort? sort-graph (cdr r1) (cdr r2))))
+    (define (monotonic* rs)
+      (define f (first rs))
+      (define r (rest rs))
+      (or (empty? r)
+          (and (test-first f r)
+               (monotonic* r))))
+    (monotonic* ranks))
 
   (define (non-preregularity-examples-ranks)
     ; Do a brute-force search over all possible argument sorts
@@ -256,9 +259,9 @@
   (check-equal? (smallest-rank-for-arity a-sr-2 (list 'X))
                 (cons (list (set 'X 'Y)) (set 'X 'Y)))
 
-  (check-true (monotonic? a-sr-1))
-  (check-true (monotonic? a-sr-2))
-  (check-true (monotonic? a-sr-3))
+  (check-true (monotonic-ranks? a-sr-1))
+  (check-true (monotonic-ranks? a-sr-2))
+  (check-true (monotonic-ranks? a-sr-3))
   (check-true (preregular-rank-list? a-sr-1))
   (check-true (preregular-rank-list? a-sr-2))
   (check-true (preregular-rank-list? a-sr-3))
@@ -319,6 +322,14 @@
     (and~> (hash-ref ranks-by-k-arity k-arity #f)
            (smallest-rank-for-arity arity)))
 
+  (define (lookup-rank-list arity)
+    (define k-arity (kind-arity arity))
+    (all-ranks-for-k-arity (hash-ref ranks-by-k-arity k-arity #f)))
+
+  (define (monotonic-op?)
+    (for/and ([sorted-ranks (in-hash-values ranks-by-k-arity)])
+      (monotonic-ranks? sorted-ranks)))
+
   (define (preregular-op?)
     (for/and ([srl (hash-values ranks-by-k-arity)])
       (preregular-rank-list? srl)))
@@ -328,6 +339,9 @@
       (for* ([srl (hash-values ranks-by-k-arity)]
              [(arg-sorts value-sorts) (non-preregularity-examples-ranks srl)])
         (yield arg-sorts value-sorts))))
+
+  (define (all-k-arities)
+    (hash-keys ranks-by-k-arity))
 
   (define (all-ranks)
     (in-generator
@@ -403,12 +417,14 @@
                      (λ (exn) (error (format "op ~a: ~a "
                                              symbol
                                              (exn-message exn))))])
-      (signature sort-graph
-                 (hash-update operators symbol
+      (let ([ops (hash-update operators symbol
                               (λ (op) (add-rank op arity sort))
                               (thunk (add-rank (empty-operator sort-graph)
-                                               arity sort)))
-                 builtins)))
+                                               arity sort)))])
+        (for ([(symbol op) ops])
+          (unless (monotonic-op? op)
+            (error "found non-monotonic rank in " symbol)))
+        (signature sort-graph ops builtins))))
 
   (define (lookup-op symbol arity)
     (define op (hash-ref operators symbol #f))
@@ -422,6 +438,10 @@
           (= (length arity) 2)
           '((#f #f) . Boolean))))
 
+  (define (lookup-op-rank-list symbol arity)
+    (define op (hash-ref operators symbol #f))
+    (lookup-rank-list op arity))
+
   (define (preregular?)
     (for/and ([op (hash-values operators)])
       (preregular-op? op)))
@@ -430,6 +450,12 @@
     (for*/first ([(op-symbol op) operators]
            [(arg-sorts value-sorts) (non-preregularity-examples-op op)])
       (list op-symbol arg-sorts value-sorts)))
+
+  (define (ops-by-kind-arity)
+    (in-generator #:arity 2
+     (for* ([(symbol op) operators]
+            [k-arity (all-k-arities op)])
+       (yield symbol k-arity))))
 
   (define (all-ops)
     (in-generator #:arity 2

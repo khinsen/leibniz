@@ -7,6 +7,7 @@
  with-context eq tr
  (contract-out
   [context?             (any/c . -> . boolean?)]
+  [check-preregularity  (context? . -> . void?)]
   [context-signature    (context? . -> . signature?)]
   [context-rules        (context? . -> . rulelist?)]
   [context-vars         (context? . -> . varset?)]
@@ -68,6 +69,12 @@
                 (valid-rule? signature r))
               (for/and ([e (in-equations (context-equations context))])
                 (valid-equation? signature e)))]))
+
+(define (check-preregularity context)
+  (define non-preregular (non-preregular-op-example
+                          (context-signature context)))
+  (when non-preregular
+    (error "signature not preregular: " non-preregular)))
 
 (define empty-context
   (let ([sorts empty-sort-graph])
@@ -328,12 +335,14 @@
         op-defs:operator ...
         var-defs:variable ...
         (~var ruleq-defs (rule-or-eq #'signature #'varset)) ...)
-     #'(define name
-         (context- included-contexts ...
-                   sort-defs ...
-                   op-defs ...
-                   var-defs ...
-                   ruleq-defs ...))]))
+     #'(begin
+         (define name
+           (context- included-contexts ...
+                     sort-defs ...
+                     op-defs ...
+                     var-defs ...
+                     ruleq-defs ...))
+         (check-preregularity name))]))
 
 (module+ test
   (define a-context
