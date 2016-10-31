@@ -3,8 +3,8 @@
 (provide
  (struct-out signature)
  (contract-out
-  [preregular?      (signature? . -> . boolean?)]
-  [non-preregular-op-example
+  [regular?         (signature? . -> . boolean?)]
+  [non-regular-op-example
                     (signature? . -> .
                       (or/c #f
                             (list/c symbol?
@@ -91,20 +91,26 @@
 ; its kind. Kind-arities matter because operator definitions with
 ; different kind-arities are completely distinct, even if they share
 ; the same name, whereas definitions with the same kind-arity are
-; subject to monotonicity and preregularity (a stronger condition that
+; subject to monotonicity and regularity (a stronger condition that
 ; ensures some nice properties, see the paper for the
 ; details). Kind-arities are represented as lists of kinds.
 ;
 ; Monotonicity is easy to check incrementally during the assembly of a
 ; signature, and any attempt to make a non-monotonic one throws an
-; execption. Preregularity cannot be verified in the same way, because
-; a non-preregular signature can become preregular by adding more
+; execption. Regularity cannot be verified in the same way, because
+; a non-regular signature can become regular by adding more
 ; operator definitions. It is therefore the responsibility of client
-; code to check a signature for preregularity before relying on this
+; code to check a signature for regularity before relying on this
 ; property.
 
 ;
 ; List of ranks partially sorted by arity
+;
+; For a regular set of ranks, scanning such a partially
+; sorted list up to the first matching arity always yields
+; the least rank and thus the least sort. If the ranks are
+; non-regular, the lookup yields a rank/sort that is one
+; possible "least" choice among several.
 ;
 (define-class sorted-ranks
 
@@ -196,7 +202,7 @@
                (monotonic* r))))
     (monotonic* ranks))
 
-  (define (non-preregularity-examples-ranks)
+  (define (non-regularity-example-ranks)
     ; Do a brute-force search over all possible argument sorts
     ; and yield those for which there is no unique least value sort.
     (in-generator #:arity 2
@@ -209,8 +215,8 @@
                      (is-subsort? sort-graph (first value-sorts) vs)))
          (yield arg-sorts value-sorts)))))
   
-  (define (preregular-rank-list?)
-    (not (for/first ([(arg-sorts value-sorts) (non-preregularity-examples-ranks)])
+  (define (regular-rank-list?)
+    (not (for/first ([(arg-sorts value-sorts) (non-regularity-example-ranks)])
            #t)))
 
   (define (all-ranks-for-k-arity)
@@ -262,9 +268,9 @@
   (check-true (monotonic-ranks? a-sr-1))
   (check-true (monotonic-ranks? a-sr-2))
   (check-true (monotonic-ranks? a-sr-3))
-  (check-true (preregular-rank-list? a-sr-1))
-  (check-true (preregular-rank-list? a-sr-2))
-  (check-true (preregular-rank-list? a-sr-3))
+  (check-true (regular-rank-list? a-sr-1))
+  (check-true (regular-rank-list? a-sr-2))
+  (check-true (regular-rank-list? a-sr-3))
 
   ; Try to make a non-monotonic rank list
   (check-exn exn:fail?
@@ -274,7 +280,7 @@
                         (add (list 'A) 'B)
                         (add (list 'B) 'A))))
 
-  ; Make a non-preregular rank list, then add a rank to make it preregular
+  ; Make a non-regular rank list, then add a rank to make it regular
   (let* ([sorts (~> empty-sort-graph
                     (add-sort 'A) (add-sort 'B) (add-sort 'C)
                     (add-subsort-relation 'A 'B)
@@ -284,11 +290,11 @@
                                       (kind sorts 'A))
                   (add (list 'B) 'B)
                   (add (list 'C) 'C))])
-    (check-false (preregular-rank-list? srl))
-    (for ([(arg-sorts value-sorts) (non-preregularity-examples-ranks srl)])
+    (check-false (regular-rank-list? srl))
+    (for ([(arg-sorts value-sorts) (non-regularity-example-ranks srl)])
       (check-equal? arg-sorts '(A))
       (check-equal? value-sorts '(B C)))
-    (check-true (preregular-rank-list? (~> srl
+    (check-true (regular-rank-list? (~> srl
                                            (add (list 'A) 'A))))))
 
 ;
@@ -330,14 +336,14 @@
     (for/and ([sorted-ranks (in-hash-values ranks-by-k-arity)])
       (monotonic-ranks? sorted-ranks)))
 
-  (define (preregular-op?)
+  (define (regular-op?)
     (for/and ([srl (hash-values ranks-by-k-arity)])
-      (preregular-rank-list? srl)))
+      (regular-rank-list? srl)))
 
-  (define (non-preregularity-examples-op)
+  (define (non-regularity-examples-op)
     (in-generator #:arity 2
       (for* ([srl (hash-values ranks-by-k-arity)]
-             [(arg-sorts value-sorts) (non-preregularity-examples-ranks srl)])
+             [(arg-sorts value-sorts) (non-regularity-example-ranks srl)])
         (yield arg-sorts value-sorts))))
 
   (define (all-k-arities)
@@ -370,7 +376,7 @@
                 (set (cons (list 'A) 'A)
                      (cons (list 'B) 'B)
                      (cons (list 'Y) 'Y)))
-  (check-true (preregular-op? an-op))
+  (check-true (regular-op? an-op))
 
   ; Try to make non-monotonic operators
   (check-exn exn:fail?
@@ -382,7 +388,7 @@
                         (add-rank (list 'A) 'B)
                         (add-rank (list 'B) 'X))))
 
-  ; Make a non-preregular operator, then add a rank to make it preregular
+  ; Make a non-regular operator, then add a rank to make it regular
   (let* ([sorts (~> empty-sort-graph
                     (add-sort 'A) (add-sort 'B) (add-sort 'C)
                     (add-subsort-relation 'A 'B)
@@ -390,11 +396,11 @@
          [op (~> (empty-operator sorts)
                  (add-rank (list 'B) 'B)
                  (add-rank (list 'C) 'C))])
-    (check-false (preregular-op? op))
-    (for ([(arg-sorts value-sorts) (non-preregularity-examples-op op)])
+    (check-false (regular-op? op))
+    (for ([(arg-sorts value-sorts) (non-regularity-examples-op op)])
       (check-equal? arg-sorts '(A))
       (check-equal? value-sorts '(B C)))
-    (check-true (preregular-op? (~> op (add-rank (list 'A) 'A))))))
+    (check-true (regular-op? (~> op (add-rank (list 'A) 'A))))))
 
 ;
 ; Signatures
@@ -442,13 +448,13 @@
     (define op (hash-ref operators symbol #f))
     (lookup-rank-list op arity))
 
-  (define (preregular?)
+  (define (regular?)
     (for/and ([op (hash-values operators)])
-      (preregular-op? op)))
+      (regular-op? op)))
 
-  (define (non-preregular-op-example)
+  (define (non-regular-op-example)
     (for*/first ([(op-symbol op) operators]
-           [(arg-sorts value-sorts) (non-preregularity-examples-op op)])
+           [(arg-sorts value-sorts) (non-regularity-examples-op op)])
       (list op-symbol arg-sorts value-sorts)))
 
   (define (ops-by-kind-arity)
@@ -515,7 +521,7 @@
     (~> (empty-signature sorts)
         (add-op 'foo empty 'B)
         (add-op 'foo (list 'A 'B) 'A)))
-  (check-true (preregular? a-signature))
+  (check-true (regular? a-signature))
   (check-equal? (lookup-op a-signature 'foo empty) (cons empty 'B))
   (check-false (lookup-op a-signature 'X empty))
   (check-equal? (for/set ([(s r) (all-ops a-signature)]) r)
@@ -554,10 +560,9 @@
          [signature (~> (empty-signature sorts)
                         (add-op 'foo (list 'B) 'B)
                         (add-op 'foo (list 'C) 'C))])
-    (check-false (preregular? signature))
-    (check-equal? (non-preregular-op-example signature)
+    (check-false (regular? signature))
+    (check-equal? (non-regular-op-example signature)
                   (list 'foo (list 'A) (list 'B 'C)))
-    (check-equal? (non-preregular-op-example
+    (check-equal? (non-regular-op-example
                    (add-op signature 'foo (list 'A) 'A))
-                  #f))
-)
+                  #f)))

@@ -42,7 +42,7 @@
 (module+ test
   (check-equal? (sort-of-noarg-term truth-signature 'true) 'Boolean)
   (check-equal? (sort-of-noarg-term truth-signature 'false) 'Boolean)
-  (check-false (non-preregular-op-example truth-signature)))
+  (check-false (non-regular-op-example truth-signature)))
 
 ;
 ; The remaining built-in term types are special terms in that they
@@ -151,7 +151,7 @@
   (check-equal? (sort-of-numarg-term integer-signature '<= (list 0 1)) 'Boolean)
   (check-equal? (sort-of-numarg-term integer-signature '>= (list 0 1)) 'Boolean)
   (check-equal? (sort-of-numarg-term integer-signature '== (list 0 1)) 'Boolean)
-  (check-false (non-preregular-op-example integer-signature)))
+  (check-false (non-regular-op-example integer-signature)))
 
 ;
 ; Rationals and their subsets
@@ -243,7 +243,7 @@
                                      '>= (list 1/2 2/3)) 'Boolean)
   (check-equal? (sort-of-numarg-term rational-signature
                                      '== (list 1/2 2/3)) 'Boolean)
-  (check-false (non-preregular-op-example rational-signature)))
+  (check-false (non-regular-op-example rational-signature)))
 
 ;
 ; IEEE binary floating-point formats
@@ -319,7 +319,7 @@
                                      '>= (list #x1s1 #x3s1)) 'Boolean)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '== (list #x1s1 #x3s1)) 'Boolean)
-  (check-false (non-preregular-op-example IEEE-float-signature)))
+  (check-false (non-regular-op-example IEEE-float-signature)))
 
 ;
 ; Functions common to all number types

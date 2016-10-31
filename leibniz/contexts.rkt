@@ -6,15 +6,15 @@
  define-context
  with-context eq tr
  (contract-out
-  [context?             (any/c . -> . boolean?)]
-  [check-preregularity  (context? . -> . void?)]
-  [context-signature    (context? . -> . signature?)]
-  [context-rules        (context? . -> . rulelist?)]
-  [context-vars         (context? . -> . varset?)]
-  [rules-by-label       (context? symbol? . -> . list?)]
-  [rule-by-label        (context? symbol? . -> . rule?)]
-  [equations-by-label   (context? symbol? . -> . set?)]
-  [equation-by-label   (context? symbol? . -> . equation?)]))
+  [context?           (any/c . -> . boolean?)]
+  [check-regularity   (context? . -> . void?)]
+  [context-signature  (context? . -> . signature?)]
+  [context-rules      (context? . -> . rulelist?)]
+  [context-vars       (context? . -> . varset?)]
+  [rules-by-label     (context? symbol? . -> . list?)]
+  [rule-by-label      (context? symbol? . -> . rule?)]
+  [equations-by-label (context? symbol? . -> . set?)]
+  [equation-by-label  (context? symbol? . -> . equation?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -70,11 +70,11 @@
               (for/and ([e (in-equations (context-equations context))])
                 (valid-equation? signature e)))]))
 
-(define (check-preregularity context)
-  (define non-preregular (non-preregular-op-example
+(define (check-regularity context)
+  (define non-regular (non-regular-op-example
                           (context-signature context)))
-  (when non-preregular
-    (error "signature not preregular: " non-preregular)))
+  (when non-regular
+    (error "signature not regular: " non-regular)))
 
 (define empty-context
   (let ([sorts empty-sort-graph])
@@ -342,7 +342,7 @@
                      op-defs ...
                      var-defs ...
                      ruleq-defs ...))
-         (check-preregularity name))]))
+         (check-regularity name))]))
 
 (module+ test
   (define a-context
