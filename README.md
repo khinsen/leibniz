@@ -28,9 +28,11 @@ The support code for Leibniz is now sufficiently advanced that first
 examples for digital scientific knowledge can be developed. They
 are located (no surprise) under `examples`. For a first contact
 with Leibniz, I suggest looking at `examples/quantities/mass.rkt`,
-which shows how physical quantities and units can be defined. In
+which shows how physical quantities and units can be defined. For a much
+more elaborate example, see `examples/mechanics/solar-system.rkt`, which
+defines gravitational interactions in a system of celestial bodies. In
 `examples/quick-guide.md` you can find essential background information
-for understanding this and other examples.
+for understanding the examples.
 
 Readers interested in the implementation should start by looking at
 the file `notes.md` for an overview of the code structure.
