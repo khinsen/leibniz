@@ -108,9 +108,8 @@ project. In addition to Racket itself, Leibniz depends on the
 following libraries:
 
  - [threading](https://github.com/lexi-lambda/threading)
- - [chk](https://github.com/jeapostrophe/chk) (or rather my slightly
-   modified [fork](https://github.com/khinsen/chk) that fixes an
-   installation problem on recent Racket versions)
+ - [sxml](http://github.com/jbclements/sxml/tree/master)
+ - [chk](https://github.com/jeapostrophe/chk)
 
 The examples also use
 

@@ -4,7 +4,8 @@
                "threading"
                "rackunit-lib"
                "chk"
-               "sweet-exp-lib"))
+               "sweet-exp-lib"
+               "sxml"))
 (define pkg-desc "Leibniz - A Digital Scientific Notation")
 (define version "0.1")
 (define compile-omit-paths 'all)

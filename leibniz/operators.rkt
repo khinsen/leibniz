@@ -22,6 +22,7 @@
                         . -> .
                         (listof (cons/c (listof sort-constraint?) sort-or-kind?)))]
   [ops-by-kind-arity (signature? . -> . sequence?)]
+  [all-ops           (signature? . -> . sequence?)]
   [display-signature (signature? natural-number/c output-port? . -> . void?)]))
 
 (require "./lightweight-class.rkt"
