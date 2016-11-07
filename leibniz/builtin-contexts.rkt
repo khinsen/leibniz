@@ -133,6 +133,14 @@
 ;
 ; Integers and rational numbers
 ;
+(define (return-X)
+  (λ (signature pattern condition substitution)
+    (substitution-value substitution 'X)))
+
+(define (return-Y)
+  (λ (signature pattern condition substitution)
+    (substitution-value substitution 'Y)))
+
 (define (unary-op predicate proc)
   (λ (signature pattern condition substitution)
     (let ([x (substitution-value substitution 'X)])
@@ -172,20 +180,54 @@
 (define-context integers
   (include integer*)
   (include truth)
+
+  (-> #:vars ([X Integer] [Y Zero])
+      (+ X Y) (return-X))
+  (-> #:vars ([X Zero] [Y Integer])
+      (+ X Y) (return-Y))
   (-> #:vars ([X Integer] [Y Integer])
       (+ X Y) (binary-op integer? +))
+
+  (-> #:vars ([X Integer] [Y Zero])
+      (- X Y) (return-X))
   (-> #:vars ([X Integer] [Y Integer])
       (- X Y) (binary-op integer? -))
+
+  (=> #:vars ([X Zero] [Y Integer])
+      (* X Y) 0)
+  (=> #:vars ([X Integer] [Y Zero])
+      (* X Y) 0)
+  (-> #:vars ([X Integer])
+      (* 1 X) (return-X))
+  (-> #:vars ([X Integer])
+      (* X 1) (return-X))
   (-> #:vars ([X Integer] [Y Integer])
       (* X Y) (binary-op integer? *))
-  (-> #:vars ([X Integer] [Y Integer])
+
+  (=> #:vars ([X Zero] [Y NonZeroInteger])
+      (div X Y) 0)
+  (-> #:vars ([X Integer])
+      (div X 1) (return-X))
+  (-> #:vars ([X Integer] [Y NonZeroInteger])
       (div X Y) (binary-op integer? quotient))
+
+  (=> #:vars ([X Zero] [Y NonZeroInteger])
+      (rem X Y) 0)
+  (=> #:vars ([X Integer])
+      (rem X 1) 0)
   (-> #:vars ([X Integer] [Y Integer])
       (rem X Y) (binary-op integer? remainder))
+
+  (=> #:vars ([X NonZeroInteger] [Y Zero])
+      (^ X Y) 1)
+  (=> #:vars ([X NonZeroNatural])
+      (^ 0 X) 0)
   (-> #:vars ([X Integer] [Y Integer])
       (^ X Y) (binary-op integer? expt-with-fix-for-zero))
+
   (-> #:vars ([X Integer])
       (abs X) (unary-op integer? abs))
+
   (-> #:vars ([X Integer] [Y Integer])
       (< X Y) (comparison-op integer? <))
   (-> #:vars ([X Integer] [Y Integer])
@@ -215,28 +257,58 @@
      #:= (RT (<= 3 3)) (T true)
      #:= (RT (>= 3 3)) (T true)
      #:= (RT (== 3 3)) (T true)
-     #:= (RT (== 3 1)) (T false))))
+     #:= (RT (== 3 1)) (T false)))
+  (define-context integers+
+    (include integers)
+    (op an-int Integer)
+    (op a-nzint NonZeroInteger)
+    (op a-nznat NonZeroNatural))
+  (with-context integers+
+    (chk
+     #:= (RT (+ 0 an-int)) (T an-int)
+     #:= (RT (+ an-int 0)) (T an-int)
+     #:= (RT (- an-int 0)) (T an-int)
+     #:= (RT (* an-int 0)) (T 0)
+     #:= (RT (* 0 an-int)) (T 0)
+     #:= (RT (* an-int 1)) (T an-int)
+     #:= (RT (* 1 an-int)) (T an-int)
+     #:= (RT (div 0 a-nzint)) (T 0)
+     #:= (RT (div 0 an-int)) (T (div 0 an-int))
+     #:= (RT (div an-int 1)) (T an-int)
+     #:= (RT (rem 0 a-nzint)) (T 0)
+     #:= (RT (rem 0 an-int)) (T (rem 0 an-int))
+     #:= (RT (rem an-int 1)) (T 0)
+     #:= (RT (^ a-nzint 0)) (T 1)
+     #:= (RT (^ 0 a-nznat)) (T 0)
+     #:= (RT (^ an-int 0)) (T (^ an-int 0))
+     #:= (RT (^ 0 an-int)) (T (^ 0 an-int)))))
 
 (define rationals*
   (builtin-context rational-sorts rational-signature
                    (empty-varset rational-sorts)
                    empty-rulelist empty-equationset))
 
-(define-context rational-numbers
+(define-context rationals**
   (include rationals*)
   (include truth)
   (-> #:vars ([X Rational] [Y Rational])
       (+ X Y) (binary-op exact? +))
+
   (-> #:vars ([X Rational] [Y Rational])
       (- X Y) (binary-op exact? -))
+
   (-> #:vars ([X Rational] [Y Rational])
       (* X Y) (binary-op exact? *))
+
   (-> #:vars ([X Rational] [Y Rational])
       (/ X Y) (binary-op exact? /))
+
   (-> #:vars ([X Rational] [Y Rational])
       (^ X Y) (binary-op exact? expt-with-fix-for-zero))
+
   (-> #:vars ([X Rational])
       (abs X) (unary-op exact? abs))
+
   (-> #:vars ([X Rational] [Y Rational])
       (< X Y) (comparison-op exact? <))
   (-> #:vars ([X Rational] [Y Rational])
@@ -249,6 +321,36 @@
       (div X Y) (binary-op integer? quotient))
   (-> #:vars ([X Integer] [Y Integer])
       (rem X Y) (binary-op integer? remainder)))
+
+(define-context rational-numbers
+  (include rationals**)
+
+  (-> #:vars ([X Rational] [Y Zero])
+      (+ X Y) (return-X))
+  (-> #:vars ([X Zero] [Y Rational])
+      (+ X Y) (return-Y))
+
+  (-> #:vars ([X Rational] [Y Zero])
+      (- X Y) (return-X))
+
+  (=> #:vars ([X Zero] [Y Rational])
+      (* X Y) 0)
+  (=> #:vars ([X Rational] [Y Zero])
+      (* X Y) 0)
+  (-> #:vars ([X Rational])
+      (* 1 X) (return-X))
+  (-> #:vars ([X Rational])
+      (* X 1) (return-X))
+
+  (=> #:vars ([X Zero] [Y NonZeroRational])
+      (/ X Y) 0)
+  (-> #:vars ([X Rational])
+      (/ X 1) (return-X))
+
+  (=> #:vars ([X NonZeroRational] [Y Zero])
+      (^ X Y) 1)
+  (=> #:vars ([X NonZeroNatural])
+      (^ 0 X) 0))
 
 (module+ test
   (with-context rational-numbers
@@ -274,13 +376,34 @@
      #:= (RT (<= 1/3 1/3)) (T true)
      #:= (RT (>= 1/3 1/3)) (T true)
      #:= (RT (== 1/3 1/3)) (T true)
-     #:= (RT (== 1/3 2/3)) (T false))))
+     #:= (RT (== 1/3 2/3)) (T false)))
+  (define-context rational-numbers+
+    (include rational-numbers)
+    (op a-rat Rational)
+    (op a-nzrat NonZeroRational)
+    (op a-nznat NonZeroNatural))
+  (with-context rational-numbers+
+    (chk
+     #:= (RT (+ 0 a-rat)) (T a-rat)
+     #:= (RT (+ a-rat 0)) (T a-rat)
+     #:= (RT (- a-rat 0)) (T a-rat)
+     #:= (RT (* a-rat 0)) (T 0)
+     #:= (RT (* 0 a-rat)) (T 0)
+     #:= (RT (* a-rat 1)) (T a-rat)
+     #:= (RT (* 1 a-rat)) (T a-rat)
+     #:= (RT (/ 0 a-nzrat)) (T 0)
+     #:= (RT (/ 0 a-rat)) (T (/ 0 a-rat))
+     #:= (RT (/ a-rat 1)) (T a-rat)
+     #:= (RT (^ 0 a-nznat)) (T 0)
+     #:= (RT (^ 0 a-rat)) (T (^ 0 a-rat))
+     #:= (RT (^ a-nzrat 0)) (T 1)
+     #:= (RT (^ a-rat 0)) (T (^ a-rat 0)))))
 
 ;
 ; Real numbers
 ;
 (define-context real-numbers
-  (include rational-numbers)
+  (include rationals**)
   (sort Real)
   (subsort Rational Real)
   (sort NonZeroReal)
@@ -300,19 +423,12 @@
   (op (* Real Real) Real)
   (op (* PositiveReal PositiveReal) PositiveReal)
   (op (* NonNegativeReal NonNegativeReal) NonNegativeReal)
-  (op (* Zero Real) Zero)
-  (op (* Real Zero) Zero)
-  (op (* Zero NonNegativeReal) Zero)
-  (op (* NonNegativeReal Zero) Zero)
   (op (/ Real NonZeroReal) Real)
   (op (/ NonZeroReal NonZeroReal) NonZeroReal)
   (op (/ PositiveReal PositiveReal) PositiveReal)
   (op (/ NonNegativeReal PositiveReal) NonNegativeReal)
-  (op (/ Zero NonZeroReal) Zero)
-  (op (/ Zero PositiveReal) Zero)
   (op (^ PositiveReal NonZeroReal) PositiveReal)
   (op (^ NonZeroReal NonZeroInteger) NonZeroReal)
-  (op (^ Zero PositiveReal) Zero)
   (op (abs Real) NonNegativeReal)
   (op (abs NonZeroReal) PositiveReal)
   (op (√ NonNegativeReal) NonNegativeReal)
@@ -320,7 +436,57 @@
   (op (< Real Real) Boolean)
   (op (> Real Real) Boolean)
   (op (<= Real Real) Boolean)
-  (op (>= Real Real) Boolean))
+  (op (>= Real Real) Boolean)
+
+  (-> #:vars ([X Real] [Y Zero])
+      (+ X Y) (return-X))
+  (-> #:vars ([X Zero] [Y Real])
+      (+ X Y) (return-Y))
+
+  (-> #:vars ([X Real] [Y Zero])
+      (- X Y) (return-X))
+
+  (=> #:vars ([X Zero] [Y Real])
+      (* X Y) 0)
+  (=> #:vars ([X Real] [Y Zero])
+      (* X Y) 0)
+  (-> #:vars ([X Real])
+      (* 1 X) (return-X))
+  (-> #:vars ([X Real])
+      (* X 1) (return-X))
+
+  (=> #:vars ([X Zero] [Y NonZeroReal])
+      (/ X Y) 0)
+  (-> #:vars ([X Real])
+      (/ X 1) (return-X))
+
+  (=> #:vars ([X NonZeroReal] [Y Zero])
+      (^ X Y) 1)
+  (=> #:vars ([X PositiveReal])
+      (^ 0 X) 0))
+
+(module+ test
+  (define-context real-numbers+
+    (include real-numbers)
+    (op a-real Real)
+    (op a-nzreal NonZeroReal)
+    (op a-preal PositiveReal))
+  (with-context real-numbers+
+    (chk
+     #:= (RT (+ 0 a-real)) (T a-real)
+     #:= (RT (+ a-real 0)) (T a-real)
+     #:= (RT (- a-real 0)) (T a-real)
+     #:= (RT (* a-real 0)) (T 0)
+     #:= (RT (* 0 a-real)) (T 0)
+     #:= (RT (* a-real 1)) (T a-real)
+     #:= (RT (* 1 a-real)) (T a-real)
+     #:= (RT (/ 0 a-nzreal)) (T 0)
+     #:= (RT (/ 0 a-real)) (T (/ 0 a-real))
+     #:= (RT (/ a-real 1)) (T a-real)
+     #:= (RT (^ 0 a-preal)) (T 0)
+     #:= (RT (^ 0 a-real)) (T (^ 0 a-real))
+     #:= (RT (^ a-nzreal 0)) (T 1)
+     #:= (RT (^ a-real 0)) (T (^ a-real 0)))))
 
 ;
 ; Floating-point numbers (IEEE binary32 and binary64)
