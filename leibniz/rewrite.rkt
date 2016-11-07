@@ -130,10 +130,17 @@
                      substitution))
       (term.substitute signature replacement substitution)))
 
+(define (maybe-result term-or-false)
+  (if term-or-false
+      (in-value term-or-false)
+      empty-sequence))
+
 (define (rewrite-head-once context term)
   (define signature (context-signature context))
-  (or (for/first ([(rule substitution) (in-matching-rules context term #t)])
-        (apply-substitution signature rule substitution))
+  (or (for*/first ([(rule substitution) (in-matching-rules context term #t)]
+                   [re-term (maybe-result
+                             (apply-substitution signature rule substitution))])
+        re-term)
       term))
 
 (module+ test
@@ -309,8 +316,10 @@
 ; Substitutions in terms and equations
 ;
 (define (substitute* signature rule term)
-  (or (for/first ([s (term.match signature (rule-pattern rule) term)])
-        (apply-substitution signature rule s))
+  (or (for*/first ([s (term.match signature (rule-pattern rule) term)]
+                   [re-term (maybe-result
+                             (apply-substitution signature rule s))])
+        re-term)
       term))
 
 (define (substitute*-leftmost-innermost signature rule term)
