@@ -76,13 +76,18 @@ module+ test
 define-context point-mass-gravitation
   ;
   include point-mass-pair-interactions
+  include time
   ;
   sort GravitationalConstant
   sort MassSquared
   sort DistanceSquared
   sort NonZeroDistanceSquared
   subsort NonZeroDistanceSquared DistanceSquared
+  sort TimeΔSquared
+  sort NonZeroTimeΔSquared
+  subsort NonZeroTimeΔSquared TimeΔSquared
   sort MassSquaredOverDistanceSquared
+  sort DistanceOverTimeΔSquared
   ;
   op G GravitationalConstant
   op {Mass * Mass} MassSquared
@@ -91,7 +96,12 @@ define-context point-mass-gravitation
   op sq(NonZeroDistance) NonZeroDistanceSquared
   op {Distance * Distance} DistanceSquared
   op {NonZeroDistance * NonZeroDistance} NonZeroDistanceSquared
+  op {NonZeroReal * NonZeroDistanceSquared} NonZeroDistanceSquared
+  op {TimeΔ * TimeΔ} TimeΔSquared
+  op {NonZeroTimeΔ * NonZeroTimeΔ} NonZeroTimeΔSquared
   op {MassSquared / DistanceSquared} MassSquaredOverDistanceSquared
+  op {Distance / NonZeroTimeΔSquared} DistanceOverTimeΔSquared
+  op {Mass * DistanceOverTimeΔSquared} Force
   op {GravitationalConstant * MassSquaredOverDistanceSquared} Force
   ;
   => ∀ PM1 : PointMass
@@ -106,8 +116,17 @@ module+ test
     ;
     include simple-solar-system-configuration
     include point-mass-gravitation
+    ;
+    ; Normalize the order of sun/earth in the terms
+    => {{mass of earth} * {mass of sun}}
+       {{mass of sun} * {mass of earth}}
+    => distance({r of earth} {r of sun})
+       distance({r of sun} {r of earth})
+    => direction({r of earth} {r of sun})
+       {-1 * direction({r of sun} {r of earth})}
   ;
   with-context simple-solar-system-gravitation
     ;
-    displayln
-      RT {pair-forces({sun and earth} r) of sun}
+    check-equal?
+      RT {{pair-forces({sun and earth} r) of sun} + {pair-forces({sun and earth} r) of earth}}
+      T  no-force

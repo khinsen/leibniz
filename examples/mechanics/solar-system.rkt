@@ -64,23 +64,47 @@ define-context sun-earth-system-numerical-values
      distance(P1 P2)
      length{P1 - P2}
 
-define-context sun-earth-gravitation
-  ;
-  include sun-earth-system
-  include point-mass-gravitation
+; Add some ad-hoc simplification rules for gravitational
+; force computations. Such rules should in the long run
+; become part of a general simplification algorithm.
 
-with-context sun-earth-system-numerical-values
+define-context sun-earth-system-with-simplification
   ;
-  displayln
-    RT {pair-forces({sun and earth} r) of sun}
+  include sun-earth-system-numerical-values
+  ;
+  => ∀ DU : DistanceUnit
+     ∀ F1 : NonZeroReal
+     ∀ F2 : NonZeroReal
+     {{F1 * DU} * {F2 * DU}}
+     {{F1 * F2} * {DU * DU}}
+  ;
+  => ∀ X : NonNegativeReal
+     {√(X) * √(X)}
+     X
+  ;
+  => ∀ R2 : NonZeroReal
+     ∀ M : Mass
+     {G * {{M * solar-mass} / {R2 * {au * au}}}}
+     {M * {{{#e2.9591221287226995e-4 / R2} * au} / {day * day}}}
+  => ∀ M : Mass
+     {solar-mass * M}
+     {M * solar-mass}
+  => ∀ A : Real
+     ∀ B : Real
+     {A / √(B)}
+     √{{A * A} / B}
+  => ∀ A : Real
+     ∀ B : Real
+     ∀ C : Real
+     {{A * B} + {A * C}}
+     {A * {B + C}}
 
-;; Sun
-;; 0.642737 -0.0447062 -0.0154626
-;; 0.000104211 0.001252 -1.30241e-05
-;; 1.98864e+06
-;; 0.696
-;; Earth
-;; -26.4251 144.543 -0.0174322
-;; -2.97599 -0.556919 6.52213e-05
-;; 5.9722
-;; 0.00637101
+; Now we can check that the sum of the forces on the point masses is zero.
+
+module+ test
+  ;
+  with-context sun-earth-system-with-simplification
+    ;
+    check-equal?
+    RT {{pair-forces({sun and earth} r) of sun} + {pair-forces({sun and earth} r) of earth}}
+    T  no-force

@@ -24,6 +24,8 @@ define-context vector
   op {Vector * Vector} Real
   op length(Vector) NonNegativeReal
   ;
+  op zero-vector Vector
+  ;
   ; Simplification rules
   ;
   => ∀ V1 : Vector
@@ -47,6 +49,20 @@ define-context vector
      ∀ V : Vector
      {V / F}
      {{1 / F} * V}
+  => ∀ F : Real
+     {F * zero-vector}
+     zero-vector
+  => ∀ F : Real
+     ∀ V : Vector
+     {zero-vector + V}
+     V
+  => ∀ F : Real
+     ∀ V : Vector
+     {V + zero-vector}
+     V
+  => ∀ V : Vector
+     {0 * V}
+     zero-vector
   ;
   => ∀ V : Vector
      {1 * V}
@@ -113,6 +129,8 @@ define-context vector-3d
   op V(Real Real Real) Vector3D
   op V(Real Real Real) Vector3D
   ;
+  => V(0 0 0)
+     zero-vector
   => ∀ X : Real
      ∀ Y : Real
      ∀ Z : Real

@@ -177,6 +177,16 @@ define-context point-mass-forces
   => ∀ F : Forces
      {no-forces + F}
      F
+  ;
+  ; Simplification rules for force arithmetic
+  => ∀ F : Force
+     {zero-vector * F}
+     no-force
+  => ∀ F : Force
+     ∀ V1 : Vector
+     ∀ V2 : Vector
+     {{V1 * F} + {V2 * F}}
+     {{V1 + V2} * F}
 
 ; Up to here, all data was defined for a single time.
 ; Trajectories are time-dependent versions of
