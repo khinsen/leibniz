@@ -8,9 +8,12 @@
  (contract-out
   [context?           (any/c . -> . boolean?)]
   [check-regularity   (context? . -> . void?)]
+  [context-sort-graph (context? . -> . sort-graph?)]
   [context-signature  (context? . -> . signature?)]
   [context-rules      (context? . -> . rulelist?)]
+  [context-equations  (context? . -> . equationset?)]
   [context-vars       (context? . -> . varset?)]
+  [merge-contexts     (context? context? . -> . context?)]
   [rules-by-label     (context? symbol? . -> . list?)]
   [rule-by-label      (context? symbol? . -> . rule?)]
   [equations-by-label (context? symbol? . -> . set?)]

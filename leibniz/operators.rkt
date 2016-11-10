@@ -21,8 +21,8 @@
   [lookup-op-rank-list (signature? symbol? (listof (or/c #f sort-or-kind?))
                         . -> .
                         (listof (cons/c (listof sort-constraint?) sort-or-kind?)))]
-  [ops-by-kind-arity (signature? . -> . sequence?)]
-  [all-ops           (signature? . -> . sequence?)]
+  [ops-by-kind-arity (signature? . -> . (sequence/c symbol? pair?))]
+  [all-ops           (signature? . -> . (sequence/c symbol? pair?))]
   [display-signature (signature? natural-number/c output-port? . -> . void?)]))
 
 (require "./lightweight-class.rkt"

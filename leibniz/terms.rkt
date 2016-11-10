@@ -1,6 +1,7 @@
 #lang racket
 
 (provide
+ (struct-out var)
  (contract-out
   [term?                  (any/c . -> . boolean?)]
   [term.sort              (term? . -> . sort-or-kind?)]
@@ -29,13 +30,14 @@
   [add-var                (varset? symbol? sort? . -> . varset?)]
   [all-vars               (varset? . -> . hash?)]
   [merge-varsets          (varset? varset? (or/c #f sort-graph?) . -> . varset?)]
-  [var?                   (any/c . -> . boolean?)]
+  ;; [var?                   (any/c . -> . boolean?)]
+  ;; [var                    (sort-graph? symbol? symbol? . -> . var?)]
   [make-var               (varset? symbol? . -> . (or/c #f var?))]
   [make-var-or-term       (signature? varset? symbol? . -> . term?)]
   [make-uvar              (sort-graph? symbol? . -> . var?)]
   [make-unique-var        (sort-graph? symbol? sort? . -> . var?)]
-  [var-name               (var? . -> . symbol?)]
-  [var-sort               (var? . -> . (or/c #f symbol?))]
+  ;; [var-name               (var? . -> . symbol?)]
+  ;; [var-sort               (var? . -> . (or/c #f symbol?))]
   [display-vars           (set? output-port? . -> . void?)]
   [display-term-with-vars ((term? output-port?) (any/c) . ->* . void?)]
   [display-term           ((term? output-port?) (any/c) . ->* . void?)]))
@@ -664,7 +666,7 @@
 (define (make-term signature name args)
   (for ([arg args])
     (unless (allowed-term? signature arg)
-      (error "argument term not compatible with signature")))
+      (error (format "argument ~a not compatible with signature" arg))))
   (or (make-term* signature name args)
       (error (format "no operator definition for (~s ~s)"
                      name (map term.sort args)))))

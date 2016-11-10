@@ -21,6 +21,7 @@
   [valid-equation? (signature? any/c . -> . boolean?)]
   [equationset? (any/c . -> . boolean?)]
   [empty-equationset equationset?]
+  [in-signature (rule? signature? . -> . rule?)]
   [in-equations (equationset? . -> . stream?)]
   [add-equation (equationset? equation? . -> . equationset?)]
   [merge-equationsets (equationset? equationset? signature? . -> . equationset?)]
