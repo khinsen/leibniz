@@ -14,10 +14,10 @@
 (begin-for-syntax
 
   (define letter-or-symbolic/p
-    (or/p letter/p symbolic/p))
+    (or/p letter/p symbolic/p (char/p #\_)))
 
   (define letter-or-symbolic-or-digit/p
-    (or/p letter/p symbolic/p digit/p))
+    (or/p letter/p symbolic/p (char/p #\_) digit/p))
 
   (define identifier/p
     (do [first <- letter-or-symbolic/p]
@@ -89,8 +89,7 @@
              (format-sort-expr (quote #,parsed-expr)))))
 
 (define (format-sort symbol)
-  (list "⬪" ; BLACK SMALL LOZENGE
-        (italic (symbol->string symbol))))
+  (bold (italic (symbol->string symbol))))
 
 (define (format-sort-expr parsed-sort-expr)
   (nonbreaking
@@ -114,15 +113,21 @@
     #`(begin (set! #,contexts-ref (add-to #,contexts-ref (quote #,parsed-expr)))
              (format-op-expr (quote #,parsed-expr)))))
 
+(define (format-prefix-op symbol)
+  (italic (symbol->string symbol)))
+
+(define (format-infix-op symbol)
+  (italic (symbol->string symbol)))
+
 (define (format-op-expr parsed-op-expr)
   (nonbreaking
    (match parsed-op-expr
      [(list 'prefix-op op-symbol '() result-sort)
-      (list (italic (symbol->string op-symbol))
+      (list (format-prefix-op op-symbol)
             " : "
             (format-sort result-sort))]
      [(list 'prefix-op op-symbol arg-sorts result-sort)
-      (list (italic (symbol->string op-symbol))
+      (list (format-prefix-op op-symbol)
             "("
             (add-between (map format-sort arg-sorts) ", ")
             ") : "
@@ -130,7 +135,7 @@
      [(list 'infix-op op-symbol (list arg-sort-1 arg-sort-2) result-sort)
       (list (format-sort arg-sort-1)
             " "
-            (italic (symbol->string op-symbol))
+            (format-infix-op op-symbol)
             " "
             (format-sort arg-sort-2)
             " : "
