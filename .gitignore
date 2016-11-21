@@ -1,5 +1,8 @@
 *.rkt~
 *.scrbl~
+*.html
+*.js
+*.css
 compiled/
 doc/
 graphs/
