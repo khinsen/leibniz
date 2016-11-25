@@ -143,12 +143,6 @@ by the [CRAPL](http://matt.might.net/articles/crapl/) license.
 
 ## Branch notes
 
-Most branches of this repository contain experiments that test the
-utility and feasibility of ideas for improvements and new
-features. Each branch has a short note in this place that explains its
-reason for being. This branch (master) always contains the version
-currently considered most useful.
-
-Note that all branches except master may be rebased, or modified in
-other ways. If you want to fork this repository, please don't rely on
-any branch other than master.
+This branch contains work on a Leibniz authoring environment based on
+Scribble. Leibniz declarations are embedded into a Scribble document
+from which contexts can then be extracted.
