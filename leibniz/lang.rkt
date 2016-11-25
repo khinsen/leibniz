@@ -69,6 +69,9 @@
                             [result-id <- identifier/p]
                             eof/p
                             (pure `(prefix-op ,id1 () ,result-id))))))))
+
+  (define term/p
+    identifier/p)
 ; ⇼  LEFT RIGHT ARROW WITH DOUBLE VERTICAL STROKE
   )
 
@@ -140,3 +143,17 @@
             (format-sort arg-sort-2)
             " : "
             (format-sort result-sort))])))
+
+; Terms
+
+(define-syntax (term stx)
+  (let* ([term-expr (syntax-parse stx
+                      [(_ term-expr:str) #'term-expr])]
+         [parsed-expr (parse-result!
+                       (parse-syntax-string (syntax/p term/p)
+                                            term-expr))])
+    #`(format-term-expr (quote #,parsed-expr))))
+
+(define (format-term-expr parsed-term-expr)
+  (nonbreaking
+   " "))
