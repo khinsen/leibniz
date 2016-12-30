@@ -1,4 +1,7 @@
-# Leibniz - a digital scientific notation
+
+![<Lᵉ>](https://github.com/khinsen/leibniz/raw/master/logo/horizontal-leibniz-logo-500-x-150-png.png)
+
+# A digital scientific notation
 
 Leibniz is an attempt to define a digital scientific notation, i.e. a
 formal language for writing down scientific models in terms of
