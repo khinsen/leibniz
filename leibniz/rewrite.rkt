@@ -3,6 +3,7 @@
 (provide
  (contract-out
   [reduce (context? term? . -> . term?)]
+  [trace-reduce (context? term? . -> . term?)]
   [reduce-equation ((context? equation?) ((or/c #f symbol?))
                     . ->* . equation?)]
   [transform (context? transformation? term? . -> . term?)]
@@ -18,7 +19,8 @@
          "./builtins.rkt"
          "./equations.rkt"
          "./contexts.rkt"
-         racket/generator)
+         racket/generator
+         racket/trace)
 
 (module+ test
 
@@ -219,6 +221,19 @@
         [(equal? rewritten-term term) term]
         ; Not equal: another round of rewriting
         [else                         (loop rewritten-term)]))))
+
+(define (trace-reduce context term)
+  (displayln (format "-- ~a" term))
+  (define rt
+    (let loop ([term term])
+      (let* ([rewritten-term (rewrite-leftmost-innermost context term)])
+        (displayln (format ".. ~a" rewritten-term))
+        (cond
+          [(eq? rewritten-term term)    term]
+          [(equal? rewritten-term term) term]
+          [else                         (loop rewritten-term)]))))
+  (displayln (format "-> ~a" rt))
+  rt)
 
 (module+ test
   (with-context test-context
