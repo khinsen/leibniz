@@ -263,6 +263,7 @@
       (add-op '/ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
       (add-op '^ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
       (add-op 'abs (list 'IEEE-binary64) 'IEEE-binary64)
+      (add-op '√ (list 'IEEE-binary64) 'IEEE-binary64)
       (add-op '< (list 'IEEE-binary64 'IEEE-binary64) 'Boolean)
       (add-op '> (list 'IEEE-binary64 'IEEE-binary64) 'Boolean)
       (add-op '<= (list 'IEEE-binary64 'IEEE-binary64) 'Boolean)

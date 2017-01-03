@@ -7,7 +7,8 @@
   [integers context?]
   [rational-numbers context?]
   [real-numbers context?]
-  [IEEE-floating-point context?]))
+  [IEEE-floating-point context?]
+  [IEEE-floating-point-with-conversion context?]))
 
 (require "./builtins.rkt"
          "./terms.rkt"
@@ -511,6 +512,8 @@
       (^ X Y) (binary-op single-flonum? expt-with-fix-for-zero))
   (-> #:vars ([X IEEE-binary32])
       (abs X) (unary-op single-flonum? abs))
+  (-> #:vars ([X IEEE-binary32])
+      (√ X) (unary-op single-flonum? sqrt))
   (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
       (< X Y) (comparison-op single-flonum? <))
   (-> #:vars ([X IEEE-binary32] [Y IEEE-binary32])
@@ -531,6 +534,8 @@
       (^ X Y) (binary-op double-flonum? expt-with-fix-for-zero))
   (-> #:vars ([X IEEE-binary64])
       (abs X) (unary-op double-flonum? abs))
+  (-> #:vars ([X IEEE-binary64])
+      (√ X) (unary-op double-flonum? sqrt))
   (-> #:vars ([X IEEE-binary64] [Y IEEE-binary64])
       (< X Y) (comparison-op double-flonum? <))
   (-> #:vars ([X IEEE-binary64] [Y IEEE-binary64])
@@ -548,11 +553,13 @@
      #:= (RT (* #x1s0 #x2s0)) (T #x2s0)
      #:= (RT (/ #x1s0 #x2s0)) (T #x8s-1)
      #:= (RT (abs #x1s0)) (T #x1s0)
+     #:= (RT (√ #x4s0)) (T #x2s0)
      #:= (RT (+ #x1l0 #x2l0)) (T #x3l0)
      #:= (RT (- #x1l0 #x2l0)) (T #x-1l0)
      #:= (RT (* #x1l0 #x2l0)) (T #x2l0)
      #:= (RT (/ #x1l0 #x2l0)) (T #x8l-1)
      #:= (RT (abs #x1l0)) (T #x1l0)
+     #:= (RT (√ #x4l0)) (T #x2l0)
      #:= (RT (< #x1s0 #x2s0)) (T true)
      #:= (RT (> #x1s0 #x2s0)) (T false)
      #:= (RT (<= #x1s0 #x2s0)) (T true)
@@ -567,3 +574,19 @@
      #:= (RT (>= #x1l0 #x1l0)) (T true)
      #:= (RT (== #x1l0 #x1l0)) (T true)
      #:= (RT (== #x1l0 #x2l0)) (T false))))
+
+(define-context IEEE-floating-point-with-conversion
+  (include IEEE-floating-point)
+  (include integers)
+  (op (Integer->IEEE-binary32 Integer) IEEE-binary32)
+  (op (Integer->IEEE-binary64 Integer) IEEE-binary64)
+  (-> #:vars ([X Integer])
+      (Integer->IEEE-binary32 X) (unary-op integer? real->single-flonum))
+  (-> #:vars ([X Integer])
+      (Integer->IEEE-binary64 X) (unary-op integer? real->double-flonum)))
+
+(module+ test
+  (with-context IEEE-floating-point-with-conversion
+    (chk
+     #:= (RT (Integer->IEEE-binary32 1)) (T #x1s0)
+     #:= (RT (Integer->IEEE-binary64 1)) (T #x1l0))))
