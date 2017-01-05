@@ -149,7 +149,7 @@ define-context space
   op {PositionΔ - PositionΔ} PositionΔ
   ; and multiplied by scalars.
   op {Real * PositionΔ} PositionΔ
-  op { PositionΔ / NonZeroReal} PositionΔ
+  op {PositionΔ / NonZeroReal} PositionΔ
   ;
   ; The length of a PositionΔ is a Distance.
   op length(PositionΔ) Distance

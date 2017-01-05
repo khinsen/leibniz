@@ -106,5 +106,23 @@ module+ test
   with-context sun-earth-system-with-simplification
     ;
     check-equal?
-    RT {{pair-forces({sun and earth} r) of sun} + {pair-forces({sun and earth} r) of earth}}
-    T  no-force
+      RT {{pair-forces({sun and earth} r) of sun} + {pair-forces({sun and earth} r) of earth}}
+      T  no-force
+
+; Switch to floating-point calculations
+
+define sun-earth-system-floating-point
+  real->IEEE-binary64
+     context
+       include sun-earth-system-with-simplification
+       op force-unit ForceMagnitude
+       => force-unit {solar-mass * {au / {day * day}}}
+
+module+ test
+  ;
+  with-context sun-earth-system-floating-point
+    ;
+    displayln
+      RT {{{pair-forces({sun and earth} r) of sun}} / force-unit}
+    ; Note: the result is a numerical vector, although it requires further
+    ;       simplification to make this evident.
