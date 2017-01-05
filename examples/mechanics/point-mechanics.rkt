@@ -119,6 +119,9 @@ define-context point-mass-forces
   ;
   sort Acceleration
   sort Force
+  sort ForceMagnitude
+  sort NonZeroForceMagnitude
+  subsort NonZeroForceMagnitude ForceMagnitude
   ;
   sort Accelerations
   sort Forces
@@ -133,7 +136,12 @@ define-context point-mass-forces
   op {Forces + Forces} Forces
   ;
   op {Real * Force} Force
-  op {Vector * Force} Force
+  op {NonNegativeReal * ForceMagnitude} ForceMagnitude
+  op {PositiveReal * NonZeroForceMagnitude} NonZeroForceMagnitude
+  op {Vector * ForceMagnitude} Force
+  op length(Force) ForceMagnitude
+  op {Force / NonZeroForceMagnitude} Vector
+  op {ForceMagnitude / NonZeroForceMagnitude} NonNegativeReal
   ;
   op {Mass * Acceleration} Force
   op {Force / Mass} Acceleration
@@ -179,14 +187,28 @@ define-context point-mass-forces
      F
   ;
   ; Simplification rules for force arithmetic
-  => ∀ F : Force
+  => ∀ F : ForceMagnitude
      {zero-vector * F}
      no-force
-  => ∀ F : Force
+  => ∀ F : ForceMagnitude
      ∀ V1 : Vector
      ∀ V2 : Vector
      {{V1 * F} + {V2 * F}}
      {{V1 + V2} * F}
+  => ∀ V : Vector
+     ∀ F : ForceMagnitude
+     length{V * F}
+     {length(V) * F}
+  => ∀ V : Vector
+     ∀ R : Real
+     ∀ F : ForceMagnitude
+     {V * {R * F}}
+     {{R * V} * F}
+  => ∀ V : Vector
+     ∀ F1 : ForceMagnitude
+     ∀ F2 : ForceMagnitude
+     {{V * F1} / F2}
+     {{F1 / F2} * V}
 
 ; Up to here, all data was defined for a single time.
 ; Trajectories are time-dependent versions of

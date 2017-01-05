@@ -16,7 +16,7 @@ define-context point-mass-pair-interactions
   include point-mass-forces
   ;
   op pair-forces(PointMassSystem Positions) Forces
-  op radial-pair-force(PointMass PointMass Positions) Force
+  op radial-pair-force(PointMass PointMass Positions) ForceMagnitude
   ;
   ; No force between a particle and itself.
   => ∀ PM : PointMass
@@ -28,7 +28,7 @@ define-context point-mass-pair-interactions
      ∀ PM2 : PointMass
      ∀ R : Positions
      {pair-forces(PM1 R) of PM2}
-     {direction({R of PM2} {R of PM1}) *  radial-pair-force(PM1 PM2 R)}
+     {direction({R of PM2} {R of PM1}) * radial-pair-force(PM1 PM2 R)}
   ; For composite systems, recurse for both subsystems.
   => ∀ PM : PointMass
      ∀ S1 : PointMassSystem
@@ -101,8 +101,8 @@ define-context point-mass-gravitation
   op {NonZeroTimeΔ * NonZeroTimeΔ} NonZeroTimeΔSquared
   op {MassSquared / DistanceSquared} MassSquaredOverDistanceSquared
   op {Distance / NonZeroTimeΔSquared} DistanceOverTimeΔSquared
-  op {Mass * DistanceOverTimeΔSquared} Force
-  op {GravitationalConstant * MassSquaredOverDistanceSquared} Force
+  op {Mass * DistanceOverTimeΔSquared} ForceMagnitude
+  op {GravitationalConstant * MassSquaredOverDistanceSquared} ForceMagnitude
   ;
   => ∀ PM1 : PointMass
      ∀ PM2 : PointMass
