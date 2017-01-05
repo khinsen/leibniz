@@ -2,6 +2,7 @@
 
 (provide with-context R T RT A S
          (rename-out [c:define-context define-context]
+                     [c:context context]
                      [c:eq eq]
                      [c:tr tr]))
 
