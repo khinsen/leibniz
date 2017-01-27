@@ -7,73 +7,10 @@
 (require scribble/doclang
          scribble/base
          (for-syntax syntax/parse
+                     "./lang/parser.rkt"
                      megaparsack megaparsack/text
                      data/monad
                      data/applicative))
-
-(begin-for-syntax
-
-  (define letter-or-symbolic/p
-    (or/p letter/p symbolic/p (char/p #\_)))
-
-  (define letter-or-symbolic-or-digit/p
-    (or/p letter/p symbolic/p (char/p #\_) digit/p))
-
-  (define identifier/p
-    (do [first <- letter-or-symbolic/p]
-        [rest <-  (many*/p letter-or-symbolic-or-digit/p)]
-        (pure (string->symbol (apply string (append (list first) rest))))))
-
-  (define less-than/p
-    (do (many+/p space/p)
-        (char/p #\<)
-        (many+/p space/p)))
-
-  (define sort-or-subsort/p
-    (do [sort1 <- identifier/p]
-        (or/p (do less-than/p
-                  [sort2 <- identifier/p]
-                  eof/p
-                  (pure `(subsort ,sort1 ,sort2)))
-              (do eof/p
-                  (pure `(sort ,sort1))))))
-
-  (define comma-with-whitespace/p
-    (do (many*/p space/p)
-        (char/p #\,)
-        (many*/p space/p)))
-
-  (define operator/p
-    (do [id1 <- identifier/p]
-        (or/p (do (char/p #\()
-                  [ids <- (many/sep+/p identifier/p comma-with-whitespace/p)]
-                  (char/p #\))
-                  (many*/p space/p)
-                  (char/p #\:)
-                  (many*/p space/p)
-                  [result-id <- identifier/p]
-                  eof/p
-                  (pure `(prefix-op ,id1 ,ids ,result-id)))
-              (do (many+/p space/p)
-                  (or/p (do [op-id <- identifier/p]
-                            (many+/p space/p)
-                            [id2 <- identifier/p]
-                            (many*/p space/p)
-                            (char/p #\:)
-                            (many*/p space/p)
-                            [result-id <- identifier/p]
-                            eof/p
-                            (pure `(infix-op ,op-id (,id1 ,id2) ,result-id)))
-                        (do (char/p #\:)
-                            (many*/p space/p)
-                            [result-id <- identifier/p]
-                            eof/p
-                            (pure `(prefix-op ,id1 () ,result-id))))))))
-
-  (define term/p
-    identifier/p)
-; ⇼  LEFT RIGHT ARROW WITH DOUBLE VERTICAL STROKE
-  )
 
 (define (add-to contexts data)
   (hash-set contexts 'current
@@ -150,7 +87,7 @@
   (let* ([term-expr (syntax-parse stx
                       [(_ term-expr:str) #'term-expr])]
          [parsed-expr (parse-result!
-                       (parse-syntax-string (syntax/p term/p)
+                       (parse-syntax-string (syntax/p (to-eof/p term/p))
                                             term-expr))])
     #`(format-term-expr (quote #,parsed-expr))))
 
