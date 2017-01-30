@@ -6,7 +6,7 @@
 @section{Kinematics}
 
 A @sort{point_system} consists of @sort{point}s.  The
-smallest possible system is a single point: @sort{point < point_system}.
+smallest possible system is a single point: @sort{point ⊆ point_system}.
 Composition of point systems is achieved with
 @op{point_system and point_system : point_system}.
 
@@ -34,8 +34,7 @@ Points move under the influence of @sort{forces}. How a @sort{point}
 reacts to a @sort{force} depends on its @sort{mass}, as described
 by Newton's law of motion:
 
-@;   @equation[@term{f at t} @term{m * (𝒟(𝒟(r)) at t)}
-@;             @var{t : time}]
+   @equation{f at t = (m * 𝒟(𝒟(r))) at t ∀ t:time}
 
 @subsection{Additional definitions}
 
