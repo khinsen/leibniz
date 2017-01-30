@@ -2,7 +2,7 @@
 
 (provide (all-from-out scribble/doclang
                        scribble/base)
-         sort op)
+         sort op term rule equation)
 
 (require scribble/doclang
          scribble/base
@@ -92,8 +92,7 @@
     #`(format-term-expr (quote #,parsed-expr))))
 
 (define (format-term-expr parsed-term-expr)
-  (nonbreaking
-   " "))
+  (nonbreaking) (format "~a" parsed-term-expr))
 
 ; Rules
 
@@ -106,5 +105,17 @@
     #`(format-rule-expr (quote #,parsed-expr))))
 
 (define (format-rule-expr parsed-rule-expr)
-  (nonbreaking
-   " "))
+  (nonbreaking (format "~a" parsed-rule-expr)))
+
+; Equations
+
+(define-syntax (equation stx)
+  (let* ([equation-expr (syntax-parse stx
+                      [(_ equation-expr:str) #'equation-expr])]
+         [parsed-expr (parse-result!
+                       (parse-syntax-string (syntax/p equation/p)
+                                            equation-expr))])
+    #`(format-equation-expr (quote #,parsed-expr))))
+
+(define (format-equation-expr parsed-equation-expr)
+  (nonbreaking (format "~a" parsed-equation-expr)))

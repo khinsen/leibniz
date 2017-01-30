@@ -20,7 +20,7 @@
       (pure x)))
 
 (define some-punctuation/p
-  (label/p "punctuation" (or/p (char/p #\_) (char/p #\-) (char/p #\%))))
+  (label/p "punctuation" (or/p (char/p #\_) (char/p #\-) (char/p #\*) (char/p #\%))))
 
 (define letter-or-symbol/p
   (or/p letter/p symbolic/p some-punctuation/p ))
@@ -33,7 +33,7 @@
       [rest <-  (many/p letter-or-symbol-or-digit/p)]
       (pure (string->symbol (apply string (append (list first) rest))))))
 
-(define reserved-identifiers (set '→ '⇒ '= '∀))
+(define reserved-identifiers (set '⊆ '→ '⇒ '= '∀))
 
 (define non-reserved-identifier/p
   (guard/p identifier/p (λ (x) (not (set-member? reserved-identifiers x)))
@@ -45,6 +45,7 @@
   (check-parse letter-or-symbol/p "-" #\-)
   (check-parse letter-or-symbol/p "<" #\<)
   (check-parse letter-or-symbol/p "%" #\%)
+  (check-parse letter-or-symbol/p "*" #\*)
   (check-parse-failure letter-or-symbol/p "AB")
   (check-parse-failure letter-or-symbol/p "1")
   (check-parse-failure letter-or-symbol/p ",")
@@ -66,7 +67,7 @@
 
 (define less-than/p
   (do (many+/p space/p)
-      (char/p #\<)
+      (char/p #\⊆)
       (many+/p space/p)))
 
 (define sort-or-subsort/p
@@ -80,9 +81,9 @@
 
 (module+ test
   (check-parse sort-or-subsort/p "foo" '(sort foo))
-  (check-parse sort-or-subsort/p "foo < bar" '(subsort foo bar))
-  (check-parse sort-or-subsort/p "foo<bar" '(sort foo<bar))
-  (check-parse-failure sort-or-subsort/p "foo< bar"))
+  (check-parse sort-or-subsort/p "foo ⊆ bar" '(subsort foo bar))
+  (check-parse sort-or-subsort/p "foo⊆bar" '(sort foo⊆bar))
+  (check-parse-failure sort-or-subsort/p "foo⊆ bar"))
 
 (define comma-with-whitespace/p
   (do (many/p space/p)
