@@ -94,3 +94,17 @@
 (define (format-term-expr parsed-term-expr)
   (nonbreaking
    " "))
+
+; Rules
+
+(define-syntax (rule stx)
+  (let* ([rule-expr (syntax-parse stx
+                      [(_ rule-expr:str) #'rule-expr])]
+         [parsed-expr (parse-result!
+                       (parse-syntax-string (syntax/p rule/p)
+                                            rule-expr))])
+    #`(format-rule-expr (quote #,parsed-expr))))
+
+(define (format-rule-expr parsed-rule-expr)
+  (nonbreaking
+   " "))

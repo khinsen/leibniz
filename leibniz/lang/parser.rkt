@@ -30,8 +30,14 @@
 
 (define identifier/p
   (do [first <- letter-or-symbol/p]
-      [rest <-  (many*/p letter-or-symbol-or-digit/p)]
+      [rest <-  (many/p letter-or-symbol-or-digit/p)]
       (pure (string->symbol (apply string (append (list first) rest))))))
+
+(define reserved-identifiers (set '→ '⇒ '= '∀))
+
+(define non-reserved-identifier/p
+  (guard/p identifier/p (λ (x) (not (set-member? reserved-identifiers x)))
+           "non-reserved identifier"))
 
 (module+ test
   (check-parse letter-or-symbol/p "A" #\A)
@@ -47,7 +53,16 @@
   (check-parse letter-or-symbol-or-digit/p "-" #\-)
   (check-parse letter-or-symbol-or-digit/p "<" #\<)
   (check-parse letter-or-symbol-or-digit/p "%" #\%)
-  (check-parse letter-or-symbol-or-digit/p "1" #\1))
+  (check-parse letter-or-symbol-or-digit/p "1" #\1)
+  (check-parse identifier/p "abc" 'abc)
+  (check-parse identifier/p "x1" 'x1)
+  (check-parse identifier/p "=" '=)
+  (check-parse-failure identifier/p "1x")
+  (check-parse non-reserved-identifier/p "abc" 'abc)
+  (check-parse non-reserved-identifier/p "x1" 'x1)
+  (check-parse-failure non-reserved-identifier/p "="))
+
+(define sort-identifier/p non-reserved-identifier/p)
 
 (define less-than/p
   (do (many+/p space/p)
@@ -55,9 +70,9 @@
       (many+/p space/p)))
 
 (define sort-or-subsort/p
-  (do [sort1 <- identifier/p]
+  (do [sort1 <- sort-identifier/p]
       (or/p (do less-than/p
-                [sort2 <- identifier/p]
+                [sort2 <- sort-identifier/p]
                 eof/p
                 (pure `(subsort ,sort1 ,sort2)))
             (do eof/p
@@ -70,34 +85,36 @@
   (check-parse-failure sort-or-subsort/p "foo< bar"))
 
 (define comma-with-whitespace/p
-  (do (many*/p space/p)
+  (do (many/p space/p)
       (char/p #\,)
-      (many*/p space/p)))
+      (many/p space/p)))
+
+(define op-identifier/p non-reserved-identifier/p)
 
 (define operator/p
-  (do [id1 <- identifier/p]
+  (do [id1 <- non-reserved-identifier/p] ; sort or op, depending on what follows
       (or/p (do (char/p #\()
-                [ids <- (many/sep+/p identifier/p comma-with-whitespace/p)]
+                [ids <- (many+/p sort-identifier/p #:sep comma-with-whitespace/p)]
                 (char/p #\))
                 (many+/p space/p)
                 (char/p #\:)
                 (many+/p space/p)
-                [result-id <- identifier/p]
+                [result-id <- sort-identifier/p]
                 eof/p
                 (pure `(prefix-op ,id1 ,ids ,result-id)))
             (do (many+/p space/p)
-                (or/p (do [op-id <- identifier/p]
+                (or/p (do [op-id <- op-identifier/p]
                           (many+/p space/p)
-                          [id2 <- identifier/p]
+                          [id2 <- sort-identifier/p]
                           (many+/p space/p)
                           (char/p #\:)
                           (many+/p space/p)
-                          [result-id <- identifier/p]
+                          [result-id <- sort-identifier/p]
                           eof/p
                           (pure `(infix-op ,op-id (,id1 ,id2) ,result-id)))
                       (do (char/p #\:)
                           (many+/p space/p)
-                          [result-id <- identifier/p]
+                          [result-id <- sort-identifier/p]
                           eof/p
                           (pure `(prefix-op ,id1 () ,result-id))))))))
 
@@ -129,9 +146,9 @@
             [t <- term/p]
             (char/p #\))
             (pure t))
-        (do [op-id <- identifier/p]
+        (do [op-id <- op-identifier/p]
             (or/p (do (char/p #\()
-                      [args <- (many/sep+/p term/p comma-with-whitespace/p)]
+                      [args <- (many+/p term/p #:sep comma-with-whitespace/p)]
                       (char/p #\))
                       (pure `(term ,op-id ,args)))
                   (pure `(term ,op-id ()))))))
@@ -139,7 +156,7 @@
 (define term/p
   (do [t1 <- simple-term/p]
       (or/p (try/p (do (many+/p space/p)
-                       [op-id <- identifier/p]
+                       [op-id <- op-identifier/p]
                        (many+/p space/p)
                        [t2 <- term/p]
                        (pure `(term ,op-id (,t1 ,t2)))))
@@ -154,3 +171,51 @@
   (check-parse term/p "foo + bar + baz" '(term + ((term foo ()) (term + ((term bar ()) (term baz ()))))))
   (check-parse term/p "foo + (bar + baz)" '(term + ((term foo ()) (term + ((term bar ()) (term baz ()))))))
   (check-parse term/p "(foo + bar) + baz" '(term + ((term + ((term foo ()) (term bar ()))) (term baz ()) ))))
+
+(define var/p
+  (do (char/p #\∀)
+      (many+/p space/p)
+      [name <- op-identifier/p]
+      (many*/p space/p)
+      (char/p #\:)
+      (many*/p space/p)
+      [sort <- sort-identifier/p]
+      (pure `(var ,name ,sort))))
+
+(define var-after-space/p
+  (do (many+/p space/p)
+      [v <- var/p]
+      (pure v)))
+
+(define rule/p
+  (do [pattern <- term/p]
+      (many+/p space/p)
+      (char/p #\⇒)
+      (many+/p space/p)
+      [replacement <- term/p]
+      [vars <- (many/p var-after-space/p)]
+      eof/p
+      (pure `(rule ,pattern ,replacement ,vars))))
+
+(define equation/p
+  (do [left <- term/p]
+      (many+/p space/p)
+      (char/p #\=)
+      (many+/p space/p)
+      [right <- term/p]
+      [vars <- (many/p var-after-space/p)]
+      eof/p
+      (pure `(equation ,left ,right ,vars))))
+
+(module+ test
+  (check-parse var/p "∀ foo:bar" '(var foo bar))
+  (check-parse var/p "∀ foo : bar" '(var foo bar))
+  (check-parse var/p "∀ foo :bar" '(var foo bar))
+  (check-parse var/p "∀ foo: bar" '(var foo bar))
+  (check-parse rule/p "a ⇒ b" '(rule (term a ()) (term b ()) ()))
+  (check-parse rule/p "a ⇒ b ∀ foo:bar" '(rule (term a ()) (term b ()) ((var foo bar))))
+  (check-parse rule/p "a ⇒ b ∀ foo:bar ∀ bar:baz"
+               '(rule (term a ()) (term b ()) ((var foo bar) (var bar baz))))
+  (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz"
+               '(equation (term a ()) (term b ()) ((var foo bar) (var bar baz)))))
+
