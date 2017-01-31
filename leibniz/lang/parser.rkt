@@ -20,13 +20,19 @@
       (pure x)))
 
 (define some-punctuation/p
-  (label/p "punctuation" (or/p (char/p #\_) (char/p #\-) (char/p #\*) (char/p #\%))))
+  (label/p "punctuation" (or/p (char/p #\-) (char/p #\*) (char/p #\%))))
+
+(define some-symbolic/p
+  (label/p "symbolic"
+           (try/p (guard/p symbolic/p
+                           (λ (x) (not (set-member? (set #\^) x)))
+                           "symbolic character"))))
 
 (define letter-or-symbol/p
-  (or/p letter/p symbolic/p some-punctuation/p ))
+  (or/p letter/p some-symbolic/p some-punctuation/p ))
 
 (define letter-or-symbol-or-digit/p
-  (or/p letter/p symbolic/p some-punctuation/p digit/p))
+  (or/p letter/p some-symbolic/p some-punctuation/p digit/p))
 
 (define identifier/p
   (do [first <- letter-or-symbol/p]
@@ -103,6 +109,35 @@
                 [result-id <- sort-identifier/p]
                 eof/p
                 (pure `(prefix-op ,id1 ,ids ,result-id)))
+            (do (char/p #\[)
+                [ids <- (many+/p sort-identifier/p #:sep comma-with-whitespace/p)]
+                (char/p #\])
+                (many+/p space/p)
+                (char/p #\:)
+                (many+/p space/p)
+                [result-id <- sort-identifier/p]
+                eof/p
+                (pure `(special-op |[]| ,(cons id1 ids) ,result-id)))
+            (do (char/p #\_)
+                (char/p #\{)
+                [id2 <- sort-identifier/p]
+                (char/p #\})
+                (many+/p space/p)
+                (char/p #\:)
+                (many+/p space/p)
+                [result-id <- sort-identifier/p]
+                eof/p
+                (pure `(special-op _ (,id1 ,id2) ,result-id)))
+            (do (char/p #\^)
+                (char/p #\{)
+                [id2 <- sort-identifier/p]
+                (char/p #\})
+                (many+/p space/p)
+                (char/p #\:)
+                (many+/p space/p)
+                [result-id <- sort-identifier/p]
+                eof/p
+                (pure `(special-op ^ (,id1 ,id2) ,result-id)))
             (do (many+/p space/p)
                 (or/p (do [op-id <- op-identifier/p]
                           (many+/p space/p)
@@ -137,6 +172,10 @@
   (check-parse-failure operator/p "foo(baz1, baz2): bar")
   (check-parse-failure operator/p "foo(baz1 , baz2) :bar")
 
+  (check-parse operator/p "foo[baz1, baz2] : bar" '(special-op |[]| (foo baz1 baz2) bar))
+  (check-parse operator/p "baz1_{baz2} : bar" '(special-op _ (baz1 baz2) bar))
+  (check-parse operator/p "baz1^{baz2} : bar" '(special-op ^ (baz1 baz2) bar))
+
   (check-parse operator/p "baz1 foo baz2 : bar" '(infix-op foo (baz1 baz2) bar))
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
@@ -154,8 +193,26 @@
                       (pure `(term ,op-id ,args)))
                   (pure `(term ,op-id ()))))))
 
+(define non-infix-term/p
+  (do [t <- simple-term/p]
+      (or/p (try/p (or/p (do (char/p #\[)
+                             [args <- (many+/p term/p #:sep comma-with-whitespace/p)]
+                             (char/p #\])
+                             (pure `(term |[]| ,(cons t args))))
+                         (do (char/p #\_)
+                             (char/p #\{)
+                             [subscript <- term/p]
+                             (char/p #\})
+                             (pure `(term _ (,t ,subscript))))
+                         (do (char/p #\^)
+                             (char/p #\{)
+                             [superscript <- term/p]
+                             (char/p #\})
+                             (pure `(term ^ (,t ,superscript))))))
+            (pure t))))
+
 (define term/p
-  (do [t1 <- simple-term/p]
+  (do [t1 <- non-infix-term/p]
       (or/p (try/p (do (many+/p space/p)
                        [op-id <- op-identifier/p]
                        (many+/p space/p)
@@ -168,6 +225,10 @@
   (check-parse term/p "foo(bar,baz)" '(term foo ((term bar ()) (term baz ()))))
   (check-parse term/p "foo(bar, baz)" '(term foo ((term bar ()) (term baz ()))))
   (check-parse term/p "foo(bar , baz)" '(term foo ((term bar ()) (term baz ()))))
+  (check-parse term/p "foo[bar]" '(term |[]| ((term foo ()) (term bar ()))))
+  (check-parse term/p "foo[bar, baz]" '(term |[]| ((term foo ()) (term bar ()) (term baz ()))))
+  (check-parse term/p "foo_{bar}" '(term _ ((term foo ()) (term bar ()))))
+  (check-parse term/p "foo^{bar}" '(term ^ ((term foo ()) (term bar ()))))
   (check-parse term/p "bar + baz" '(term + ((term bar ()) (term baz ()))))
   (check-parse term/p "foo + bar + baz" '(term + ((term foo ()) (term + ((term bar ()) (term baz ()))))))
   (check-parse term/p "foo + (bar + baz)" '(term + ((term foo ()) (term + ((term bar ()) (term baz ()))))))
@@ -219,4 +280,3 @@
                '(rule (term a ()) (term b ()) ((var foo bar) (var bar baz))))
   (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz"
                '(equation (term a ()) (term b ()) ((var foo bar) (var bar baz)))))
-
