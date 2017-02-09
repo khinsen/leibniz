@@ -2,7 +2,8 @@
 
 (provide (all-from-out scribble/doclang
                        scribble/base)
-         sort op term rule equation)
+         sort op term rule equation
+         empty-document)
 
 (require scribble/doclang
          scribble/base
@@ -10,11 +11,8 @@
                      "./lang/parser.rkt"
                      megaparsack megaparsack/text
                      data/monad
-                     data/applicative))
-
-(define (add-to contexts data)
-  (hash-set contexts 'current
-            (cons data (hash-ref contexts 'current empty))))
+                     data/applicative)
+         "./documents.rkt")
 
 ; Sorts
 
@@ -24,8 +22,8 @@
          [parsed-expr (parse-result!
                        (parse-syntax-string (syntax/p sort-or-subsort/p)
                                             sort-expr))]
-         [contexts-ref (datum->syntax stx 'contexts)])
-    #`(begin (set! #,contexts-ref (add-to #,contexts-ref (quote #,parsed-expr)))
+         [leibniz-ref (datum->syntax stx 'leibniz)])
+    #`(begin (set! #,leibniz-ref (add-declaration #,leibniz-ref (quote #,parsed-expr)))
              (format-sort-expr (quote #,parsed-expr)))))
 
 (define (format-sort symbol)
@@ -49,8 +47,8 @@
          [parsed-expr (parse-result!
                        (parse-syntax-string (syntax/p operator/p)
                                             op-expr))]
-         [contexts-ref (datum->syntax stx 'contexts)])
-    #`(begin (set! #,contexts-ref (add-to #,contexts-ref (quote #,parsed-expr)))
+         [leibniz-ref (datum->syntax stx 'leibniz)])
+    #`(begin (set! #,leibniz-ref (add-declaration #,leibniz-ref (quote #,parsed-expr)))
              (format-op-expr (quote #,parsed-expr)))))
 
 (define (format-prefix-op symbol)
