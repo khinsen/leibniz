@@ -48,7 +48,7 @@
 
   (define real-number-ops
     (for/fold ([rnops (hash)])
-              ([(symbol rank) (all-ops (context-signature real-numbers))])
+              ([(symbol rank meta) (all-ops (context-signature real-numbers))])
       (hash-update rnops symbol (λ (rs) (set-add rs rank))
                    (set rank))))
 
@@ -59,7 +59,7 @@
     (for/fold ([sig (merge-signatures (context-signature integers)
                                       (context-signature IEEE-floating-point-with-conversion)
                                       sorts)])
-              ([(symbol rank) (all-ops (context-signature context))]
+              ([(symbol rank meta) (all-ops (context-signature context))]
                ; don't translate arithmetic from the real-number context
                #:unless (set-member? (hash-ref real-number-ops symbol (set))
                                      rank))

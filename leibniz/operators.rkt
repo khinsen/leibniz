@@ -11,18 +11,21 @@
                                     (listof symbol?)
                                     (listof symbol?))))]
   [empty-signature  ((sort-graph?) (#:builtins set?) . ->* . signature?)]
-  [add-op           (signature? symbol? (listof sort-constraint?) sort?
-                     . -> . signature?)]
+  [add-op           ((signature? symbol? (listof sort-constraint?) sort?) (#:meta any/c)
+                     . ->* . signature?)]
   [merge-signatures (signature? signature? (or/c #f sort-graph?)
                      . -> . signature?)]
   [lookup-op        (signature? symbol? (listof (or/c #f sort-or-kind?))
                      . -> .
                      (or/c #f (cons/c (listof sort-constraint?) sort-or-kind?)))]
+  [lookup-op-meta   (signature? symbol? (listof (or/c #f sort-or-kind?))
+                     . -> .
+                     (or/c #f (list/c (listof sort-constraint?) sort-or-kind? any/c)))]
   [lookup-op-rank-list (signature? symbol? (listof (or/c #f sort-or-kind?))
                         . -> .
-                        (listof (cons/c (listof sort-constraint?) sort-or-kind?)))]
+                        (listof (list/c (listof sort-constraint?) sort-or-kind? any/c)))]
   [ops-by-kind-arity (signature? . -> . (sequence/c symbol? pair?))]
-  [all-ops           (signature? . -> . (sequence/c symbol? pair?))]
+  [all-ops           (signature? . -> . (sequence/c symbol? pair? any/c))]
   [display-signature (signature? natural-number/c output-port? . -> . void?)]))
 
 (require "./lightweight-class.rkt"
@@ -119,17 +122,19 @@
   ; sort-graph: the sort graph everything is based on
   ; k-rank: the kind-arity plus kind-of-sort that is common
   ;         to all definitions in this rank list
-  ; ranks: the partially sorted list of ranks
+  ; ranks: the partially sorted list of ranks with attached metadata
 
   (define (check-kinds k-arity k-sort)
-    (equal? k-rank (cons k-arity k-sort)))
+    (match-let ([(list a s m) k-rank])
+      (and (equal? k-arity a)
+           (equal? k-sort s))))
 
   (define (is-subarity? arity1 arity2)
     (and (= (length arity1) (length arity2))
          (for/and ([s1 arity1] [s2 arity2])
            (conforms-to? sort-graph s1 s2))))
 
-  (define (add arity sort)
+  (define (add arity sort meta)
 
     ; Adding a new rank requires
     ; (1) finding the right place to insert it
@@ -141,14 +146,14 @@
 
     (define (insert-rank prefix ranks)
       (sorted-ranks sort-graph k-rank
-                    (for/fold ([ranks (cons (cons arity sort) ranks)])
+                    (for/fold ([ranks (cons (list arity sort meta) ranks)])
                               ([r prefix])
                       (cons r ranks))))
 
     (define (add* prefix ranks)
       (if (empty? ranks)
           (insert-rank prefix ranks)
-          (match-let* ([(and r (cons a s)) (first ranks)])
+          (match-let* ([(and r (list a s m)) (first ranks)])
             (cond
               [(equal? arity a)
                ; The new arity is already present in the list.
@@ -179,11 +184,11 @@
     (add* empty ranks))
 
   (define (matching-ranks-for-arity arity)
-    (filter (λ (r) (is-subarity? arity (car r))) ranks))
+    (filter (λ (r) (is-subarity? arity (first r))) ranks))
 
   (define (smallest-rank-for-arity arity)
     (define after (dropf ranks
-                         (λ (r) (not (is-subarity? arity (car r))))))
+                         (λ (r) (not (is-subarity? arity (first r))))))
     (if (empty? after)
         k-rank
         (car after)))
@@ -193,8 +198,8 @@
     ; This method is only provided for testing.
     (define (test-first r1 rs)
       (for/and ([r2 rs]
-                #:when (is-subarity? (car r1) (car r2)))
-        (is-subsort? sort-graph (cdr r1) (cdr r2))))
+                #:when (is-subarity? (first r1) (first r2)))
+        (is-subsort? sort-graph (second r1) (second r2))))
     (define (monotonic* rs)
       (define f (first rs))
       (define r (rest rs))
@@ -209,8 +214,8 @@
     (in-generator #:arity 2
      (for ([arg-sorts (cartesian-product
                        (map (λ (c) (conforming-sorts sort-graph c))
-                            (car k-rank)))])
-       (define value-sorts (map cdr (matching-ranks-for-arity arg-sorts)))
+                            (first k-rank)))])
+       (define value-sorts (map second (matching-ranks-for-arity arg-sorts)))
        (unless (or (< (length value-sorts) 2)
                    (for/and ([vs (rest value-sorts)])
                      (is-subsort? sort-graph (first value-sorts) vs)))
@@ -224,25 +229,25 @@
     ranks))
 
 (define (empty-sorted-ranks sort-graph k-arity k-sort)
-  (define k-rank (cons k-arity k-sort))
+  (define k-rank (list k-arity k-sort #f))
   (sorted-ranks sort-graph k-rank empty))
 
 (module+ test
 
   (define a-sr-1
     (~> (empty-sorted-ranks sorts (list (kind sorts 'A)) (kind sorts 'A))
-        (add (list 'A) 'A)
-        (add (list 'B) 'B)))
+        (add (list 'A) 'A #f)
+        (add (list 'B) 'B #f)))
 
   (define a-sr-2
     (~> (empty-sorted-ranks sorts (list (kind sorts 'X)) (kind sorts 'X))
-        (add (list 'Y) 'Y)))
+        (add (list 'Y) 'Y #f)))
 
   (define a-sr-3
     (~> (empty-sorted-ranks sorts (list (kind sorts 'A) (kind sorts 'X))
                             (kind sorts 'A))
-        (add (list 'A 'X) 'A)
-        (add (list 'B 'Y) 'B)))
+        (add (list 'A 'X) 'A #f)
+        (add (list 'B 'Y) 'B #f)))
 
   (check-true (is-subarity? a-sr-1 (list 'B) (list 'A)))
   (check-true (is-subarity? a-sr-1 (list 'A) (list 'A)))
@@ -253,18 +258,18 @@
   (check-false (is-subarity? a-sr-1 (list 'B 'B) (list 'B)))
 
   (check-equal? (matching-ranks-for-arity a-sr-1 (list 'A))
-                (list (cons (list 'A) 'A)))
+                (list (list (list 'A) 'A #f)))
   (check-equal? (matching-ranks-for-arity a-sr-1 (list 'B))
-                (list (cons (list 'B) 'B) (cons (list 'A) 'A)))
+                (list (list (list 'B) 'B #f) (list (list 'A) 'A #f)))
   (check-equal? (matching-ranks-for-arity a-sr-2 (list 'Y))
-                (list (cons (list 'Y) 'Y)))
+                (list (list (list 'Y) 'Y #f)))
   (check-equal? (matching-ranks-for-arity a-sr-2 (list 'X)) empty)
 
-  (check-equal? (smallest-rank-for-arity a-sr-1 (list 'A)) (cons (list 'A) 'A))
-  (check-equal? (smallest-rank-for-arity a-sr-1 (list 'B)) (cons (list 'B) 'B))
-  (check-equal? (smallest-rank-for-arity a-sr-2 (list 'Y)) (cons (list 'Y) 'Y))
+  (check-equal? (smallest-rank-for-arity a-sr-1 (list 'A)) (list (list 'A) 'A #f))
+  (check-equal? (smallest-rank-for-arity a-sr-1 (list 'B)) (list (list 'B) 'B #f))
+  (check-equal? (smallest-rank-for-arity a-sr-2 (list 'Y)) (list (list 'Y) 'Y #f))
   (check-equal? (smallest-rank-for-arity a-sr-2 (list 'X))
-                (cons (list (set 'X 'Y)) (set 'X 'Y)))
+                (list (list (set 'X 'Y)) (set 'X 'Y) #f))
 
   (check-true (monotonic-ranks? a-sr-1))
   (check-true (monotonic-ranks? a-sr-2))
@@ -278,8 +283,8 @@
              (thunk (~> (empty-sorted-ranks sorts
                                             (list (kind sorts 'A))
                                             (kind sorts 'A))
-                        (add (list 'A) 'B)
-                        (add (list 'B) 'A))))
+                        (add (list 'A) 'B #f)
+                        (add (list 'B) 'A #f))))
 
   ; Make a non-regular rank list, then add a rank to make it regular
   (let* ([sorts (~> empty-sort-graph
@@ -289,14 +294,14 @@
          [srl (~> (empty-sorted-ranks sorts
                                       (list (kind sorts 'A))
                                       (kind sorts 'A))
-                  (add (list 'B) 'B)
-                  (add (list 'C) 'C))])
+                  (add (list 'B) 'B #f)
+                  (add (list 'C) 'C #f))])
     (check-false (regular-rank-list? srl))
     (for ([(arg-sorts value-sorts) (non-regularity-example-ranks srl)])
       (check-equal? arg-sorts '(A))
       (check-equal? value-sorts '(B C)))
     (check-true (regular-rank-list? (~> srl
-                                           (add (list 'A) 'A))))))
+                                        (add (list 'A) 'A #f))))))
 
 ;
 ; Operators
@@ -311,14 +316,14 @@
   (define (kind-arity arity)
     (map (λ (sc) (kind-constraint sort-graph sc)) arity))
 
-  (define (add-rank arity sort)
+  (define (add-rank arity sort meta)
     (define k-arity (kind-arity arity))
     (define k-sort (kind sort-graph sort))
     (define (update ranks)
       (unless (check-kinds ranks k-arity k-sort)
         (error (format "adding rank ~s -> ~a makes operator non-monotonic"
                        arity sort)))
-      (add ranks arity sort))
+      (add ranks arity sort meta))
     (operator sort-graph
               (hash-update ranks-by-k-arity k-arity update
                            (thunk (empty-sorted-ranks sort-graph
@@ -363,31 +368,31 @@
 
   (define an-op
     (~> (empty-operator sorts)
-        (add-rank (list 'A) 'A)
-        (add-rank (list 'B) 'B)
-        (add-rank (list 'Y) 'Y)))
+        (add-rank (list 'A) 'A #f)
+        (add-rank (list 'B) 'B #f)
+        (add-rank (list 'Y) 'Y #f)))
 
   (check-equal? (dict-count (operator-ranks-by-k-arity an-op)) 2)
-  (check-equal? (lookup-rank an-op (list 'A)) (cons (list 'A) 'A))
-  (check-equal? (lookup-rank an-op (list 'B)) (cons (list 'B) 'B))
-  (check-equal? (lookup-rank an-op (list 'Y)) (cons (list 'Y) 'Y))
+  (check-equal? (lookup-rank an-op (list 'A)) (list (list 'A) 'A #f))
+  (check-equal? (lookup-rank an-op (list 'B)) (list (list 'B) 'B #f))
+  (check-equal? (lookup-rank an-op (list 'Y)) (list (list 'Y) 'Y #f))
   (check-equal? (lookup-rank an-op (list 'X))
-                (cons (list (set 'X 'Y)) (set 'X 'Y)))
+                (list (list (set 'X 'Y)) (set 'X 'Y) #f))
   (check-equal? (for/set ([r (all-ranks an-op)]) r)
-                (set (cons (list 'A) 'A)
-                     (cons (list 'B) 'B)
-                     (cons (list 'Y) 'Y)))
+                (set (list (list 'A) 'A #f)
+                     (list (list 'B) 'B #f)
+                     (list (list 'Y) 'Y #f)))
   (check-true (regular-op? an-op))
 
   ; Try to make non-monotonic operators
   (check-exn exn:fail?
              (thunk (~> (empty-operator sorts)
-                        (add-rank (list 'A) 'B)
-                        (add-rank (list 'B) 'A))))
+                        (add-rank (list 'A) 'B #f)
+                        (add-rank (list 'B) 'A #f))))
   (check-exn exn:fail?
              (thunk (~> (empty-operator sorts)
-                        (add-rank (list 'A) 'B)
-                        (add-rank (list 'B) 'X))))
+                        (add-rank (list 'A) 'B #f)
+                        (add-rank (list 'B) 'X #f))))
 
   ; Make a non-regular operator, then add a rank to make it regular
   (let* ([sorts (~> empty-sort-graph
@@ -395,13 +400,13 @@
                     (add-subsort-relation 'A 'B)
                     (add-subsort-relation 'A 'C))]
          [op (~> (empty-operator sorts)
-                 (add-rank (list 'B) 'B)
-                 (add-rank (list 'C) 'C))])
+                 (add-rank (list 'B) 'B #f)
+                 (add-rank (list 'C) 'C #f))])
     (check-false (regular-op? op))
     (for ([(arg-sorts value-sorts) (non-regularity-examples-op op)])
       (check-equal? arg-sorts '(A))
       (check-equal? value-sorts '(B C)))
-    (check-true (regular-op? (~> op (add-rank (list 'A) 'A))))))
+    (check-true (regular-op? (~> op (add-rank (list 'A) 'A #f))))))
 
 ;
 ; Signatures
@@ -416,7 +421,7 @@
 
   #:write-proc *display*
 
-  (define (add-op symbol arity sort)
+  (define (add-op* symbol arity sort meta)
     (for ([arg arity])
       (validate-sort-constraint sort-graph arg))
     (validate-sort sort-graph sort)
@@ -425,15 +430,15 @@
                                              symbol
                                              (exn-message exn))))])
       (let ([ops (hash-update operators symbol
-                              (λ (op) (add-rank op arity sort))
+                              (λ (op) (add-rank op arity sort meta))
                               (thunk (add-rank (empty-operator sort-graph)
-                                               arity sort)))])
+                                               arity sort meta)))])
         (for ([(symbol op) ops])
           (unless (monotonic-op? op)
             (error "found non-monotonic rank in " symbol)))
         (signature sort-graph ops builtins))))
 
-  (define (lookup-op symbol arity)
+  (define (lookup-op-meta symbol arity)
     (define op (hash-ref operators symbol #f))
     (or
      (and op
@@ -443,7 +448,12 @@
      (and (set-member? builtins '*truth*)
           (equal? symbol '==)
           (= (length arity) 2)
-          '((#f #f) . Boolean))))
+          '((#f #f) Boolean #f))))
+
+  (define (lookup-op symbol arity)
+    (define rank (lookup-op-meta symbol arity))
+    (and rank
+         (cons (first rank) (second rank))))
 
   (define (lookup-op-rank-list symbol arity)
     (define op (hash-ref operators symbol #f))
@@ -465,10 +475,10 @@
        (yield symbol k-arity))))
 
   (define (all-ops)
-    (in-generator #:arity 2
+    (in-generator #:arity 3
      (for* ([(symbol op) operators]
             [rank (all-ranks op)])
-       (yield symbol rank))))
+       (yield symbol (cons (first rank) (second rank)) (third rank)))))
 
   (define (merge-signatures other new-sort-graph)
     (define merged-sort-graph
@@ -477,8 +487,8 @@
     (define merged-builtins (set-union builtins (signature-builtins other)))
     (for/fold ([sig (empty-signature merged-sort-graph
                                      #:builtins merged-builtins)])
-              ([(symbol rank) (stream-append (sequence->stream (all-ops))
-                                             (sequence->stream (send other all-ops)))])
+              ([(symbol rank meta) (stream-append (sequence->stream (all-ops))
+                                                  (sequence->stream (send other all-ops)))])
       (unless (andmap sort? (car rank))
         ; Kinds as sort constraints need special attention when merging
         ; signatures, because the merging the sort graph can also merge
@@ -486,7 +496,7 @@
         ; are represented as sets of sorts, the original kind representation
         ; is no longer a valid sort.
         (error "kind arguments not yet implemented"))
-      (send sig add-op symbol (car rank) (cdr rank))))
+      (send sig add-op* symbol (car rank) (cdr rank) meta)))
 
   (define (display-signature indentation port)
     (define prefix (make-string indentation #\space))
@@ -514,6 +524,9 @@
     (display-signature 2 port)
     (display ")\n" port)))
 
+(define (add-op signature symbol arity sort #:meta [meta #f])
+  (add-op* signature symbol arity sort meta))
+
 (define (empty-signature sort-graph #:builtins [builtins (set)])
   (signature sort-graph (hash) builtins))
 
@@ -523,9 +536,11 @@
         (add-op 'foo empty 'B)
         (add-op 'foo (list 'A 'B) 'A)))
   (check-true (regular? a-signature))
+  (check-equal? (lookup-op-meta a-signature 'foo empty) (list empty 'B #f))
   (check-equal? (lookup-op a-signature 'foo empty) (cons empty 'B))
+  (check-false (lookup-op-meta a-signature 'X empty))
   (check-false (lookup-op a-signature 'X empty))
-  (check-equal? (for/set ([(s r) (all-ops a-signature)]) r)
+  (check-equal? (for/set ([(s r m) (all-ops a-signature)]) r)
                 (set (cons empty 'B) (cons (list 'A 'B) 'A)))
   (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X)))
   (check-equal? (merge-signatures (empty-signature sorts)

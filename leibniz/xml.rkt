@@ -27,7 +27,7 @@
             (subsorts ,@(for/list ([ss (all-subsort-relations sorts)])
                           `(subsort (@ (sort ,(symbol->string (car ss)))
                                        (sort ,(symbol->string (cdr ss)))))))
-            (ops ,@(for/list ([(symbol rank) (all-ops signature)])
+            (ops ,@(for/list ([(symbol rank meta) (all-ops signature)])
                      `(op (@ (id ,(symbol->string symbol)))
                           (arity ,@(for/list ([s (car rank)])
                                      `(sort (@ (id ,(symbol->string s))))))
