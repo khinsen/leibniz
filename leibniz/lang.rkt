@@ -14,6 +14,15 @@
                      data/applicative)
          "./documents.rkt")
 
+(begin-for-syntax
+  (define (source-loc stx)
+    (list 'list
+          (syntax-source stx)
+          (syntax-line stx)
+          (syntax-column stx)
+          (syntax-position stx)
+          (syntax-span stx))))
+
 ; Sorts
 
 (define-syntax (sort stx)
@@ -22,8 +31,9 @@
          [parsed-expr (parse-result!
                        (parse-syntax-string (syntax/p sort-or-subsort/p)
                                             sort-expr))]
+         [loc (datum->syntax stx (source-loc sort-expr))]
          [leibniz-ref (datum->syntax stx 'leibniz)])
-    #`(begin (set! #,leibniz-ref (add-declaration #,leibniz-ref (quote #,parsed-expr)))
+    #`(begin (set! #,leibniz-ref (add-declaration #,leibniz-ref (quote #,parsed-expr) #,loc))
              (format-sort-expr (quote #,parsed-expr)))))
 
 (define (format-sort symbol)
@@ -47,8 +57,9 @@
          [parsed-expr (parse-result!
                        (parse-syntax-string (syntax/p operator/p)
                                             op-expr))]
+         [loc (datum->syntax stx (source-loc op-expr))]
          [leibniz-ref (datum->syntax stx 'leibniz)])
-    #`(begin (set! #,leibniz-ref (add-declaration #,leibniz-ref (quote #,parsed-expr)))
+    #`(begin (set! #,leibniz-ref (add-declaration #,leibniz-ref (quote #,parsed-expr) #,loc))
              (format-op-expr (quote #,parsed-expr)))))
 
 (define (format-prefix-op symbol)
@@ -112,8 +123,10 @@
                       [(_ equation-expr:str) #'equation-expr])]
          [parsed-expr (parse-result!
                        (parse-syntax-string (syntax/p equation/p)
-                                            equation-expr))])
-    #`(format-equation-expr (quote #,parsed-expr))))
+                                            equation-expr))]
+         [leibniz-ref (datum->syntax stx 'leibniz)])
+    #`(begin (set! #,leibniz-ref (process-declarations #,leibniz-ref))
+             (format-equation-expr (quote #,parsed-expr)))))
 
 (define (format-equation-expr parsed-equation-expr)
   (nonbreaking (format "~a" parsed-equation-expr)))

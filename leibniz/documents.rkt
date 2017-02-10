@@ -1,7 +1,8 @@
 #lang racket
 
 (provide empty-document
-         add-declaration)
+         add-declaration
+         process-declarations)
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -19,14 +20,32 @@
     (sort bar)
     (subsort foo bar)))
 
+; Re-raise exceptions with the source location information from the document
+
+(define-struct (exn:fail:leibniz exn:fail) (a-srcloc)
+  #:property prop:exn:srclocs
+  (lambda (a-struct)
+    (match a-struct
+      [(struct exn:fail:leibniz (msg marks a-srcloc))
+       (list a-srcloc)])))
+
+(define ((re-raise-exn loc) e)
+  (if loc 
+      (raise (make-exn:fail:leibniz
+              (exn-message e)
+              (current-continuation-marks)
+              (apply srcloc loc)))
+      (raise e)))
+
 ; Lazy signatures store declarations to be added until an explicit version
 ; is requested.
 
 (struct lazy-signature (base-signature declarations))
 
-(define (lazy-add-declaration l-signature declaration)
+(define (lazy-add-declaration l-signature declaration loc)
   (lazy-signature (lazy-signature-base-signature l-signature)
-                  (cons declaration (lazy-signature-declarations l-signature))))
+                  (cons (cons declaration loc)
+                        (lazy-signature-declarations l-signature))))
 
 (define (lazy-make-explicit l-signature)
   (define base (lazy-signature-base-signature l-signature))
@@ -34,14 +53,15 @@
   (define declarations (reverse (lazy-signature-declarations l-signature)))
   (define sorts
     (for/fold ([sorts base-sorts])
-              ([decl declarations])
-      (match decl
-        [(list 'sort s) (sorts:add-sort sorts s)]
-        [(list 'subsort s1 s2) (~> sorts
-                                   (sorts:add-sort s1)
-                                   (sorts:add-sort s2)
-                                   (sorts:add-subsort-relation s1 s2))]
-        [_ sorts])))
+              ([decl/loc declarations])
+      (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
+        (match (car decl/loc)
+          [(list 'sort s) (sorts:add-sort sorts s)]
+          [(list 'subsort s1 s2) (~> sorts
+                                     (sorts:add-sort s1)
+                                     (sorts:add-sort s2)
+                                     (sorts:add-subsort-relation s1 s2))]
+          [_ sorts]))))
   ; TODO operators
   (operators:empty-signature sorts))
 
@@ -49,22 +69,22 @@
   (define empty-lazy-signature
     (lazy-signature (operators:empty-signature sorts:empty-sort-graph) empty))
   (check-equal? (~> empty-lazy-signature
-                    (lazy-add-declaration '(sort foo))
-                    (lazy-add-declaration '(sort bar))
-                    (lazy-add-declaration '(subsort foo bar))
+                    (lazy-add-declaration '(sort foo) #f)
+                    (lazy-add-declaration '(sort bar) #f)
+                    (lazy-add-declaration '(subsort foo bar) #f)
                     (lazy-make-explicit))
                 (contexts:context-signature test-context))
   (check-equal? (~> empty-lazy-signature
-                    (lazy-add-declaration '(subsort foo bar))
+                    (lazy-add-declaration '(subsort foo bar) #f)
                     (lazy-make-explicit))
                 (contexts:context-signature test-context))
   (check-equal? (~> empty-lazy-signature
-                    (lazy-add-declaration '(sort foo))
-                    (lazy-add-declaration '(sort bar))
-                    (lazy-add-declaration '(sort foo))
-                    (lazy-add-declaration '(subsort foo bar))
-                    (lazy-add-declaration '(sort bar))
-                    (lazy-add-declaration '(subsort foo bar))
+                    (lazy-add-declaration '(sort foo) #f)
+                    (lazy-add-declaration '(sort bar) #f)
+                    (lazy-add-declaration '(sort foo) #f)
+                    (lazy-add-declaration '(subsort foo bar) #f)
+                    (lazy-add-declaration '(sort bar) #f)
+                    (lazy-add-declaration '(subsort foo bar) #f)
                     (lazy-make-explicit))
                 (contexts:context-signature test-context)))
 
@@ -76,13 +96,13 @@
   ; signature: a lazy signature including all declarations seen so far
   ; named-contexts: a hash mapping context names (strings) to contexts
 
-  (define (add-declaration decl)
-    (document (lazy-add-declaration signature decl)
+  (define (add-declaration decl loc)
+    (document (lazy-add-declaration signature decl loc)
               context
               named-contexts))
 
   (define (process-declarations)
-    (define sig (lazy-make-explicit signature))
+    (define sig  (lazy-make-explicit signature))
     (define sorts (operators:signature-sort-graph sig))
     (define context (contexts:builtin-context sorts
                                               sig
@@ -111,7 +131,7 @@
 (module+ test
 
   (check-equal? (~> empty-document
-                    (add-declaration '(subsort foo bar))
+                    (add-declaration '(subsort foo bar) #f)
                     (process-declarations)
                     (current-context)
                     )
