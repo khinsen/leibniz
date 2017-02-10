@@ -5,28 +5,28 @@
 
 @section{Kinematics}
 
-A @sort{point_system} consists of @sort{point}s.  The
-smallest possible system is a single point: @sort{point ⊆ point_system}.
+A @sort{point-system} consists of @sort{point}s.  The
+smallest possible system is a single point: @sort{point ⊆ point-system}.
 Composition of point systems is achieved with
-@op{point_system and point_system : point_system}.
+@op{point-system and point-system : point-system}.
 
 We introduce @sort{positions} such that @op{positions of point : position}
 selects the @sort{position} of a specific @sort{point}. Likewise, we define
-@sort{velocities} with @op{velocities of point : velocity} and
-@sort{accelerations} with @op{accelerations of point : acceleration}.
+@sort{velocity}/@sort{velocities} with @op{velocities of point : velocity} and
+@sort{acceleration}/@sort{accelerations} with @op{accelerations of point : acceleration}.
 
-For moving points, the @sort{positions} as a function of time are
+For moving points, the @sort{positions} as a function of @sort{time} are
 called a @sort{trajectory}: @op{trajectory at time : positions}.
 We will also need the first and second time derivatives of a @sort{trajectory}:
 @itemlist[
-  @item{@sort{v_trajectory}, @op{𝒟(trajectory) : v_trajectory}}
-  @item{@sort{a_trajectory}, @op{𝒟(v_trajectory) : a_trajectory}}]
+  @item{@sort{v-trajectory}, @op{𝒟(trajectory) : v-trajectory}}
+  @item{@sort{a-trajectory}, @op{𝒟(v-trajectory) : a-trajectory}}]
 
 @subsection[#:style 'unnumbered]{Additional definitions}
 
 @itemlist[
-  @item{@smaller[@op{v_trajectory at time : velocities}]}
-  @item{@smaller[@op{a_trajectory at time : accelerations}]}]
+  @item{@smaller[@op{v-trajectory at time : velocities}]}
+  @item{@smaller[@op{a-trajectory at time : accelerations}]}]
 
 @section{Dynamics}
 
@@ -35,6 +35,9 @@ reacts to a @sort{force} depends on its @sort{mass}, as described
 by Newton's law of motion:
 
    @equation{f at t = (m * 𝒟(𝒟(r))) at t ∀ t:time}
+
+where the force trajectory @op{f : f-trajectory} depends
+on the trajectory @op{r : trajectory}.
 
 @subsection{Additional definitions}
 
