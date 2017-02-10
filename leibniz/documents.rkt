@@ -24,7 +24,7 @@
 
 (define-struct (exn:fail:leibniz exn:fail) (a-srcloc)
   #:property prop:exn:srclocs
-  (lambda (a-struct)
+  (λ (a-struct)
     (match a-struct
       [(struct exn:fail:leibniz (msg marks a-srcloc))
        (list a-srcloc)])))
@@ -62,8 +62,26 @@
                                      (sorts:add-sort s2)
                                      (sorts:add-subsort-relation s1 s2))]
           [_ sorts]))))
-  ; TODO operators
-  (operators:empty-signature sorts))
+  (define signature
+    (for/fold ([sig (operators:merge-signatures base (operators:empty-signature sorts) sorts)])
+              ([decl/loc declarations])
+      (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
+        (match (car decl/loc)
+          [(list 'prefix-op op args rsort) (operators:add-op sig op args rsort)]
+          [(list 'infix-op op args rsort) (operators:add-op sig op args rsort)]
+          [(list 'special-op op args rsort) (operators:add-op sig op args rsort)]
+          [_ sig]))))
+  (define non-regular (operators:non-regular-op-example signature))
+  (when non-regular
+    (match-let ([(list op argsorts rsorts) non-regular])
+      (define loc
+        (for/first ([decl/loc declarations]
+                    #:when (and (member (first (car decl/loc)) '(prefix-op infix-op special-op))
+                                (equal? op (second (car decl/loc)))))
+          (cdr decl/loc)))
+      (with-handlers ([exn:fail? (re-raise-exn loc)])
+        (error (format "operator ~a~a has ambiguous sorts ~a" op argsorts rsorts)))))
+  signature)
 
 (module+ test
   (define empty-lazy-signature
