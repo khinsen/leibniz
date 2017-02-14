@@ -5,6 +5,8 @@
 
 @section{Kinematics}
 
+@context["test"]{
+
 A @sort{point-system} consists of @sort{point}s.  The
 smallest possible system is a single point: @sort{point ⊆ point-system}.
 Composition of point systems is achieved with
@@ -36,11 +38,13 @@ by Newton's law of motion:
 
    @equation{f at t = (m * 𝒟(𝒟(r))) at t ∀ t:time}
 
-where the force trajectory @op{f : f-trajectory} depends
+where the force trajectory (@sort{f-trajectory}) @op{f : f-trajectory} depends
 on the trajectory @op{r : trajectory}.
 
 @subsection{Additional definitions}
 
 @itemlist[
   @item{@smaller[@op{forces of point : force}]}
-  @item{@smaller[@op{masses of point : mass}]}]
+  @item{@smaller[@op{masses of point : mass}]}] (@sort{masses})
+
+}
