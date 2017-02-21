@@ -1,8 +1,8 @@
 #lang racket
 
 (provide empty-document
-         add-declaration
-         process-declarations)
+         add-context
+         get-context)
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -37,23 +37,12 @@
               (apply srcloc loc)))
       (raise e)))
 
-; Lazy signatures store declarations to be added until an explicit version
-; is requested.
+; Make a signature from a sequence of declarations
 
-(struct lazy-signature (base-signature declarations))
-
-(define (lazy-add-declaration l-signature declaration loc)
-  (lazy-signature (lazy-signature-base-signature l-signature)
-                  (cons (cons declaration loc)
-                        (lazy-signature-declarations l-signature))))
-
-(define (lazy-make-explicit l-signature)
-  (define base (lazy-signature-base-signature l-signature))
-  (define base-sorts (operators:signature-sort-graph base))
-  (define declarations (reverse (lazy-signature-declarations l-signature)))
+(define (make-signature decls)
   (define sorts
-    (for/fold ([sorts base-sorts])
-              ([decl/loc declarations])
+    (for/fold ([sorts sorts:empty-sort-graph])
+              ([decl/loc decls])
       (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
         (match (car decl/loc)
           [(list 'sort s) (sorts:add-sort sorts s)]
@@ -63,8 +52,8 @@
                                      (sorts:add-subsort-relation s1 s2))]
           [_ sorts]))))
   (define signature
-    (for/fold ([sig (operators:merge-signatures base (operators:empty-signature sorts) sorts)])
-              ([decl/loc declarations])
+    (for/fold ([sig (operators:empty-signature sorts)])
+              ([decl/loc decls])
       (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
         (match (car decl/loc)
           [(list 'prefix-op op args rsort) (operators:add-op sig op args rsort)]
@@ -75,7 +64,7 @@
   (when non-regular
     (match-let ([(list op argsorts rsorts) non-regular])
       (define loc
-        (for/first ([decl/loc declarations]
+        (for/first ([decl/loc decls]
                     #:when (and (member (first (car decl/loc)) '(prefix-op infix-op special-op))
                                 (equal? op (second (car decl/loc)))))
           (cdr decl/loc)))
@@ -83,75 +72,47 @@
         (error (format "operator ~a~a has ambiguous sorts ~a" op argsorts rsorts)))))
   signature)
 
-(module+ test
-  (define empty-lazy-signature
-    (lazy-signature (operators:empty-signature sorts:empty-sort-graph) empty))
-  (check-equal? (~> empty-lazy-signature
-                    (lazy-add-declaration '(sort foo) #f)
-                    (lazy-add-declaration '(sort bar) #f)
-                    (lazy-add-declaration '(subsort foo bar) #f)
-                    (lazy-make-explicit))
-                (contexts:context-signature test-context))
-  (check-equal? (~> empty-lazy-signature
-                    (lazy-add-declaration '(subsort foo bar) #f)
-                    (lazy-make-explicit))
-                (contexts:context-signature test-context))
-  (check-equal? (~> empty-lazy-signature
-                    (lazy-add-declaration '(sort foo) #f)
-                    (lazy-add-declaration '(sort bar) #f)
-                    (lazy-add-declaration '(sort foo) #f)
-                    (lazy-add-declaration '(subsort foo bar) #f)
-                    (lazy-add-declaration '(sort bar) #f)
-                    (lazy-add-declaration '(subsort foo bar) #f)
-                    (lazy-make-explicit))
-                (contexts:context-signature test-context)))
-
 ; Documents track declarations and expressions embedded in a Scribble document
 
 (define-class document
 
-  (field signature context named-contexts)
-  ; signature: a lazy signature including all declarations seen so far
-  ; named-contexts: a hash mapping context names (strings) to contexts
+  (field contexts)
+  ; contexts: a hash mapping context names (strings) to contexts
 
-  (define (add-declaration decl loc)
-    (document (lazy-add-declaration signature decl loc)
-              context
-              named-contexts))
+  (define (add-context name decls)
+    (define signature (make-signature decls))
+    (define sorts (operators:signature-sort-graph signature))
+    (define context
+      (contexts:builtin-context sorts
+                                signature
+                                (terms:empty-varset sorts)
+                                equations:empty-rulelist
+                                equations:empty-equationset))
+    (document (hash-set contexts name context)))
 
-  (define (process-declarations)
-    (define sig  (lazy-make-explicit signature))
-    (define sorts (operators:signature-sort-graph sig))
-    (define context (contexts:builtin-context sorts
-                                              sig
-                                              (terms:empty-varset sorts)
-                                              equations:empty-rulelist
-                                              equations:empty-equationset))
-    (document (lazy-signature sig empty) context named-contexts))
+  (define (get-context name)
+    (hash-ref contexts name)))
 
-  (define (current-context*)
-    context)
 
-  (define (current-context)
-    (send (process-declarations) current-context*))
-)
-
-(define empty-document
-  (let* ([signature (operators:empty-signature sorts:empty-sort-graph)]
-         [sorts (operators:signature-sort-graph signature)]
-         [context (contexts:builtin-context sorts
-                                            signature
-                                            (terms:empty-varset sorts)
-                                            equations:empty-rulelist
-                                            equations:empty-equationset)])
-    (document (lazy-signature signature empty) context (hash ))))
+(define empty-document (document (hash)))
 
 (module+ test
-
   (check-equal? (~> empty-document
-                    (add-declaration '(subsort foo bar) #f)
-                    (process-declarations)
-                    (current-context)
-                    )
+                    (add-context "test" (list (cons '(sort foo) #f)
+                                              (cons '(sort bar) #f)
+                                              (cons '(subsort foo bar) #f)))
+                    (get-context "test"))
                 test-context)
-)
+  (check-equal? (~> empty-document
+                    (add-context "test" (list (cons '(subsort foo bar) #f)))
+                    (get-context "test"))
+                test-context)
+  (check-equal? (~> empty-document
+                    (add-context "test" (list (cons '(sort foo) #f)
+                                              (cons '(sort bar) #f)
+                                              (cons '(subsort foo bar) #f)
+                                              (cons '(sort bar) #f)
+                                              (cons '(subsort foo bar) #f)
+                                              (cons '(sort foo) #f)))
+                    (get-context "test"))
+                test-context))
