@@ -25,7 +25,7 @@
     (list 'list
           (syntax-source stx)
           (syntax-line stx)
-          (syntax-column stx)
+          (+ 1 (syntax-column stx))
           (syntax-position stx)
           (syntax-span stx))))
 
@@ -82,14 +82,22 @@
                                   (map syntax-e (syntax-e #'(args.arg-in-list ...))))))
     (pattern any
              #:attr decl empty
-             #:with expansion #'any)))
+             #:with expansion #'any))
+
+  (define-splicing-syntax-class context-ref
+    (pattern (~seq #:use name:str)
+             #:attr ref #`(cons name #,(source-loc #'name)))))
 
 (define-syntax (context stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
-      [(_ name body:body-item ...)
+      [(_ name:str include:context-ref ... body:body-item ...)
        #`(begin (set! #,leibniz-ref (add-context #,leibniz-ref name
+                                                 (list include.ref ...)
                                                  #,(cons #'list (apply append (attribute body.decl)))))
+                (margin-note "Context " (italic name)
+                             (list (linebreak) (hspace 3)
+                                   "uses " (italic include.name)) ...)
                 body.expansion ...)])))
 
 ; Formatting

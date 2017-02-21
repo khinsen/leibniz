@@ -39,20 +39,29 @@
 
 ; Make a signature from a sequence of declarations
 
-(define (make-signature decls)
-  (define sorts
-    (for/fold ([sorts sorts:empty-sort-graph])
-              ([decl/loc decls])
-      (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
-        (match (car decl/loc)
-          [(list 'sort s) (sorts:add-sort sorts s)]
-          [(list 'subsort s1 s2) (~> sorts
-                                     (sorts:add-sort s1)
-                                     (sorts:add-sort s2)
-                                     (sorts:add-subsort-relation s1 s2))]
-          [_ sorts]))))
+(define (make-sort-graph includes decls)
+  (define after-includes
+    (for/fold ([ms sorts:empty-sort-graph])
+              ([c includes])
+      (sorts:merge-sort-graphs ms (contexts:context-sort-graph c))))
+  (for/fold ([sorts after-includes])
+            ([decl/loc decls])
+    (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
+      (match (car decl/loc)
+        [(list 'sort s) (sorts:add-sort sorts s)]
+        [(list 'subsort s1 s2) (~> sorts
+                                   (sorts:add-sort s1)
+                                   (sorts:add-sort s2)
+                                   (sorts:add-subsort-relation s1 s2))]
+        [_ sorts]))))
+
+(define (make-signature sort-graph includes decls)
+  (define after-includes
+    (for/fold ([msig (operators:empty-signature sort-graph)])
+              ([c includes])
+      (operators:merge-signatures msig (contexts:context-signature c) sort-graph)))
   (define signature
-    (for/fold ([sig (operators:empty-signature sorts)])
+    (for/fold ([sig after-includes])
               ([decl/loc decls])
       (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
         (match (car decl/loc)
@@ -79,9 +88,13 @@
   (field contexts)
   ; contexts: a hash mapping context names (strings) to contexts
 
-  (define (add-context name decls)
-    (define signature (make-signature decls))
-    (define sorts (operators:signature-sort-graph signature))
+  (define (add-context name includes decls)
+    (define included-contexts
+      (for/list ([name/loc includes])
+        (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
+          (get-context (car name/loc)))))
+    (define sorts (make-sort-graph included-contexts decls))
+    (define signature (make-signature sorts included-contexts decls))
     (define context
       (contexts:builtin-context sorts
                                 signature
@@ -91,6 +104,8 @@
     (document (hash-set contexts name context)))
 
   (define (get-context name)
+    (unless (hash-has-key? contexts name)
+      (error (format "no context named ~a" name)))
     (hash-ref contexts name)))
 
 

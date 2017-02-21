@@ -5,7 +5,13 @@
 
 @section{Kinematics}
 
-@context["test"]{
+@context["foo"]{
+
+Nothing here but @sort{foo}!
+
+}
+
+@context["test" #:use "foo"]{
 
 A @sort{point-system} consists of @sort{point}s.  The
 smallest possible system is a single point: @sort{point ⊆ point-system}.
