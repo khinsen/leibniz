@@ -96,7 +96,7 @@
                                                  (list include.ref ...)
                                                  #,(cons #'list (apply append (attribute body.decl)))))
                 (margin-note "Context " (italic name)
-                             (list (linebreak) (hspace 3)
+                             (list (linebreak)
                                    "uses " (italic include.name)) ...)
                 body.expansion ...)])))
 
@@ -127,6 +127,22 @@
             (format-infix-op op-symbol)
             " "
             (format-sort arg-sort-2)
+            " : "
+            (format-sort result-sort))]
+     [(list 'special-op '|[]| (list f-arg-sort arg-sorts ... ) result-sort)
+      (list (format-sort f-arg-sort)
+            "["
+            (add-between (map format-sort arg-sorts) ", ")
+            "] : "
+            (format-sort result-sort))]
+     [(list 'special-op '_ (list arg-sort-1 arg-sort-2) result-sort)
+      (list (format-sort arg-sort-1)
+            (subscript (format-sort arg-sort-2))
+            " : "
+            (format-sort result-sort))]
+     [(list 'special-op '^ (list arg-sort-1 arg-sort-2) result-sort)
+      (list (format-sort arg-sort-1)
+            (superscript (format-sort arg-sort-2))
             " : "
             (format-sort result-sort))])))
 
