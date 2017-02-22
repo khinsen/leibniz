@@ -53,6 +53,7 @@
                                    (sorts:add-sort s1)
                                    (sorts:add-sort s2)
                                    (sorts:add-subsort-relation s1 s2))]
+        [(list (or 'prefix-op 'infix-op 'special-op) op args rsort) (sorts:add-sort sorts rsort)]
         [_ sorts]))))
 
 (define (make-signature sort-graph includes decls)
