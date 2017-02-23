@@ -18,7 +18,8 @@
                      megaparsack megaparsack/text
                      data/monad
                      data/applicative)
-         "./documents.rkt")
+         "./documents.rkt"
+         (prefix-in terms: "./terms.rkt"))
 
 ; Translate the location information from a syntax object into strings and numbers
 ; that can be used at runtime.
@@ -59,7 +60,7 @@
     (pattern ((~literal term) term-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p)) #'(term-expr ...))
              #:attr decl empty
-             #:with expansion #`(parsed-term (quote parsed)))
+             #:with expansion #`(parsed-term leibniz-doc current-context (quote parsed) #,(source-loc (first (syntax->list #'(term-expr ...))))))
     (pattern ((~literal rule) rule-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
              #:attr decl empty
@@ -91,15 +92,18 @@
                 (margin-note "Context " (italic name)
                              (list (linebreak)
                                    "uses " (italic include.name)) ...)
-                body.expansion ...)])))
+                (let ([leibniz-doc #,leibniz-ref]
+                      [current-context name])
+                  (list body.expansion ...)))])))
 
 ; Formatting
 
 (define leibniz-css
-  #".Leibniz { background-color: #F0F0FF; }\n.LeibnizSort { background-color: #E0E0FF; }\n")
+  (make-css-addition
+   #".Leibniz { background-color: #F0F0FF; }\n.LeibnizSort { background-color: #E0E0FF; }\n"))
 
-(define leibniz-style (make-style "Leibniz" (list (make-css-addition leibniz-css))))
-(define sort-style (make-style "LeibnizSort" (list (make-css-addition leibniz-css))))
+(define leibniz-style (style "Leibniz" (list leibniz-css)))
+(define sort-style (style "LeibnizSort" (list leibniz-css)))
 
 (define (format-sort symbol)
   (elem #:style sort-style (symbol->string symbol)))
@@ -152,8 +156,13 @@
             (format-sort result-sort))])))
 
 
-(define (parsed-term parsed-term-expr)
-  (nonbreaking) (format "~a" parsed-term-expr))
+(define (parsed-term leibniz-doc current-context parsed-term-expr loc)
+  (define term (make-term leibniz-doc current-context parsed-term-expr loc))
+  (define term-as-str (let ([o (open-output-string)])
+                        (terms:display-term term o)
+                        (get-output-string o)))
+  (elem #:style (style #f (list (hover-property (symbol->string (terms:term.sort term)))))
+        term-as-str))
 
 (define (parsed-rule parsed-rule-expr)
   (nonbreaking (format "~a" parsed-rule-expr)))

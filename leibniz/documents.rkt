@@ -2,7 +2,8 @@
 
 (provide empty-document
          add-context
-         get-context)
+         get-context
+         make-term)
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -107,7 +108,17 @@
   (define (get-context name)
     (unless (hash-has-key? contexts name)
       (error (format "no context named ~a" name)))
-    (hash-ref contexts name)))
+    (hash-ref contexts name))
+
+  (define (make-term context-name term-expr loc)
+    (define context (get-context context-name))
+    (define signature (contexts:context-signature context))
+    (define (make-term* term-expr)
+      (match term-expr
+        [(list 'term op args)
+         (terms:make-term signature op (map make-term* args))]))
+    (with-handlers ([exn:fail? (re-raise-exn loc)])
+      (make-term* term-expr))))
 
 
 (define empty-document (document (hash)))
