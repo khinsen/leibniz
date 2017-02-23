@@ -280,3 +280,20 @@
                '(rule (term a ()) (term b ()) ((var foo bar) (var bar baz))))
   (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz"
                '(equation (term a ()) (term b ()) ((var foo bar) (var bar baz)))))
+
+
+; Utility function for parsing input from scribble, which may consist of multiple
+; string values that may contain newlines.
+
+(define (parse-scribble-text parser text)
+  (define syntax-list (syntax->list text))
+  (define first-string (first syntax-list))
+  (define combined-string
+    (if (equal? (length syntax-list) 1)
+        first-string
+        (datum->syntax first-string
+                       (string-normalize-spaces
+                        (apply string-append (map syntax->datum syntax-list)))
+                       first-string)))
+  (parse-result!
+   (parse-syntax-string parser combined-string)))

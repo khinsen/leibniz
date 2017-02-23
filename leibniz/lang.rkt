@@ -45,34 +45,24 @@
              #:attr decl (attribute arg.decl)))
 
   (define-syntax-class body-item
-    (pattern ((~literal sort) sort-decl:str)
-             #:attr parsed (parse-result!
-                            (parse-syntax-string (syntax/p sort-or-subsort/p)
-                                                 #'sort-decl))
+    (pattern ((~literal sort) sort-decl:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p sort-or-subsort/p) #'(sort-decl ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
              #:with expansion  #`(parsed-declaration (quote parsed)))
-    (pattern ((~literal op) op-decl:str)
-             #:attr parsed (parse-result!
-                            (parse-syntax-string (syntax/p operator/p)
-                                                 #'op-decl))
+    (pattern ((~literal op) op-decl:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p operator/p) #'(op-decl ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
              #:with expansion #`(parsed-declaration (quote parsed)))
-    (pattern ((~literal term) term-expr:str)
-             #:attr parsed (parse-result!
-                            (parse-syntax-string (syntax/p (to-eof/p term/p))
-                                                 #'term-expr))
+    (pattern ((~literal term) term-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p)) #'(term-expr ...))
              #:attr decl empty
              #:with expansion #`(parsed-term (quote parsed)))
-    (pattern ((~literal rule) rule-expr:str)
-             #:attr parsed (parse-result!
-                            (parse-syntax-string (syntax/p rule/p)
-                                                 #'rule-expr))
+    (pattern ((~literal rule) rule-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
              #:attr decl empty
              #:with expansion #`(parsed-rule (quote parsed)))
-    (pattern ((~literal equation) equation-expr:str)
-             #:attr parsed (parse-result!
-                            (parse-syntax-string (syntax/p equation/p)
-                                                 #'equation-expr))
+    (pattern ((~literal equation) equation-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
              #:attr decl empty
              #:with expansion #`(parsed-equation (quote parsed)))
     (pattern (element args:arg-or-kw-arg ...)
