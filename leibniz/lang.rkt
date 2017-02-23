@@ -5,10 +5,13 @@
          context
          parsed-declaration parsed-term parsed-rule parsed-equation
          sort op term rule equation
-         empty-document)
+         empty-document
+         inset)
 
 (require scribble/doclang
          scribble/base
+         scribble/core
+         scribble/html-properties
          (for-syntax syntax/parse
                      racket/list
                      "./lang/parser.rkt"
@@ -92,6 +95,15 @@
 
 ; Formatting
 
+(define leibniz-css
+  #".Leibniz { background-color: #F0F0FF; }\n.LeibnizSort { background-color: #E0E0FF; }\n")
+
+(define leibniz-style (make-style "Leibniz" (list (make-css-addition leibniz-css))))
+(define sort-style (make-style "LeibnizSort" (list (make-css-addition leibniz-css))))
+
+(define (format-sort symbol)
+  (elem #:style sort-style (symbol->string symbol)))
+
 (define (parsed-declaration decl)
   (nonbreaking
    (match decl
@@ -99,51 +111,46 @@
       (format-sort sort-symbol)]
      [(list 'subsort sort-symbol-1 sort-symbol-2)
       (list (format-sort sort-symbol-1)
-            " ⊆ "  ; MEDIUM MATHEMATICAL SPACE ; SUBSET OF OR EQUAL TO
+            (elem #:style leibniz-style " ⊆ ")
+            ; MEDIUM MATHEMATICAL SPACE ; SUBSET OF OR EQUAL TO
             (format-sort sort-symbol-2))]
-     [(list 'prefix-op op-symbol '() result-sort)
-      (list (format-prefix-op op-symbol)
-            " : "
-            (format-sort result-sort))]
      [(list 'prefix-op op-symbol arg-sorts result-sort)
-      (list (format-prefix-op op-symbol)
-            "("
-            (add-between (map format-sort arg-sorts) ", ")
-            ") : "
+      (elem #:style leibniz-style
+            (symbol->string op-symbol)
+            (if (zero? (length arg-sorts))
+                ""
+                (list "(" (add-between (map format-sort arg-sorts) ", ") ")"))
+            " : "
             (format-sort result-sort))]
      [(list 'infix-op op-symbol (list arg-sort-1 arg-sort-2) result-sort)
-      (list (format-sort arg-sort-1)
+      (elem #:style leibniz-style
+            (format-sort arg-sort-1)
             " "
-            (format-infix-op op-symbol)
+            (symbol->string op-symbol)
             " "
             (format-sort arg-sort-2)
             " : "
             (format-sort result-sort))]
      [(list 'special-op '|[]| (list f-arg-sort arg-sorts ... ) result-sort)
-      (list (format-sort f-arg-sort)
+      (elem #:style leibniz-style
+            (format-sort f-arg-sort)
             "["
             (add-between (map format-sort arg-sorts) ", ")
             "] : "
             (format-sort result-sort))]
      [(list 'special-op '_ (list arg-sort-1 arg-sort-2) result-sort)
-      (list (format-sort arg-sort-1)
+      (elem #:style leibniz-style
+            (format-sort arg-sort-1)
             (subscript (format-sort arg-sort-2))
             " : "
             (format-sort result-sort))]
      [(list 'special-op '^ (list arg-sort-1 arg-sort-2) result-sort)
-      (list (format-sort arg-sort-1)
+      (elem #:style leibniz-style
+            (format-sort arg-sort-1)
             (superscript (format-sort arg-sort-2))
             " : "
             (format-sort result-sort))])))
 
-(define (format-sort symbol)
-  (bold (italic (symbol->string symbol))))
-
-(define (format-prefix-op symbol)
-  (italic (symbol->string symbol)))
-
-(define (format-infix-op symbol)
-  (italic (symbol->string symbol)))
 
 (define (parsed-term parsed-term-expr)
   (nonbreaking) (format "~a" parsed-term-expr))
@@ -170,3 +177,14 @@
 
 (define-syntax (equation stx)
   (raise-syntax-error #f "equation used outside context" stx))
+
+
+; Support code for nicer formatting
+
+(define (inset . body)
+  (apply nested
+         (for/list ([element body])
+           (if (equal? element "\n")
+               (linebreak)
+               element))
+         #:style 'inset))

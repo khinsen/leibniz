@@ -10,12 +10,18 @@
 A @sort{point-system} consists of @sort{point}s.  The
 smallest possible system is a single point: @sort{point ⊆ point-system}.
 Composition of point systems is achieved with
-@op{point-system and point-system : point-system}.
 
-The @sort{positions} of all the @sort{point}s in a @sort{point-system}
-(@op{positions_{point} : position}) as a function of @sort{time} are
-called a @sort{trajectory} (@op{trajectory[time] : positions}). We
-will also need the first and second time derivatives of these
+  @inset{
+    @op{point-system and point-system : point-system}.}
+
+The motion of the @sort{point}s is described by a @sort{trajectory},
+i.e. by @sort{positions} that change over @sort{time}:
+
+   @inset{
+     @op{trajectory[time] : positions}
+     @op{positions_{point} : position}}
+
+We will also need the first and second time derivatives of these
 trajectories:
 
 @itemlist[
