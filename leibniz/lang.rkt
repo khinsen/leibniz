@@ -15,7 +15,7 @@
          (for-syntax syntax/parse
                      racket/list
                      "./lang/parser.rkt"
-                     megaparsack megaparsack/text
+                     megaparsack (except-in megaparsack/text integer/p)
                      data/monad
                      data/applicative)
          "./documents.rkt"

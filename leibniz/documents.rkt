@@ -116,7 +116,9 @@
     (define (make-term* term-expr)
       (match term-expr
         [(list 'term op args)
-         (terms:make-term signature op (map make-term* args))]))
+         (terms:make-term signature op (map make-term* args))]
+        [(list 'integer n) n]
+        [(list 'rational r) r]))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (make-term* term-expr))))
 
@@ -125,21 +127,24 @@
 
 (module+ test
   (check-equal? (~> empty-document
-                    (add-context "test" (list (cons '(sort foo) #f)
-                                              (cons '(sort bar) #f)
-                                              (cons '(subsort foo bar) #f)))
+                    (add-context "test" empty
+                                 (list (cons '(sort foo) #f)
+                                       (cons '(sort bar) #f)
+                                       (cons '(subsort foo bar) #f)))
                     (get-context "test"))
                 test-context)
   (check-equal? (~> empty-document
-                    (add-context "test" (list (cons '(subsort foo bar) #f)))
+                    (add-context "test" empty
+                                 (list (cons '(subsort foo bar) #f)))
                     (get-context "test"))
                 test-context)
   (check-equal? (~> empty-document
-                    (add-context "test" (list (cons '(sort foo) #f)
-                                              (cons '(sort bar) #f)
-                                              (cons '(subsort foo bar) #f)
-                                              (cons '(sort bar) #f)
-                                              (cons '(subsort foo bar) #f)
-                                              (cons '(sort foo) #f)))
+                    (add-context "test" empty
+                                 (list (cons '(sort foo) #f)
+                                       (cons '(sort bar) #f)
+                                       (cons '(subsort foo bar) #f)
+                                       (cons '(sort bar) #f)
+                                       (cons '(subsort foo bar) #f)
+                                       (cons '(sort foo) #f)))
                     (get-context "test"))
                 test-context))

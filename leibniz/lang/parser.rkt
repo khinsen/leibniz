@@ -181,11 +181,45 @@
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
   (check-parse-failure operator/p "baz1 foo baz2:bar"))
 
+(define nn-integer/p
+  (do [digits <- (many+/p digit/p)]
+      (pure (read (open-input-string (apply string digits))))))
+
+(define integer/p
+  (or/p (do (char/p #\-)
+            [v <- nn-integer/p]
+            (pure  (list 'integer (- v))))
+        (do [v <- nn-integer/p]
+            (pure (list 'integer v)))))
+
+(define rational/p
+  (do [num <- integer/p]
+      (or/p (do (char/p #\⁄) ; Code point 2044 FRACTION SLASH
+                [den <- (guard/p nn-integer/p (λ (n) (> n 0)))]
+                (pure (list 'rational (/ (second num) den))))
+            (pure num))))
+
+(module+ test
+  (check-parse integer/p "0" '(integer 0))
+  (check-parse integer/p "-0" '(integer 0))
+  (check-parse integer/p "123" '(integer 123))
+  (check-parse integer/p "-123" '(integer -123))
+  (check-parse-failure integer/p "abc")
+  (check-parse-failure integer/p "")
+  (check-parse rational/p "0" '(integer 0))
+  (check-parse rational/p "-0" '(integer 0))
+  (check-parse rational/p "123" '(integer 123))
+  (check-parse rational/p "-123" '(integer -123))
+  (check-parse rational/p "2⁄3" '(rational 2/3))
+  (check-parse rational/p "-2⁄3" '(rational -2/3))
+  (check-parse-failure rational/p "2⁄0"))
+
 (define simple-term/p
   (or/p (do (char/p #\()
             [t <- term/p]
             (char/p #\))
             (pure t))
+        rational/p
         (do [op-id <- op-identifier/p]
             (or/p (do (char/p #\()
                       [args <- (many+/p term/p #:sep comma-with-whitespace/p)]
@@ -232,7 +266,8 @@
   (check-parse term/p "bar + baz" '(term + ((term bar ()) (term baz ()))))
   (check-parse term/p "foo + bar + baz" '(term + ((term foo ()) (term + ((term bar ()) (term baz ()))))))
   (check-parse term/p "foo + (bar + baz)" '(term + ((term foo ()) (term + ((term bar ()) (term baz ()))))))
-  (check-parse term/p "(foo + bar) + baz" '(term + ((term + ((term foo ()) (term bar ()))) (term baz ()) ))))
+  (check-parse term/p "(foo + bar) + baz" '(term + ((term + ((term foo ()) (term bar ()))) (term baz ()) )))
+  (check-parse term/p "(foo + 2) - 3⁄4" '(term - ((term + ((term foo ()) (integer 2))) (rational 3/4)))))
 
 (define var/p
   (do (char/p #\∀)
