@@ -40,7 +40,8 @@
   ;; [var-sort               (var? . -> . (or/c #f symbol?))]
   [display-vars           (set? output-port? . -> . void?)]
   [display-term-with-vars ((term? output-port?) (any/c) . ->* . void?)]
-  [display-term           ((term? output-port?) (any/c) . ->* . void?)]))
+  [display-term           ((term? output-port?) (any/c) . ->* . void?)]
+  [term->string           (term? . -> . string?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
@@ -305,11 +306,12 @@
         (display-term term port)
         (display ")" port))))
 
-(module+ test
-  (define (term->string term)
+(define (term->string term)
     (let ([o (open-output-string)])
       (display-term-with-vars term o)
       (get-output-string o)))
+
+(module+ test
   (check-equal? (term->string 2) "NonZeroNatural:2")
   (check-equal? (term->string 'foo) "Symbol:'foo")
   (check-equal? (term->string "foo") "String:\"foo\"")

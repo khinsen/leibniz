@@ -1,9 +1,8 @@
 #lang racket
 
 (provide empty-document
-         add-context
-         get-context
-         make-term)
+         add-context get-context
+         make-term make-rule)
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -83,6 +82,56 @@
         (error (format "operator ~a~a has ambiguous sorts ~a" op argsorts rsorts)))))
   signature)
 
+(define (make-term* signature)
+  (letrec ([fn (match-lambda
+                 [(list 'term op args)
+                  (terms:make-term signature op (map fn args))]
+                 [(list 'integer n) n]
+                 [(list 'rational r) r])])
+    fn))
+
+(define (make-varset* signature vars)
+  (define sorts (operators:signature-sort-graph signature))
+  (for/fold ([vs (terms:empty-varset sorts)])
+            ([v vars])
+    (match v
+      [(list 'var name sort)
+       (terms:add-var vs name sort)])))
+
+(define (make-pattern* signature varset)
+  (letrec ([fn (match-lambda
+                 [(list 'term name '())
+                  (terms:make-var-or-term signature varset name)]
+                 [(list 'term op args)
+                  (terms:make-term signature op (map fn args))]
+                 [(list 'integer n) n]
+                 [(list 'rational r) r])])
+    fn))
+
+(define (make-rule* signature rule-expr)
+  (match rule-expr
+    [(list 'rule pattern replacement vars)
+     (let* ([varset (make-varset* signature vars)]
+            [mp (make-pattern* signature varset)])
+       (equations:make-rule signature (mp pattern)
+                            #f
+                            (mp replacement)
+                            #f #t))]
+    [_ #f]))
+
+(define (make-rulelist signature includes decls)
+  (define after-includes
+    (for/fold ([mrl equations:empty-rulelist])
+              ([c includes])
+      (equations:merge-rulelists mrl (contexts:context-rules c) signature)))
+  (for/fold ([rl after-includes])
+            ([decl/loc decls])
+    (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
+      (define rule (make-rule* signature (car decl/loc)))
+      (if rule
+          (equations:add-rule rl rule)
+          rl))))
+
 ; Documents track declarations and expressions embedded in a Scribble document
 
 (define-class document
@@ -97,11 +146,12 @@
           (get-context (car name/loc)))))
     (define sorts (make-sort-graph included-contexts decls))
     (define signature (make-signature sorts included-contexts decls))
+    (define rules (make-rulelist signature included-contexts decls))
     (define context
       (contexts:builtin-context sorts
                                 signature
                                 (terms:empty-varset sorts)
-                                equations:empty-rulelist
+                                rules
                                 equations:empty-equationset))
     (document (hash-set contexts name context)))
 
@@ -113,14 +163,14 @@
   (define (make-term context-name term-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
-    (define (make-term* term-expr)
-      (match term-expr
-        [(list 'term op args)
-         (terms:make-term signature op (map make-term* args))]
-        [(list 'integer n) n]
-        [(list 'rational r) r]))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (make-term* term-expr))))
+      ((make-term* signature) term-expr)))
+
+  (define (make-rule context-name rule-expr loc)
+    (define context (get-context context-name))
+    (define signature (contexts:context-signature context))
+    (with-handlers ([exn:fail? (re-raise-exn loc)])
+      (make-rule* signature rule-expr))))
 
 
 (define empty-document (document (hash)))
@@ -147,4 +197,11 @@
                                        (cons '(subsort foo bar) #f)
                                        (cons '(sort foo) #f)))
                     (get-context "test"))
-                test-context))
+                test-context)
+  (check-equal? (~> empty-document
+                    (add-context "test" empty
+                                 (list (cons '(subsort foo bar) #f)
+                                       (cons '(prefix-op a-foo () foo) #f)))
+                    (make-term "test" '(term a-foo ()) #f)
+                    (terms:term->string))
+                "foo:a-foo"))

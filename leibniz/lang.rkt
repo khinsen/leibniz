@@ -19,7 +19,8 @@
                      data/monad
                      data/applicative)
          "./documents.rkt"
-         (prefix-in terms: "./terms.rkt"))
+         (prefix-in terms: "./terms.rkt")
+         (prefix-in equations: "./equations.rkt"))
 
 ; Translate the location information from a syntax object into strings and numbers
 ; that can be used at runtime.
@@ -63,8 +64,10 @@
              #:with expansion #`(parsed-term leibniz-doc current-context (quote parsed) #,(source-loc (first (syntax->list #'(term-expr ...))))))
     (pattern ((~literal rule) rule-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
-             #:attr decl empty
-             #:with expansion #`(parsed-rule (quote parsed)))
+             #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
+             #:with expansion #`(parsed-rule leibniz-doc current-context 
+                                             (quote parsed)
+                                             #,(source-loc (first (syntax->list #'(rule-expr ...))))))
     (pattern ((~literal equation) equation-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
              #:attr decl empty
@@ -156,16 +159,28 @@
             (format-sort result-sort))])))
 
 
-(define (parsed-term leibniz-doc current-context parsed-term-expr loc)
-  (define term (make-term leibniz-doc current-context parsed-term-expr loc))
+(define (format-term context term)
   (define term-as-str (let ([o (open-output-string)])
                         (terms:display-term term o)
                         (get-output-string o)))
   (elem #:style (style #f (list (hover-property (symbol->string (terms:term.sort term)))))
         term-as-str))
 
-(define (parsed-rule parsed-rule-expr)
-  (nonbreaking (format "~a" parsed-rule-expr)))
+(define (parsed-term leibniz-doc current-context parsed-term-expr loc)
+  (define term (make-term leibniz-doc current-context parsed-term-expr loc))
+  (format-term (get-context leibniz-doc current-context) term))
+
+(define (parsed-rule leibniz-doc current-context parsed-rule-expr loc)
+  (define context (get-context leibniz-doc current-context))
+  (define rule (make-rule leibniz-doc current-context parsed-rule-expr loc))
+  (define vars (terms:term.vars (equations:rule-pattern rule)))
+  (list
+   (format-term context (equations:rule-pattern rule))
+   (elem #:style leibniz-style " → ")
+   (format-term context (equations:rule-replacement rule))
+   (for/list ([var (in-set vars)])
+     (list (elem #:style leibniz-style (format " ∀ ~a : " (terms:var-name var)))
+           (format-sort (terms:var-sort var))))))
 
 (define (parsed-equation parsed-equation-expr)
   (nonbreaking (format "~a" parsed-equation-expr)))
