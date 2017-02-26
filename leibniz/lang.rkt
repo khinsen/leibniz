@@ -103,13 +103,13 @@
 
 (define leibniz-css
   (make-css-addition
-   #".Leibniz { background-color: #F0F0FF; }\n.LeibnizSort { background-color: #E0E0FF; }\n"))
+   #".Leibniz { background-color: #E8E8FF; }\n.LeibnizSort { background-color: #E0E0FF; }\n"))
 
 (define leibniz-style (style "Leibniz" (list leibniz-css)))
 (define sort-style (style "LeibnizSort" (list leibniz-css)))
 
 (define (format-sort symbol)
-  (elem #:style sort-style (symbol->string symbol)))
+  (elem #:style leibniz-style (italic (symbol->string symbol))))
 
 (define (parsed-declaration decl)
   (nonbreaking
@@ -163,7 +163,8 @@
   (define term-as-str (let ([o (open-output-string)])
                         (terms:display-term term o)
                         (get-output-string o)))
-  (elem #:style (style #f (list (hover-property (symbol->string (terms:term.sort term)))))
+  (define sort-str(symbol->string (terms:term.sort term)))
+  (elem #:style (style "Leibniz" (list leibniz-css (hover-property sort-str)))
         term-as-str))
 
 (define (parsed-term leibniz-doc current-context parsed-term-expr loc)
