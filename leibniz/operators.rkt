@@ -507,7 +507,7 @@
     (newline port)
     (display prefix port)
     (display "; operators" port)
-    (for ([(symbol rank) (all-ops)])
+    (for ([(symbol rank meta) (all-ops)])
       (newline port)
       (display prefix port)
       (display "(op " port)
