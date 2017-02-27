@@ -41,10 +41,13 @@ force}) according to Newton's law of motion,
 
 where @op{m : masses} (op{masses_{point} : mass}) is a
 time-independent non-negative property of each @sort{point}.  The
-@sort{force} trajectories @op{f : f-trajectory} are in general functions of the
-position trajectories @op{r : trajectory} as we will see in the next section,
+@sort{force} trajectories @op{f : f-trajectory}, @op{f-trajectory[time] : forces}
+are in general functions of the position trajectories @op{r : trajectory} as we
+will see in the next section,
 and Newton's law of motion therefore is a differential equation
 that, together with suitable initial conditions, defines @term{r}.
+
+@op{masses * accelerations : forces}
 
 }
 
