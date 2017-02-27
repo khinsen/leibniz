@@ -96,6 +96,9 @@
       (char/p #\,)
       (many/p space/p)))
 
+(define (mark-as-infix op-symbol)
+  (string->symbol (format "_~a" op-symbol)))
+
 (define op-identifier/p non-reserved-identifier/p)
 
 (define operator/p
@@ -147,7 +150,7 @@
                           (many+/p space/p)
                           [result-id <- sort-identifier/p]
                           eof/p
-                          (pure `(infix-op ,op-id (,id1 ,id2) ,result-id)))
+                          (pure `(infix-op ,(mark-as-infix op-id) (,id1 ,id2) ,result-id)))
                       (do (char/p #\:)
                           (many+/p space/p)
                           [result-id <- sort-identifier/p]
@@ -176,7 +179,7 @@
   (check-parse operator/p "baz1_{baz2} : bar" '(special-op _ (baz1 baz2) bar))
   (check-parse operator/p "baz1^{baz2} : bar" '(special-op ^ (baz1 baz2) bar))
 
-  (check-parse operator/p "baz1 foo baz2 : bar" '(infix-op foo (baz1 baz2) bar))
+  (check-parse operator/p "baz1 foo baz2 : bar" '(infix-op _foo (baz1 baz2) bar))
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
   (check-parse-failure operator/p "baz1 foo baz2:bar"))
@@ -251,7 +254,7 @@
                        [op-id <- op-identifier/p]
                        (many+/p space/p)
                        [t2 <- term/p]
-                       (pure `(term ,op-id (,t1 ,t2)))))
+                       (pure `(term ,(mark-as-infix op-id) (,t1 ,t2)))))
             (pure t1))))
 
 (module+ test
@@ -263,11 +266,11 @@
   (check-parse term/p "foo[bar, baz]" '(term |[]| ((term foo ()) (term bar ()) (term baz ()))))
   (check-parse term/p "foo_{bar}" '(term _ ((term foo ()) (term bar ()))))
   (check-parse term/p "foo^{bar}" '(term ^ ((term foo ()) (term bar ()))))
-  (check-parse term/p "bar + baz" '(term + ((term bar ()) (term baz ()))))
-  (check-parse term/p "foo + bar + baz" '(term + ((term foo ()) (term + ((term bar ()) (term baz ()))))))
-  (check-parse term/p "foo + (bar + baz)" '(term + ((term foo ()) (term + ((term bar ()) (term baz ()))))))
-  (check-parse term/p "(foo + bar) + baz" '(term + ((term + ((term foo ()) (term bar ()))) (term baz ()) )))
-  (check-parse term/p "(foo + 2) - 3⁄4" '(term - ((term + ((term foo ()) (integer 2))) (rational 3/4)))))
+  (check-parse term/p "bar + baz" '(term _+ ((term bar ()) (term baz ()))))
+  (check-parse term/p "foo + bar + baz" '(term _+ ((term foo ()) (term _+ ((term bar ()) (term baz ()))))))
+  (check-parse term/p "foo + (bar + baz)" '(term _+ ((term foo ()) (term _+ ((term bar ()) (term baz ()))))))
+  (check-parse term/p "(foo + bar) + baz" '(term _+ ((term _+ ((term foo ()) (term bar ()))) (term baz ()) )))
+  (check-parse term/p "(foo + 2) - 3⁄4" '(term _- ((term _+ ((term foo ()) (integer 2))) (rational 3/4)))))
 
 (define var/p
   (do (char/p #\∀)

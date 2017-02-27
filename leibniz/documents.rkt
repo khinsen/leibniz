@@ -2,7 +2,7 @@
 
 (provide empty-document
          add-context get-context
-         make-term make-rule)
+         make-term make-rule make-equation)
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -64,11 +64,15 @@
   (define signature
     (for/fold ([sig after-includes])
               ([decl/loc decls])
-      (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
+      (define loc (cdr decl/loc))
+      (with-handlers ([exn:fail? (re-raise-exn loc)])
         (match (car decl/loc)
-          [(list 'prefix-op op args rsort) (operators:add-op sig op args rsort)]
-          [(list 'infix-op op args rsort) (operators:add-op sig op args rsort)]
-          [(list 'special-op op args rsort) (operators:add-op sig op args rsort)]
+          [(list 'prefix-op op args rsort)
+           (operators:add-op sig op args rsort #:meta (cons 'prefix-op loc))]
+          [(list 'infix-op op args rsort)
+           (operators:add-op sig op args rsort #:meta (cons 'infix-op loc))]
+          [(list 'special-op op args rsort)
+           (operators:add-op sig op args rsort #:meta (cons 'special-op loc))]
           [_ sig]))))
   (define non-regular (operators:non-regular-op-example signature))
   (when non-regular
@@ -132,6 +136,18 @@
           (equations:add-rule rl rule)
           rl))))
 
+(define (make-equation* signature equation-expr)
+  (match equation-expr
+    [(list 'equation left right vars)
+     (let* ([varset (make-varset* signature vars)]
+            [mp (make-pattern* signature varset)])
+       (equations:make-equation signature
+                                (mp left)
+                                #f
+                                (mp right)
+                                #f))]
+    [_ #f]))
+
 ; Documents track declarations and expressions embedded in a Scribble document
 
 (define-class document
@@ -170,7 +186,13 @@
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (make-rule* signature rule-expr))))
+      (make-rule* signature rule-expr)))
+
+  (define (make-equation context-name equation-expr loc)
+    (define context (get-context context-name))
+    (define signature (contexts:context-signature context))
+    (with-handlers ([exn:fail? (re-raise-exn loc)])
+      (make-equation* signature equation-expr))))
 
 
 (define empty-document (document (hash)))

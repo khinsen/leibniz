@@ -18,9 +18,12 @@
                      megaparsack (except-in megaparsack/text integer/p)
                      data/monad
                      data/applicative)
+         "./condd.rkt"
          "./documents.rkt"
          (prefix-in terms: "./terms.rkt")
-         (prefix-in equations: "./equations.rkt"))
+         (prefix-in operators: "./operators.rkt")
+         (prefix-in equations: "./equations.rkt")
+         (prefix-in contexts: "./contexts.rkt"))
 
 ; Translate the location information from a syntax object into strings and numbers
 ; that can be used at runtime.
@@ -71,7 +74,9 @@
     (pattern ((~literal equation) equation-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
              #:attr decl empty
-             #:with expansion #`(parsed-equation (quote parsed)))
+             #:with expansion #`(parsed-equation leibniz-doc current-context 
+                                                 (quote parsed)
+                                                 #,(source-loc (first (syntax->list #'(equation-expr ...))))))
     (pattern (element args:arg-or-kw-arg ...)
              #:attr decl (apply append (attribute args.decl))
              #:with expansion
@@ -111,6 +116,13 @@
 (define (format-sort symbol)
   (elem #:style leibniz-style (italic (symbol->string symbol))))
 
+(define (op-symbol-and-type op-symbol)
+  (define s (symbol->string op-symbol))
+  (cond
+    [(member s '("[]" "^" "_")) (values s 'special-op)]
+    [(string-prefix? s "_") (values (substring s 1) 'infix-op)]
+    [else (values s 'prefix-op)]))
+
 (define (parsed-declaration decl)
   (nonbreaking
    (match decl
@@ -130,11 +142,10 @@
             " : "
             (format-sort result-sort))]
      [(list 'infix-op op-symbol (list arg-sort-1 arg-sort-2) result-sort)
+      (define-values (op-str _) (op-symbol-and-type op-symbol))
       (elem #:style leibniz-style
             (format-sort arg-sort-1)
-            " "
-            (symbol->string op-symbol)
-            " "
+            " " op-str " "
             (format-sort arg-sort-2)
             " : "
             (format-sort result-sort))]
@@ -158,33 +169,104 @@
             " : "
             (format-sort result-sort))])))
 
+(define (term->string context term)
+  (let ([o (open-output-string)])
+    (terms:display-term term o)
+    (get-output-string o)))
 
-(define (format-term context term)
-  (define term-as-str (let ([o (open-output-string)])
-                        (terms:display-term term o)
-                        (get-output-string o)))
-  (define sort-str(symbol->string (terms:term.sort term)))
-  (elem #:style (style "Leibniz" (list leibniz-css (hover-property sort-str)))
-        term-as-str))
+(define (infix-term? term)
+  (define-values (raw-op args) (terms:term.op-and-args term))
+  (and raw-op
+       (let-values ([(op type) (op-symbol-and-type raw-op)])
+         (equal? type 'infix-op))))
+
+(define (parenthesize term-elem condition)
+  (if condition
+      (list "(" term-elem ")")
+      term-elem))
+
+(define (format-term signature term)
+  (condd
+   [(terms:var? term)                   ; vars: print name in italic
+    (italic (symbol->string (terms:var-name term)))]
+   #:do (define-values (raw-op args) (terms:term.op-and-args term))
+   [(not raw-op)                        ; everything other than an op-term: convert to string
+    (term->string term)]
+   #:do (define-values (op type) (op-symbol-and-type raw-op))
+   [(zero? (length args))               ; no args implies prefix-op
+    op]
+   [(equal? type 'prefix-op)
+    (list op
+          "("
+          (add-between (for/list ([arg args]) (format-term signature arg)) ", ")
+          ")")]
+   #:do (define arg1 (first args))
+   #:do (define f-arg1 (format-term signature arg1))
+   [(equal? op "[]")
+    (list (parenthesize f-arg1 (infix-term? arg1))
+          "["
+          (add-between (for/list ([arg (rest args)]) (format-term signature arg)) ", ")
+          "]")]
+   #:do (define arg2 (second args))
+   #:do (define f-arg2 (format-term signature arg2))
+   [(equal? type 'infix-op)
+    (list (parenthesize f-arg1 (infix-term? arg1))
+          " " op  " " f-arg2)]
+   [(equal? op "^")
+    (list f-arg1 (superscript f-arg2))]
+   [(equal? op "_")
+    (list f-arg1 (subscript f-arg2))]
+   [else (error (format "operator ~a of type ~a" op type))]))
 
 (define (parsed-term leibniz-doc current-context parsed-term-expr loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (contexts:context-signature context))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
-  (format-term (get-context leibniz-doc current-context) term))
+  (define sort-str(symbol->string (terms:term.sort term)))
+  (define term-elem (format-term signature term))
+  (elem #:style (style "Leibniz" (list leibniz-css (hover-property sort-str)))
+        term-elem))
 
 (define (parsed-rule leibniz-doc current-context parsed-rule-expr loc)
   (define context (get-context leibniz-doc current-context))
+  (define signature (contexts:context-signature context))
   (define rule (make-rule leibniz-doc current-context parsed-rule-expr loc))
   (define vars (terms:term.vars (equations:rule-pattern rule)))
-  (list
-   (format-term context (equations:rule-pattern rule))
-   (elem #:style leibniz-style " → ")
-   (format-term context (equations:rule-replacement rule))
-   (for/list ([var (in-set vars)])
-     (list (elem #:style leibniz-style (format " ∀ ~a : " (terms:var-name var)))
-           (format-sort (terms:var-sort var))))))
+  (define pattern-elem (format-term signature (equations:rule-pattern rule)))
+  (define replacement-elem (format-term signature (equations:rule-replacement rule)))
+  (define var-elems (for/list ([var (in-set vars)])
+                      (elem #:style leibniz-style
+                            (linebreak ) (hspace 2)
+                            "∀ "
+                            (italic (symbol->string (terms:var-name var)))
+                            " : "
+                            (format-sort (terms:var-sort var)))))
+  (elem #:style leibniz-style
+        pattern-elem
+        " ⇒ "
+        replacement-elem
+        var-elems))
 
-(define (parsed-equation parsed-equation-expr)
-  (nonbreaking (format "~a" parsed-equation-expr)))
+(define (parsed-equation leibniz-doc current-context parsed-equation-expr loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (contexts:context-signature context))
+  (define equation (make-equation leibniz-doc current-context parsed-equation-expr loc))
+  (define vars (set-union (terms:term.vars (equations:equation-left equation))
+                          (terms:term.vars (equations:equation-right equation))))
+  (define left-elem (format-term signature (equations:equation-left equation)))
+  (define right-elem (format-term signature (equations:equation-right equation)))
+  (define var-elems (for/list ([var (in-set vars)])
+                      (elem #:style leibniz-style
+                            (linebreak ) (hspace 2)
+                            "∀ "
+                            (italic (symbol->string (terms:var-name var)))
+                            " : "
+                            (format-sort (terms:var-sort var)))))
+  (elem #:style leibniz-style
+        left-elem
+        " = "
+        right-elem
+        var-elems))
 
 ; Raise errors when Leibniz code is used outside of a context
 
