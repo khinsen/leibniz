@@ -102,13 +102,23 @@
              (not (symbol? label)))
     (error (format "Rule label not a symbol: ~s" label))))
 
+(define (is-boolean? sort-graph sort)
+  ; Accept both boolean and Boolean until spelling rules have stabilized...
+  (cond
+    [(has-sort? sort-graph 'Boolean)
+     (conforms-to? sort-graph sort 'Boolean)]
+    [(has-sort? sort-graph 'boolean)
+     (conforms-to? sort-graph sort 'boolean)]
+    [else
+     (error "signature has no boolean sort")]))
+
 (define (check-condition signature condition allowed-vars)
   (when condition
     (define sort-graph (signature-sort-graph signature))
     (define condition-vars (term.vars condition))
     (check-term signature condition)
-    (unless (conforms-to? sort-graph (term.sort condition) 'Boolean)
-      (error (format "Condition ~s not of sort Boolean" condition)))
+    (unless (is-boolean? sort-graph (term.sort condition))
+      (error (format "Condition ~s not boolean" condition)))
     (unless (and (lookup-op signature 'true empty)
                  (lookup-op signature 'false empty))
       (error "signature does not contain true and false"))
