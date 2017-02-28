@@ -39,7 +39,7 @@
       [rest <-  (many/p letter-or-symbol-or-digit/p)]
       (pure (string->symbol (apply string (append (list first) rest))))))
 
-(define reserved-identifiers (set '⊆ '→ '⇒ '= '∀))
+(define reserved-identifiers (set '⊆ '→ '⇒ '= '∀ 'if))
 
 (define non-reserved-identifier/p
   (guard/p identifier/p (λ (x) (not (set-member? reserved-identifiers x)))
@@ -282,10 +282,14 @@
       [sort <- sort-identifier/p]
       (pure `(var ,name ,sort))))
 
-(define var-after-space/p
+(define condition/p
+  (do (string/p "if")
+      (many+/p space/p)
+      term/p))
+
+(define clause/p
   (do (many+/p space/p)
-      [v <- var/p]
-      (pure v)))
+      (or/p var/p condition/p)))
 
 (define rule/p
   (do [pattern <- term/p]
@@ -293,9 +297,9 @@
       (char/p #\⇒)
       (many+/p space/p)
       [replacement <- term/p]
-      [vars <- (many/p var-after-space/p)]
+      [clauses <- (many/p clause/p)]
       eof/p
-      (pure `(rule ,pattern ,replacement ,vars))))
+      (pure `(rule ,pattern ,replacement ,clauses))))
 
 (define equation/p
   (do [left <- term/p]
@@ -303,21 +307,43 @@
       (char/p #\=)
       (many+/p space/p)
       [right <- term/p]
-      [vars <- (many/p var-after-space/p)]
+      [clauses <- (many/p clause/p)]
       eof/p
-      (pure `(equation ,left ,right ,vars))))
+      (pure `(equation ,left ,right ,clauses))))
 
 (module+ test
   (check-parse var/p "∀ foo:bar" '(var foo bar))
   (check-parse var/p "∀ foo : bar" '(var foo bar))
   (check-parse var/p "∀ foo :bar" '(var foo bar))
   (check-parse var/p "∀ foo: bar" '(var foo bar))
-  (check-parse rule/p "a ⇒ b" '(rule (term a ()) (term b ()) ()))
-  (check-parse rule/p "a ⇒ b ∀ foo:bar" '(rule (term a ()) (term b ()) ((var foo bar))))
+  (check-parse rule/p "a ⇒ b"
+               '(rule (term a ())
+                      (term b ())
+                      ()))
+  (check-parse rule/p "a ⇒ b ∀ foo:bar"
+               '(rule (term a ())
+                      (term b ())
+                      ((var foo bar))))
   (check-parse rule/p "a ⇒ b ∀ foo:bar ∀ bar:baz"
-               '(rule (term a ()) (term b ()) ((var foo bar) (var bar baz))))
+               '(rule (term a ())
+                      (term b ())
+                      ((var foo bar) (var bar baz))))
+  (check-parse rule/p "a ⇒ b ∀ foo:bar if a > 0"
+               '(rule (term a ())
+                      (term b ())
+                      ((var foo bar) (term _> ((term a ()) (integer 0))))))
+  (check-parse rule/p "a ⇒ b if a > 0"
+               '(rule (term a ())
+                      (term b ())
+                      ((term _> ((term a ()) (integer 0))))))
   (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz"
-               '(equation (term a ()) (term b ()) ((var foo bar) (var bar baz)))))
+               '(equation (term a ())
+                          (term b ())
+                          ((var foo bar) (var bar baz))))
+  (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz if test(a)"
+               '(equation (term a ())
+                          (term b ())
+                          ((var foo bar) (var bar baz) (term test ((term a ())))))))
 
 
 ; Utility function for parsing input from scribble, which may consist of multiple

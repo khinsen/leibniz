@@ -15,10 +15,26 @@
 (module+ test
   (require rackunit)
 
-  (contexts:define-context test-context
+  (contexts:define-context test-context1
     (sort foo)
     (sort bar)
-    (subsort foo bar)))
+    (subsort foo bar))
+  
+  (contexts:define-context test-context2
+    (sort foo)
+    (sort bar)
+    (sort Boolean)
+    (subsort foo bar)
+    (op a-foo foo)
+    (op (a-foo bar) foo)
+    (op (a-bar foo) bar)
+    (op true Boolean)
+    (op false Boolean)
+    (op (_∧ Boolean Boolean) Boolean)
+    (op (a-test foo) Boolean)
+    (op (another-test foo) Boolean)
+    (=> #:var (X foo) (a-foo X) a-foo #:if (_∧ (a-test X) (another-test X)))
+    ))
 
 ; Re-raise exceptions with the source location information from the document
 
@@ -68,11 +84,11 @@
       (with-handlers ([exn:fail? (re-raise-exn loc)])
         (match (car decl/loc)
           [(list 'prefix-op op args rsort)
-           (operators:add-op sig op args rsort #:meta (cons 'prefix-op loc))]
+           (operators:add-op sig op args rsort #:meta loc)]
           [(list 'infix-op op args rsort)
-           (operators:add-op sig op args rsort #:meta (cons 'infix-op loc))]
+           (operators:add-op sig op args rsort #:meta loc)]
           [(list 'special-op op args rsort)
-           (operators:add-op sig op args rsort #:meta (cons 'special-op loc))]
+           (operators:add-op sig op args rsort #:meta loc)]
           [_ sig]))))
   (define non-regular (operators:non-regular-op-example signature))
   (when non-regular
@@ -94,16 +110,19 @@
                  [(list 'rational r) r])])
     fn))
 
-(define (make-varset* signature vars)
+(define (make-varset* signature clauses)
   (define sorts (operators:signature-sort-graph signature))
   (for/fold ([vs (terms:empty-varset sorts)])
-            ([v vars])
-    (match v
+            ([c clauses])
+    (match c
       [(list 'var name sort)
-       (terms:add-var vs name sort)])))
+       (terms:add-var vs name sort)]
+      [_ vs])))
 
 (define (make-pattern* signature varset)
   (letrec ([fn (match-lambda
+                 [#f
+                  #f]
                  [(list 'term name '())
                   (terms:make-var-or-term signature varset name)]
                  [(list 'term op args)
@@ -112,13 +131,24 @@
                  [(list 'rational r) r])])
     fn))
 
+(define (make-condition* clauses)
+  (for/fold ([condition #f])
+              ([c clauses])
+      (match c
+        [(list 'var name sort)
+         condition]
+        [term
+         (if condition
+             (list 'term '_∧ (list condition term))
+             term)])))
+
 (define (make-rule* signature rule-expr)
   (match rule-expr
-    [(list 'rule pattern replacement vars)
-     (let* ([varset (make-varset* signature vars)]
+    [(list 'rule pattern replacement clauses)
+     (let* ([varset (make-varset* signature clauses)]
             [mp (make-pattern* signature varset)])
        (equations:make-rule signature (mp pattern)
-                            #f
+                            (mp (make-condition* clauses))
                             (mp replacement)
                             #f #t))]
     [_ #f]))
@@ -138,12 +168,12 @@
 
 (define (make-equation* signature equation-expr)
   (match equation-expr
-    [(list 'equation left right vars)
-     (let* ([varset (make-varset* signature vars)]
+    [(list 'equation left right clauses)
+     (let* ([varset (make-varset* signature clauses)]
             [mp (make-pattern* signature varset)])
        (equations:make-equation signature
                                 (mp left)
-                                #f
+                                (mp (make-condition* clauses))
                                 (mp right)
                                 #f))]
     [_ #f]))
@@ -204,12 +234,12 @@
                                        (cons '(sort bar) #f)
                                        (cons '(subsort foo bar) #f)))
                     (get-context "test"))
-                test-context)
+                test-context1)
   (check-equal? (~> empty-document
                     (add-context "test" empty
                                  (list (cons '(subsort foo bar) #f)))
                     (get-context "test"))
-                test-context)
+                test-context1)
   (check-equal? (~> empty-document
                     (add-context "test" empty
                                  (list (cons '(sort foo) #f)
@@ -219,11 +249,33 @@
                                        (cons '(subsort foo bar) #f)
                                        (cons '(sort foo) #f)))
                     (get-context "test"))
-                test-context)
+                test-context1)
+
   (check-equal? (~> empty-document
                     (add-context "test" empty
                                  (list (cons '(subsort foo bar) #f)
                                        (cons '(prefix-op a-foo () foo) #f)))
                     (make-term "test" '(term a-foo ()) #f)
                     (terms:term->string))
-                "foo:a-foo"))
+                "foo:a-foo")
+
+  (check-equal? (~> empty-document
+                    (add-context "test" empty
+                                 (list (cons '(subsort foo bar) #f)
+                                       (cons '(sort Boolean) #f)
+                                       (cons '(prefix-op a-foo () foo) #f)
+                                       (cons '(prefix-op a-foo (bar) foo) #f)
+                                       (cons '(prefix-op a-bar (foo) bar) #f)
+                                       (cons '(prefix-op true () Boolean) #f)
+                                       (cons '(prefix-op false () Boolean) #f)
+                                       (cons '(prefix-op _∧ (Boolean Boolean) Boolean) #f)
+                                       (cons '(prefix-op a-test (foo) Boolean) #f)
+                                       (cons '(prefix-op another-test (foo) Boolean) #f)
+                                       (cons '(rule (term a-foo ((term X ())))
+                                                    (term a-foo ())
+                                                    ((var X foo)
+                                                     (term a-test ((term X ())))
+                                                     (term another-test ((term X ()))))) #f)
+                                       ))
+                    (get-context "test"))
+                test-context2))

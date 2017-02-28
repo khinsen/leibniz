@@ -232,6 +232,7 @@
   (define signature (contexts:context-signature context))
   (define rule (make-rule leibniz-doc current-context parsed-rule-expr loc))
   (define vars (terms:term.vars (equations:rule-pattern rule)))
+  (define cond (equations:rule-condition rule))
   (define pattern-elem (format-term signature (equations:rule-pattern rule)))
   (define replacement-elem (format-term signature (equations:rule-replacement rule)))
   (define var-elems (for/list ([var (in-set vars)])
@@ -241,11 +242,19 @@
                             (italic (symbol->string (terms:var-name var)))
                             " : "
                             (format-sort (terms:var-sort var)))))
+  (define cond-elem
+    (if cond
+        (elem #:style leibniz-style
+              (linebreak) (hspace 2)
+              "if "
+              (format-term signature cond))
+        ""))
   (elem #:style leibniz-style
         pattern-elem
         " ⇒ "
         replacement-elem
-        var-elems))
+        var-elems
+        cond-elem))
 
 (define (parsed-equation leibniz-doc current-context parsed-equation-expr loc)
   (define context (get-context leibniz-doc current-context))
@@ -253,6 +262,7 @@
   (define equation (make-equation leibniz-doc current-context parsed-equation-expr loc))
   (define vars (set-union (terms:term.vars (equations:equation-left equation))
                           (terms:term.vars (equations:equation-right equation))))
+  (define cond (equations:equation-condition equation))
   (define left-elem (format-term signature (equations:equation-left equation)))
   (define right-elem (format-term signature (equations:equation-right equation)))
   (define var-elems (for/list ([var (in-set vars)])
@@ -262,11 +272,19 @@
                             (italic (symbol->string (terms:var-name var)))
                             " : "
                             (format-sort (terms:var-sort var)))))
+  (define cond-elem
+    (if cond
+        (elem #:style leibniz-style
+              (linebreak) (hspace 2)
+              "if "
+              (format-term signature cond))
+        ""))
   (elem #:style leibniz-style
         left-elem
         " = "
         right-elem
-        var-elems))
+        var-elems
+        cond-elem))
 
 ; Raise errors when Leibniz code is used outside of a context
 
