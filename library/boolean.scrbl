@@ -22,7 +22,17 @@ The following operators are defined on terms of sort @sort{boolean}:
                 @list["Or:"       @op{boolean ∨ boolean : boolean}]
                 @list["Xor:"      @op{boolean ⊻ boolean : boolean}] ]]
 
-@subsection{Simplifiction rules}
+@subsection{Rewrite rules}
+
+@subsubsection{Eliminate Negation and Or}
+
+Negation is replaced by Xor with @term{true}:
+  @inset{@rule{¬(X) ⇒ true ⊻ X ∀ X:boolean}}
+
+Or is replaced by Xor and And:
+  @inset{@rule{X ∨ Y ⇒ X ⊻ Y ⊻ X ∧ Y ∀ X:boolean  ∀ Y:boolean}}
+
+@subsubsection{Simplify And relations}
 
 And is @term{false} if one of its arguments is @term{false}:
   @inset{@rule{X ∧ false ⇒ false ∀ X:boolean}
@@ -32,23 +42,25 @@ If one argument of And is @term{true}, the result is the other argument:
   @inset{@rule{X ∧ true ⇒ X ∀ X:boolean}
          @rule{true ∧ X ⇒ X ∀ X:boolean}}
 
-If the arguments to And are equal to each other, they are also equal to the result:
+If the two arguments to And are equal, they are also equal to the result:
   @inset{@rule{X ∧ X ⇒ X ∀ X:boolean}}
+
+@subsubsection{Simplify Xor relations}
 
 Xor with @term{false} leaves truth values unchanged:
   @inset{@rule{X ⊻ false ⇒ X ∀ X:boolean}
          @rule{false ⊻ X ⇒ X ∀ X:boolean}}
 
-If the arguments to Xor are equal, the result is @term{false}:
+If the two arguments to Xor are equal, the result is @term{false}:
   @inset{@rule{X ⊻ X ⇒ false ∀ X:boolean}}
 
-Negation is replaced by Xor with @term{true}:
-  @inset{@rule{¬(X) ⇒ true ⊻ X ∀ X:boolean}}
+@subsubsection{Standardize combinations of Xor and And}
 
-Or is replaced by Xor and And:
-  @inset{@rule{X ∨ Y ⇒ X ⊻ Y ⊻ X ∧ Y ∀ X:boolean  ∀ Y:boolean}}
-
-The above set of rules must be complemented by one more rule to cover all situations:
+The above rules will reduce any boolean expression to a combination of Xor and And
+operations that allow no further simplification. However, it is still possible that
+logically equal expressions are rewritten into distinct syntactical forms, making it
+difficult to verify that they are equal. The following rule standardizes results
+by replacing Xor inside And by And inside Xor:
   @inset{@rule{X ∧ Y ⊻ Z ⇒ (X ∧ Y) ⊻ X ∧ Z
                ∀ X:boolean  ∀ Y:boolean   ∀ Z:boolean}}
 
