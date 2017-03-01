@@ -182,7 +182,7 @@
             " : "
             (format-sort result-sort))])))
 
-(define (term->string context term)
+(define (term->string term)
   (let ([o (open-output-string)])
     (terms:display-term term o)
     (get-output-string o)))
