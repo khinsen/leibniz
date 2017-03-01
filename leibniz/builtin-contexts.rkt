@@ -31,8 +31,8 @@
        (add-rule
         (make-rule truth-signature
                    (make-term truth-signature
-                              '== (list (make-uvar truth-sorts 'X)
-                                        (make-uvar truth-sorts 'Y)))
+                              '_== (list (make-uvar truth-sorts 'X)
+                                         (make-uvar truth-sorts 'Y)))
                    #f
                    (λ (signature pattern condition substitution)
                      (let ((x (substitution-value substitution 'X))

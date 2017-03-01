@@ -446,7 +446,7 @@
      ; A somewhat hacky special case: if the signature includes the
      ; *truth* builtin, it includes == for equality of arbitrary terms.
      (and (set-member? builtins '*truth*)
-          (equal? symbol '==)
+          (equal? symbol '_==)
           (= (length arity) 2)
           '((#f #f) boolean #f))))
 
