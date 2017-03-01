@@ -197,7 +197,7 @@
 
 (define rational/p
   (do [num <- integer/p]
-      (or/p (do (char/p #\⁄) ; Code point 2044 FRACTION SLASH
+      (or/p (do (or/p (char/p #\/) (char/p #\⁄)) ; Code point 2044 FRACTION SLASH
                 [den <- (guard/p nn-integer/p (λ (n) (> n 0)))]
                 (pure (list 'rational (/ (second num) den))))
             (pure num))))
@@ -213,7 +213,8 @@
   (check-parse rational/p "-0" '(integer 0))
   (check-parse rational/p "123" '(integer 123))
   (check-parse rational/p "-123" '(integer -123))
-  (check-parse rational/p "2⁄3" '(rational 2/3))
+  (check-parse rational/p "2⁄3" '(rational 2/3)) ; fraction slash
+  (check-parse rational/p "2/3" '(rational 2/3)) ; standard slash
   (check-parse rational/p "-2⁄3" '(rational -2/3))
   (check-parse-failure rational/p "2⁄0"))
 
