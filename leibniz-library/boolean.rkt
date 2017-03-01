@@ -3,15 +3,11 @@
 @title{Boolean algebra}
 @author{Konrad Hinsen}
 
+@import["builtins" leibniz-library/builtins]
+
 Adapted from the @hyperlink["http://maude.cs.uiuc.edu/maude1/manual/maude-manual-html/maude-manual_16.html"]{Maude manual}.
 
-@context["truth"]{
-@section{Truth values}
-
-The truth values are @op{true : boolean} and @op{false : boolean}.
-}
-
-@context["boolean" #:use "truth"]{
+@context["boolean" #:use "builtins/truth"]{
 @section{Logical operations}
 
 The following operators are defined on terms of sort @sort{boolean}:
