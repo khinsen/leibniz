@@ -2,6 +2,7 @@
 
 (provide (all-from-out scribble/doclang
                        scribble/base)
+         import
          context
          parsed-declaration parsed-term parsed-rule parsed-equation
          sort op term rule equation
@@ -13,6 +14,7 @@
          scribble/core
          scribble/html-properties
          (for-syntax syntax/parse
+                     racket/syntax
                      racket/list
                      "./lang/parser.rkt"
                      megaparsack (except-in megaparsack/text integer/p)
@@ -103,6 +105,17 @@
                 (let ([leibniz-doc #,leibniz-ref]
                       [current-context name])
                   (list body.expansion ...)))])))
+
+; Import library modules
+
+(define-syntax (import stx)
+  (syntax-parse stx
+    [(_ name:str source:expr)
+     (with-syntax ([library-id (format-id #'name "library/~a" (syntax-e #'name))]
+                   [leibniz-id (datum->syntax #'name 'leibniz)])
+       #'(begin (require (only-in source [leibniz-id library-id]))
+                (set! leibniz-id
+                      (add-library leibniz-id name library-id))))]))
 
 ; Formatting
 

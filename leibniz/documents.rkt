@@ -1,6 +1,7 @@
 #lang racket
 
 (provide empty-document
+         add-library add-builtin-context
          add-context get-context
          make-term make-rule make-equation)
 
@@ -182,8 +183,15 @@
 
 (define-class document
 
-  (field contexts)
+  (field contexts library)
   ; contexts: a hash mapping context names (strings) to contexts
+  ; library: a hash mapping document names to documents
+
+  (define (add-library name library-document)
+    (document contexts (hash-set library name library-document)))
+
+  (define (add-builtin-context name context)
+    (document (hash-set contexts name context) library))
 
   (define (add-context name includes decls)
     (define included-contexts
@@ -199,12 +207,22 @@
                                 (terms:empty-varset sorts)
                                 rules
                                 equations:empty-equationset))
-    (document (hash-set contexts name context)))
+    (document (hash-set contexts name context) library))
 
   (define (get-context name)
-    (unless (hash-has-key? contexts name)
-      (error (format "no context named ~a" name)))
-    (hash-ref contexts name))
+    (define elements (map string-trim (string-split name "/")))
+    (case (length elements)
+      [(1)
+       (unless (hash-has-key? contexts (first elements))
+         (error (format "no context named ~a" name)))
+       (hash-ref contexts (first elements))]
+      [(2)
+       (unless (hash-has-key? library (first elements))
+         (error (format "no library named ~a" (first elements))))
+       (define library-doc (hash-ref library (first elements)))
+       (send library-doc get-context (second elements))]
+      [else
+       (error (format "illegal context specification ~a" name))]))
 
   (define (make-term context-name term-expr loc)
     (define context (get-context context-name))
@@ -225,7 +243,7 @@
       (make-equation* signature equation-expr))))
 
 
-(define empty-document (document (hash)))
+(define empty-document (document (hash) (hash)))
 
 (module+ test
   (check-equal? (~> empty-document
