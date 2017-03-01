@@ -31,16 +31,15 @@
 ;     are converted by adding an int->float conversion on the replacement term.
 
 (define (real->IEEE-binary32 context)
-  (real->float context 'IEEE-binary32 'Integer->IEEE-binary32))
+  (real->float context 'IEEE-binary32 'ℤ->IEEE-binary32))
 
 (define (real->IEEE-binary64 context)
-  (real->float context 'IEEE-binary64 'Integer->IEEE-binary64))
+  (real->float context 'IEEE-binary64 'ℤ->IEEE-binary64))
 
 (define (real->float context float-sort from-integer)
 
-  (define real-sorts (set 'Real 'NonZeroReal 'PositiveReal 'NonNegativeReal
-                          'Rational 'NonZeroRational 'PositiveRational
-                          'NonNegativeRational))
+  (define real-sorts (set 'ℝ 'ℝ\\0 'ℝ+ 'ℝ+0
+                          'ℚ 'ℚ\\0 'ℚ+ 'ℚ+0))
   (define (translate-sort sort)
     (if (set-member? real-sorts sort)
         float-sort
@@ -115,7 +114,7 @@
     (define t-replacement (translate-term (rule-replacement rule)))
     (define t-replacement-conversion
       (if (and (conforms-to? sorts (term.sort t-pattern) (kind sorts float-sort))
-               (conforms-to? sorts (term.sort t-replacement) 'Integer))
+               (conforms-to? sorts (term.sort t-replacement) 'ℤ))
           (make-term signature from-integer (list t-replacement))
           t-replacement))
     (make-rule signature
@@ -159,21 +158,21 @@
   ; of X with tolerance ε.
   (define-context heron
     (include real-numbers)
-    (op (heron NonNegativeReal PositiveReal NonNegativeReal) NonNegativeReal)
-    (op (heron NonNegativeReal PositiveReal) NonNegativeReal)
+    (op (heron ℝ+0 ℝ+ ℝ+0) ℝ+0)
+    (op (heron ℝ+0 ℝ+) ℝ+0)
     ; If no starting guess is given, start from 1.
-    (=> #:vars ([X NonNegativeReal] [ε PositiveReal])
+    (=> #:vars ([X ℝ+0] [ε ℝ+])
         (heron X ε)
         (heron X ε 1))
     ; If the current approximation is good enough, stop.
-    (=> #:vars ([X NonNegativeReal] [ε PositiveReal] [≅√X NonNegativeReal])
+    (=> #:vars ([X ℝ+0] [ε ℝ+] [≅√X ℝ+0])
         (heron X ε ≅√X)
         ≅√X
-        #:if (< (abs (- X (* ≅√X ≅√X))) ε))
+        #:if (_< (abs (_- X (_× ≅√X ≅√X))) ε))
     ; One more iteration.
-    (=> #:vars ([X NonNegativeReal] [ε PositiveReal] [≅√X NonNegativeReal])
+    (=> #:vars ([X ℝ+0] [ε ℝ+] [≅√X ℝ+0])
         (heron X ε ≅√X)
-        (heron X ε (* 1/2 (+ ≅√X (/ X ≅√X))))))
+        (heron X ε (_× 1/2 (_+ ≅√X (_÷ X ≅√X))))))
 
   (with-context heron
     (check-equal? (RT (heron 2 1/2)) (T 3/2))

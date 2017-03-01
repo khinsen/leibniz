@@ -108,7 +108,7 @@
     (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)]
    [symbol?
-    (define (term.sort x) 'Symbol)
+    (define (term.sort x) 'symbol)
     (define (term.builtin-type x) '*symbol*)
     (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
@@ -118,7 +118,7 @@
     (define term.match non-pattern-match)
     (define term.substitute non-pattern-substitute)]
    [string?
-    (define (term.sort x) 'String)
+    (define (term.sort x) 'string)
     (define (term.builtin-type x) '*string*)
     (define term.key term.builtin-type)
     (define (term.has-vars? x) #f)
@@ -137,11 +137,11 @@
    (define term.substitute non-pattern-substitute)])
 
 (module+ test
-  (check-equal? (term.sort 0) 'Zero)
-  (check-equal? (term.sort 1) 'NonZeroNatural)
-  (check-equal? (term.sort -1) 'NonZeroInteger)
-  (check-equal? (term.sort 1/2) 'PositiveRational)
-  (check-equal? (term.sort -1/2) 'NonZeroRational)
+  (check-equal? (term.sort 0) 'zero)
+  (check-equal? (term.sort 1) 'ℕ\\0)
+  (check-equal? (term.sort -1) 'ℤ\\0)
+  (check-equal? (term.sort 1/2) 'ℚ+)
+  (check-equal? (term.sort -1/2) 'ℚ\\0)
   (check-equal? (term.builtin-type 0) '*integer*)
   (check-equal? (term.builtin-type 1/2) '*rational*)
   (check-equal? (term.key 0) '*integer*)
@@ -149,13 +149,13 @@
   (check-false (term.has-vars? 1))
   (check-values-equal? (term.op-and-args 1) (values #f #f))
   (check-equal? (term.in-signature 1 a-signature) 1)
-  (check-equal? (term.sort 'foo) 'Symbol)
+  (check-equal? (term.sort 'foo) 'symbol)
   (check-equal? (term.builtin-type 'foo) '*symbol*)
   (check-equal? (term.key 'foo) '*symbol*)
   (check-false (term.has-vars? 'foo))
   (check-values-equal? (term.op-and-args 'foo) (values #f #f))
   (check-equal? (term.in-signature 'foo a-signature) 'foo)
-  (check-equal? (term.sort "foo") 'String)
+  (check-equal? (term.sort "foo") 'string)
   (check-equal? (term.builtin-type "foo") '*string*)
   (check-equal? (term.key "foo") '*string*)
   (check-false (term.has-vars? "foo"))
@@ -312,9 +312,9 @@
       (get-output-string o)))
 
 (module+ test
-  (check-equal? (term->string 2) "NonZeroNatural:2")
-  (check-equal? (term->string 'foo) "Symbol:'foo")
-  (check-equal? (term->string "foo") "String:\"foo\"")
+  (check-equal? (term->string 2) "ℕ\\0:2")
+  (check-equal? (term->string 'foo) "symbol:'foo")
+  (check-equal? (term->string "foo") "string:\"foo\"")
   (check-equal? (term->string (make-term a-signature 'a-B empty))
                 "B:a-B")
   (check-equal? (term->string
@@ -482,10 +482,10 @@
     (~> (empty-varset sorts)
         (add-var 'A-var 'A)
         (add-var 'B-var 'B)
-        (add-var 'Zero-var 'Zero)
-        (add-var 'Integer-var 'Integer)
-        (add-var 'NonZeroInteger-var 'NonZeroInteger)
-        (add-var 'StrangelyNamedVar 'Zero)))
+        (add-var 'Zero-var 'zero)
+        (add-var 'Integer-var 'ℤ)
+        (add-var 'NonZeroInteger-var 'ℤ\\0)
+        (add-var 'StrangelyNamedVar 'zero)))
   (define A-var (make-var a-varset 'A-var))
   (define B-var (make-var a-varset 'B-var))
   (define Zero-var (make-var a-varset 'Zero-var))

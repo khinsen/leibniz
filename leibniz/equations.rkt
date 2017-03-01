@@ -105,8 +105,6 @@
 (define (is-boolean? sort-graph sort)
   ; Accept both boolean and Boolean until spelling rules have stabilized...
   (cond
-    [(has-sort? sort-graph 'Boolean)
-     (conforms-to? sort-graph sort 'Boolean)]
     [(has-sort? sort-graph 'boolean)
      (conforms-to? sort-graph sort 'boolean)]
     [else
@@ -117,7 +115,7 @@
     (define sort-graph (signature-sort-graph signature))
     (define condition-vars (term.vars condition))
     (check-term signature condition)
-    (unless (is-boolean? sort-graph (term.sort condition))
+    (unless (conforms-to? sort-graph (term.sort condition) 'boolean)
       (error (format "Condition ~s not boolean" condition)))
     (unless (and (lookup-op signature 'true empty)
                  (lookup-op signature 'false empty))

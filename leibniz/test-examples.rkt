@@ -31,5 +31,5 @@
   (~> (empty-varset sorts)
       (add-var 'Avar 'A)
       (add-var 'Bvar 'B)
-      (add-var 'IntVar 'Integer)
-      (add-var 'BoolVar 'Boolean)))
+      (add-var 'IntVar 'ℤ)
+      (add-var 'BoolVar 'boolean)))

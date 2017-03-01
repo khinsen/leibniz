@@ -31,12 +31,12 @@
            threading)
 
   (define-context test-context
-    (sort Boolean)
-    (op true Boolean)
-    (op false Boolean)
-    (op (not Boolean) Boolean)
-    (op foo Boolean)
-    (op bar Boolean)
+    (sort boolean)
+    (op true boolean)
+    (op false boolean)
+    (op (not boolean) boolean)
+    (op foo boolean)
+    (op bar boolean)
     (=> (not true) false)
     (=> (not false) true)
     (=> foo (not true) #:if false)
@@ -45,25 +45,25 @@
         foo true))
 
   (define-context test-with-var
-    (sort Boolean)
+    (sort boolean)
     (sort FooBar)
-    (op true Boolean)
-    (op false Boolean)
-    (op (not Boolean) Boolean)
-    (op foo Boolean)
-    (op bar Boolean)
+    (op true boolean)
+    (op false boolean)
+    (op (not boolean) boolean)
+    (op foo boolean)
+    (op bar boolean)
     (op foo-bar FooBar)
-    (var X Boolean)
+    (var X boolean)
     (=> (not true) false)
     (=> (not false) true)
     (=> (not (not X)) X))
 
   (define-context test-with-procedure
-    (sort Boolean)
-    (op true Boolean)
-    (op false Boolean)
-    (op (not Boolean) Boolean)
-    (var X Boolean)
+    (sort boolean)
+    (op true boolean)
+    (op false boolean)
+    (op (not boolean) boolean)
+    (var X boolean)
     (-> (not X) (λ (signature pattern condition substitution)
                   (let ([x (substitution-value substitution 'X)])
                     (define-values (op args) (term.op-and-args x))
@@ -302,7 +302,7 @@
 
 (module+ test
   (with-context test-with-var
-    (define transformation (tr #:var (X Boolean) X (not X)))
+    (define transformation (tr #:var (X boolean) X (not X)))
     (check-equal? (transform test-with-var transformation (T foo))
                   (T (not foo)))
     (check-equal? (transform test-with-var transformation (T X))
@@ -317,12 +317,12 @@
                                       'negated)
                   (eq #:label negated (not foo) (not bar))))
   (with-context test-with-var
-    (define transformation (tr #:vars ([% Boolean] [Y FooBar]) % Y))
+    (define transformation (tr #:vars ([% boolean] [Y FooBar]) % Y))
     (check-exn exn:fail?
                (thunk (transform test-with-var transformation
-                                 (T #:var (Y Boolean) (not Y))))))
+                                 (T #:var (Y boolean) (not Y))))))
   (with-context test-context
-    (define transformation (tr #:var (X Boolean) X (not X)))
+    (define transformation (tr #:var (X boolean) X (not X)))
     (check-equal? (transform-equation test-context transformation
                                       (eq an-equation))
                   (eq false false))))

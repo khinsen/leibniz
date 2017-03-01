@@ -365,8 +365,8 @@
      (op (foo A B) A)
      (var Avar A)
      (var Bvar B)
-     (var IntVar Integer)
-     (var BoolVar Boolean)))
+     (var IntVar ℤ)
+     (var BoolVar boolean)))
 
   (check-equal? (context-sort-graph a-context) sorts)
   (check-equal? (context-signature a-context) a-signature)

@@ -448,7 +448,7 @@
      (and (set-member? builtins '*truth*)
           (equal? symbol '==)
           (= (length arity) 2)
-          '((#f #f) Boolean #f))))
+          '((#f #f) boolean #f))))
 
   (define (lookup-op symbol arity)
     (define rank (lookup-op-meta symbol arity))

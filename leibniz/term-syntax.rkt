@@ -116,8 +116,8 @@
   (check-exn exn:fail? (thunk (term a-signature "foo")))
   (check-equal? (pattern a-signature a-varset Avar)
                 (make-var a-varset 'Avar))
-  (check-equal? (pattern a-signature a-varset #:var (Xvar Integer) Xvar)
-                (make-var (add-vars a-varset (list (cons 'Xvar 'Integer)))
+  (check-equal? (pattern a-signature a-varset #:var (Xvar ℤ) Xvar)
+                (make-var (add-vars a-varset (list (cons 'Xvar 'ℤ)))
                           'Xvar))
   (check-equal? (pattern a-signature a-varset
                          #:vars ([Xvar A] [Yvar B])
