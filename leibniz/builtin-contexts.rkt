@@ -46,10 +46,10 @@
 (module+ test
   (with-context truth
     (chk
-     #:= (RT (== true false)) (T false)
-     #:= (RT (== true true)) (T true)
-     #:= (RT (== false true)) (T false)
-     #:= (RT (== false false)) (T true))))
+     #:= (RT (_== true false)) (T false)
+     #:= (RT (_== true true)) (T true)
+     #:= (RT (_== false true)) (T false)
+     #:= (RT (_== false false)) (T true))))
 
 ;
 ; Boolean algebra
@@ -115,10 +115,10 @@
      #:= (RT (=> true false))   (T false)
      #:= (RT (=> false true))   (T true)
      #:= (RT (=> false false))  (T true)
-     #:= (RT (== true true))    (T true)
-     #:= (RT (== true false))   (T false)
-     #:= (RT (== false true))   (T false)
-     #:= (RT (== false false))  (T true))))
+     #:= (RT (_== true true))    (T true)
+     #:= (RT (_== true false))   (T false)
+     #:= (RT (_== false true))   (T false)
+     #:= (RT (_== false false))  (T true))))
 
 ;
 ; Symbols and strings (to be completed)
@@ -205,23 +205,23 @@
   (-> #:vars ([X ℤ] [Y ℤ])
       (_× X Y) (binary-op integer? *))
 
-  (=> #:vars ([X zero] [Y ℤ\\0])
+  (=> #:vars ([X zero] [Y ℤnz])
       (_div X Y) 0)
   (-> #:vars ([X ℤ])
       (_div X 1) (return-X))
-  (-> #:vars ([X ℤ] [Y ℤ\\0])
+  (-> #:vars ([X ℤ] [Y ℤnz])
       (_div X Y) (binary-op integer? quotient))
 
-  (=> #:vars ([X zero] [Y ℤ\\0])
+  (=> #:vars ([X zero] [Y ℤnz])
       (_rem X Y) 0)
   (=> #:vars ([X ℤ])
       (_rem X 1) 0)
   (-> #:vars ([X ℤ] [Y ℤ])
       (_rem X Y) (binary-op integer? remainder))
 
-  (=> #:vars ([X ℤ\\0] [Y zero])
+  (=> #:vars ([X ℤnz] [Y zero])
       (^ X Y) 1)
-  (=> #:vars ([X ℕ\\0])
+  (=> #:vars ([X ℕnz])
       (^ 0 X) 0)
   (-> #:vars ([X ℤ] [Y ℤ])
       (^ X Y) (binary-op integer? expt-with-fix-for-zero))
@@ -257,13 +257,13 @@
      #:= (RT (_≥ 2 3)) (T false)
      #:= (RT (_≤ 3 3)) (T true)
      #:= (RT (_≥ 3 3)) (T true)
-     #:= (RT (== 3 3)) (T true)
-     #:= (RT (== 3 1)) (T false)))
+     #:= (RT (_== 3 3)) (T true)
+     #:= (RT (_== 3 1)) (T false)))
   (define-context integers+
     (include integers)
     (op an-int ℤ)
-    (op a-nzint ℤ\\0)
-    (op a-nznat ℕ\\0))
+    (op a-nzint ℤnz)
+    (op a-nznat ℕnz))
   (with-context integers+
     (chk
      #:= (RT (_+ 0 an-int)) (T an-int)
@@ -343,14 +343,14 @@
   (-> #:vars ([X ℚ])
       (_× X 1) (return-X))
 
-  (=> #:vars ([X zero] [Y ℚ\\0])
+  (=> #:vars ([X zero] [Y ℚnz])
       (_÷ X Y) 0)
   (-> #:vars ([X ℚ])
       (_÷ X 1) (return-X))
 
-  (=> #:vars ([X ℚ\\0] [Y zero])
+  (=> #:vars ([X ℚnz] [Y zero])
       (^ X Y) 1)
-  (=> #:vars ([X ℕ\\0])
+  (=> #:vars ([X ℕnz])
       (^ 0 X) 0))
 
 (module+ test
@@ -376,13 +376,13 @@
      #:= (RT (_≥ 1/3 1/2)) (T false)
      #:= (RT (_≤ 1/3 1/3)) (T true)
      #:= (RT (_≥ 1/3 1/3)) (T true)
-     #:= (RT (== 1/3 1/3)) (T true)
-     #:= (RT (== 1/3 2/3)) (T false)))
+     #:= (RT (_== 1/3 1/3)) (T true)
+     #:= (RT (_== 1/3 2/3)) (T false)))
   (define-context rational-numbers+
     (include rational-numbers)
     (op a-rat ℚ)
-    (op a-nzrat ℚ\\0)
-    (op a-nznat ℕ\\0))
+    (op a-nzrat ℚnz)
+    (op a-nznat ℕnz))
   (with-context rational-numbers+
     (chk
      #:= (RT (_+ 0 a-rat)) (T a-rat)
@@ -404,41 +404,41 @@
 ; Real numbers
 ;
 ; 'ℝ    real
-; 'ℝ\0  non-zero real
-; 'ℝ+   positive real
-; 'ℝ+0  non-negative real
+; 'ℝnz  non-zero real
+; 'ℝp   positive real
+; 'ℝnn  non-negative real
 ;
 (define-context real-numbers
   (include rationals**)
   (sort ℝ)
   (subsort ℚ ℝ)
-  (sort ℝ\0)
-  (subsort ℝ\0 ℝ)
-  (subsort ℚ\\0 ℝ\0)
-  (sort ℝ+)
-  (subsort ℝ+ ℝ\0)
-  (subsort ℚ+ ℝ+)
-  (sort ℝ+0)
-  (subsort ℝ+0 ℝ)
-  (subsort ℝ+ ℝ+0)
-  (subsort ℚ+0 ℝ+0)
+  (sort ℝnz)
+  (subsort ℝnz ℝ)
+  (subsort ℚnz ℝnz)
+  (sort ℝp)
+  (subsort ℝp ℝnz)
+  (subsort ℚp ℝp)
+  (sort ℝnn)
+  (subsort ℝnn ℝ)
+  (subsort ℝp ℝnn)
+  (subsort ℚnn ℝnn)
   (op (_+ ℝ ℝ) ℝ)
-  (op (_+ ℝ+ ℝ+) ℝ+)
-  (op (_+ ℝ+0 ℝ+0) ℝ+0)
+  (op (_+ ℝp ℝp) ℝp)
+  (op (_+ ℝnn ℝnn) ℝnn)
   (op (_- ℝ ℝ) ℝ)
   (op (_× ℝ ℝ) ℝ)
-  (op (_× ℝ+ ℝ+) ℝ+)
-  (op (_× ℝ+0 ℝ+0) ℝ+0)
-  (op (_÷ ℝ ℝ\0) ℝ)
-  (op (_÷ ℝ\0 ℝ\0) ℝ\0)
-  (op (_÷ ℝ+ ℝ+) ℝ+)
-  (op (_÷ ℝ+0 ℝ+) ℝ+0)
-  (op (^ ℝ+ ℝ\0) ℝ+)
-  (op (^ ℝ\0 ℤ\\0) ℝ\0)
-  (op (abs ℝ) ℝ+0)
-  (op (abs ℝ\0) ℝ+)
-  (op (√ ℝ+0) ℝ+0)
-  (op (√ ℝ+) ℝ+)
+  (op (_× ℝp ℝp) ℝp)
+  (op (_× ℝnn ℝnn) ℝnn)
+  (op (_÷ ℝ ℝnz) ℝ)
+  (op (_÷ ℝnz ℝnz) ℝnz)
+  (op (_÷ ℝp ℝp) ℝp)
+  (op (_÷ ℝnn ℝp) ℝnn)
+  (op (^ ℝp ℝnz) ℝp)
+  (op (^ ℝnz ℤnz) ℝnz)
+  (op (abs ℝ) ℝnn)
+  (op (abs ℝnz) ℝp)
+  (op (√ ℝnn) ℝnn)
+  (op (√ ℝp) ℝp)
   (op (_< ℝ ℝ) boolean)
   (op (_> ℝ ℝ) boolean)
   (op (_≤ ℝ ℝ) boolean)
@@ -461,22 +461,22 @@
   (-> #:vars ([X ℝ])
       (_× X 1) (return-X))
 
-  (=> #:vars ([X zero] [Y ℝ\0])
+  (=> #:vars ([X zero] [Y ℝnz])
       (_÷ X Y) 0)
   (-> #:vars ([X ℝ])
       (_÷ X 1) (return-X))
 
-  (=> #:vars ([X ℝ\0] [Y zero])
+  (=> #:vars ([X ℝnz] [Y zero])
       (^ X Y) 1)
-  (=> #:vars ([X ℝ+])
+  (=> #:vars ([X ℝp])
       (^ 0 X) 0))
 
 (module+ test
   (define-context real-numbers+
     (include real-numbers)
     (op a-real ℝ)
-    (op a-nzreal ℝ\0)
-    (op a-preal ℝ+))
+    (op a-nzreal ℝnz)
+    (op a-preal ℝp))
   (with-context real-numbers+
     (chk
      #:= (RT (_+ 0 a-real)) (T a-real)
@@ -577,8 +577,8 @@
      #:= (RT (_≥ #x1l0 #x2l0)) (T false)
      #:= (RT (_≤ #x1l0 #x1l0)) (T true)
      #:= (RT (_≥ #x1l0 #x1l0)) (T true)
-     #:= (RT (== #x1l0 #x1l0)) (T true)
-     #:= (RT (== #x1l0 #x2l0)) (T false))))
+     #:= (RT (_== #x1l0 #x1l0)) (T true)
+     #:= (RT (_== #x1l0 #x2l0)) (T false))))
 
 (define-context IEEE-floating-point-with-conversion
   (include IEEE-floating-point)

@@ -138,10 +138,10 @@
 
 (module+ test
   (check-equal? (term.sort 0) 'zero)
-  (check-equal? (term.sort 1) 'ℕ\\0)
-  (check-equal? (term.sort -1) 'ℤ\\0)
-  (check-equal? (term.sort 1/2) 'ℚ+)
-  (check-equal? (term.sort -1/2) 'ℚ\\0)
+  (check-equal? (term.sort 1) 'ℕnz)
+  (check-equal? (term.sort -1) 'ℤnz)
+  (check-equal? (term.sort 1/2) 'ℚp)
+  (check-equal? (term.sort -1/2) 'ℚnz)
   (check-equal? (term.builtin-type 0) '*integer*)
   (check-equal? (term.builtin-type 1/2) '*rational*)
   (check-equal? (term.key 0) '*integer*)
@@ -312,7 +312,7 @@
       (get-output-string o)))
 
 (module+ test
-  (check-equal? (term->string 2) "ℕ\\0:2")
+  (check-equal? (term->string 2) "ℕnz:2")
   (check-equal? (term->string 'foo) "symbol:'foo")
   (check-equal? (term->string "foo") "string:\"foo\"")
   (check-equal? (term->string (make-term a-signature 'a-B empty))
@@ -484,7 +484,7 @@
         (add-var 'B-var 'B)
         (add-var 'Zero-var 'zero)
         (add-var 'Integer-var 'ℤ)
-        (add-var 'NonZeroInteger-var 'ℤ\\0)
+        (add-var 'NonZeroInteger-var 'ℤnz)
         (add-var 'StrangelyNamedVar 'zero)))
   (define A-var (make-var a-varset 'A-var))
   (define B-var (make-var a-varset 'B-var))
@@ -626,9 +626,9 @@
   (define Uvar-Y (make-uvar truth-sorts 'Y))
   (define true-term (make-term truth-signature 'true empty))
   (define an-equality-pattern (make-term truth-signature
-                                         '== (list Uvar-X Uvar-Y)))
+                                         '_== (list Uvar-X Uvar-Y)))
   (define an-equality-term (make-term truth-signature
-                                      '== (list true-term true-term)))
+                                      '_== (list true-term true-term)))
   (check-single-match truth-signature an-equality-pattern an-equality-term
                       (merge-substitutions
                        (substitution 'X true-term)

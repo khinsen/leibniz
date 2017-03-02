@@ -38,8 +38,8 @@
 
 (define (real->float context float-sort from-integer)
 
-  (define real-sorts (set 'ℝ 'ℝ\\0 'ℝ+ 'ℝ+0
-                          'ℚ 'ℚ\\0 'ℚ+ 'ℚ+0))
+  (define real-sorts (set 'ℝ 'ℝnz 'ℝp 'ℝnn
+                          'ℚ 'ℚnz 'ℚp 'ℚnn))
   (define (translate-sort sort)
     (if (set-member? real-sorts sort)
         float-sort
@@ -158,19 +158,19 @@
   ; of X with tolerance ε.
   (define-context heron
     (include real-numbers)
-    (op (heron ℝ+0 ℝ+ ℝ+0) ℝ+0)
-    (op (heron ℝ+0 ℝ+) ℝ+0)
+    (op (heron ℝnn ℝp ℝnn) ℝnn)
+    (op (heron ℝnn ℝp) ℝnn)
     ; If no starting guess is given, start from 1.
-    (=> #:vars ([X ℝ+0] [ε ℝ+])
+    (=> #:vars ([X ℝnn] [ε ℝp])
         (heron X ε)
         (heron X ε 1))
     ; If the current approximation is good enough, stop.
-    (=> #:vars ([X ℝ+0] [ε ℝ+] [≅√X ℝ+0])
+    (=> #:vars ([X ℝnn] [ε ℝp] [≅√X ℝnn])
         (heron X ε ≅√X)
         ≅√X
         #:if (_< (abs (_- X (_× ≅√X ≅√X))) ε))
     ; One more iteration.
-    (=> #:vars ([X ℝ+0] [ε ℝ+] [≅√X ℝ+0])
+    (=> #:vars ([X ℝnn] [ε ℝp] [≅√X ℝnn])
         (heron X ε ≅√X)
         (heron X ε (_× 1/2 (_+ ≅√X (_÷ X ≅√X))))))
 
