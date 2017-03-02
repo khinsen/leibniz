@@ -5,8 +5,6 @@
 
 @import["builtins" leibniz-library/builtins]
 
-Adapted from the @hyperlink["http://maude.cs.uiuc.edu/maude1/manual/maude-manual-html/maude-manual_16.html"]{Maude manual}.
-
 @context["boolean" #:use "builtins/truth"]{
 @section{Logical operations}
 
@@ -59,5 +57,30 @@ difficult to verify that they are equal. The following rule standardizes results
 by replacing Xor inside And by And inside Xor:
   @inset{@rule{X ∧ Y ⊻ Z ⇒ (X ∧ Y) ⊻ X ∧ Z
                ∀ X:boolean  ∀ Y:boolean   ∀ Z:boolean}}
+
+
+@subsection{Tests}
+
+Truth table for Not:
+  @inset{@test{¬(false) ⇒ true}
+         @test{¬(true) ⇒ false}}
+
+Truth table for And:
+  @inset{@test{false ∧ false ⇒ false}
+         @test{false ∧ true ⇒ false}
+         @test{true ∧ false ⇒ false}
+         @test{true ∧ true ⇒ true}}
+
+Truth table for Or:
+  @inset{@test{false ∨ false ⇒ false}
+         @test{false ∨ true ⇒ true}
+         @test{true ∨ false ⇒ true}
+         @test{true ∨ true ⇒ true}}
+
+Truth table for Xor:
+  @inset{@test{false ⊻ false ⇒ false}
+         @test{false ⊻ true ⇒ true}
+         @test{true ⊻ false ⇒ true}
+         @test{true ⊻ true ⇒ false}}
 
 }

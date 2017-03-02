@@ -2,11 +2,12 @@
 
 (provide (all-from-out scribble/doclang
                        scribble/base)
+         empty-document
          import
          context
-         parsed-declaration parsed-term parsed-rule parsed-equation
+         parsed-declaration parsed-term parsed-rule parsed-equation parsed-test
          sort op term rule equation
-         empty-document
+         test
          inset)
 
 (require scribble/doclang
@@ -79,6 +80,12 @@
              #:with expansion #`(parsed-equation leibniz-doc current-context 
                                                  (quote parsed)
                                                  #,(source-loc (first (syntax->list #'(equation-expr ...))))))
+    (pattern ((~literal test) rule-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
+             #:attr decl empty
+             #:with expansion #`(parsed-test leibniz-doc current-context 
+                                             (quote parsed)
+                                             #,(source-loc (first (syntax->list #'(rule-expr ...))))))
     (pattern (element args:arg-or-kw-arg ...)
              #:attr decl (apply append (attribute args.decl))
              #:with expansion
@@ -121,10 +128,10 @@
 
 (define leibniz-css
   (make-css-addition
-   #".Leibniz { background-color: #E8E8FF; }\n.LeibnizSort { background-color: #E0E0FF; }\n"))
+   #".Leibniz { background-color: #E8E8FF; }\n.LeibnizOutput { background-color: #E0FFE0; }\n"))
 
 (define leibniz-style (style "Leibniz" (list leibniz-css)))
-(define sort-style (style "LeibnizSort" (list leibniz-css)))
+(define leibniz-output-style (style "LeibnizOutput" (list leibniz-css)))
 
 (define (format-sort symbol)
   (elem #:style leibniz-style (italic (symbol->string symbol))))
@@ -299,6 +306,23 @@
         var-elems
         cond-elem))
 
+(define (parsed-test leibniz-doc current-context parsed-rule-expr loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (contexts:context-signature context))
+  (define test (make-test leibniz-doc current-context parsed-rule-expr loc))
+  (define success (equal? (second test) (third test)))
+  (list
+   (elem #:style leibniz-style
+         (format-term signature (first test))
+         " ⇒ "
+         (format-term signature (second test)))
+   (nonbreaking (hspace 1))
+   (if success
+       (elem #:style (style "LeibnizOutput" (list leibniz-css (color-property "green")))
+             "✓")
+       (elem #:style leibniz-output-style
+             (list "❌ " (format-term signature (third test)))))))
+
 ; Raise errors when Leibniz code is used outside of a context
 
 (define-syntax (sort stx)
@@ -316,6 +340,8 @@
 (define-syntax (equation stx)
   (raise-syntax-error #f "equation used outside context" stx))
 
+(define-syntax (test stx)
+  (raise-syntax-error #f "test used outside context" stx))
 
 ; Support code for nicer formatting
 

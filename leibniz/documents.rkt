@@ -3,13 +3,15 @@
 (provide empty-document
          add-library add-builtin-context
          add-context get-context
-         make-term make-rule make-equation)
+         make-term make-rule make-equation
+         make-test)
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
          (prefix-in equations: "./equations.rkt")
          (prefix-in contexts: "./contexts.rkt")
+         (prefix-in rewrite: "./rewrite.rkt")
          "./lightweight-class.rkt"
          threading)
 
@@ -179,13 +181,14 @@
                                 #f))]
     [_ #f]))
 
+
 ; Documents track declarations and expressions embedded in a Scribble document
 
 (define-class document
 
   (field contexts library)
-  ; contexts: a hash mapping context names (strings) to contexts
-  ; library: a hash mapping document names to documents
+                                        ; contexts: a hash mapping context names (strings) to contexts
+                                        ; library: a hash mapping document names to documents
 
   (define (add-library name library-document)
     (document contexts (hash-set library name library-document)))
@@ -240,7 +243,20 @@
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (make-equation* signature equation-expr))))
+      (make-equation* signature equation-expr)))
+
+  (define (make-test context-name rule-expr loc)
+    (define context (get-context context-name))
+    (define signature (contexts:context-signature context))
+    (with-handlers ([exn:fail? (re-raise-exn loc)])
+      (match rule-expr
+        [(list 'rule pattern replacement '())
+         (let* ([mt (make-term* signature)]
+                [term (mt pattern)]
+                [expected (mt replacement)]
+                [rterm (rewrite:reduce context term)])
+           (list term expected rterm))]
+        [_ (error "test may not contain rule clauses")]))))
 
 
 (define empty-document (document (hash) (hash)))
@@ -296,4 +312,22 @@
                                                      (term another-test ((term X ()))))) #f)
                                        ))
                     (get-context "test"))
-                test-context2))
+                test-context2)
+
+  (check-true (~> empty-document
+                  (add-context "test" empty
+                               (list (cons '(sort foo) #f)
+                                     (cons '(prefix-op a-foo () foo) #f)
+                                     (cons '(prefix-op a-foo (foo) foo) #f)
+                                     (cons '(rule (term a-foo ((term X ())))
+                                                  (term a-foo ())
+                                                  ((var X foo))) #f)))
+                  (make-test "test" '(rule (term a-foo ((term a-foo ())))
+                                           (term a-foo ())
+                                           ())
+                             #f)
+                  ; check if the last two (out of three) elements are equal
+                  rest
+                  list->set
+                  set-count
+                  (equal? 1))))
