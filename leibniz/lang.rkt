@@ -5,8 +5,9 @@
          empty-document
          import
          context
-         parsed-declaration parsed-term parsed-rule parsed-equation parsed-test
+         parsed-declaration parsed-term parsed-rule parsed-equation parsed-test parsed-comment
          sort op term rule equation
+         comment-sort comment-op
          test
          inset)
 
@@ -80,6 +81,14 @@
              #:with expansion #`(parsed-equation leibniz-doc current-context 
                                                  (quote parsed)
                                                  #,(source-loc (first (syntax->list #'(equation-expr ...))))))
+    (pattern ((~literal comment-sort) sort-decl:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p sort-or-subsort/p) #'(sort-decl ...))
+             #:attr decl empty
+             #:with expansion  #`(parsed-comment (quote parsed)))
+    (pattern ((~literal comment-op) op-decl:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p operator/p) #'(op-decl ...))
+             #:attr decl empty
+             #:with expansion #`(parsed-comment (quote parsed)))
     (pattern ((~literal test) rule-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
              #:attr decl empty
@@ -128,13 +137,14 @@
 
 (define leibniz-css
   (make-css-addition
-   #".Leibniz { background-color: #E8E8FF; }\n.LeibnizOutput { background-color: #E0FFE0; }\n"))
+   #".Leibniz { background-color: #E8E8FF; }\n.LeibnizOutput { background-color: #E0FFE0; }\n.LeibnizComment { background-color: #FFE8E8; }\n"))
 
 (define leibniz-style (style "Leibniz" (list leibniz-css)))
 (define leibniz-output-style (style "LeibnizOutput" (list leibniz-css)))
+(define leibniz-comment-style (style "LeibnizComment" (list leibniz-css)))
 
 (define (format-sort symbol)
-  (elem #:style leibniz-style (italic (symbol->string symbol))))
+  (italic (symbol->string symbol)))
 
 (define (op-symbol-and-type op-symbol)
   (define s (symbol->string op-symbol))
@@ -143,51 +153,50 @@
     [(string-prefix? s "_") (values (substring s 1) 'infix-op)]
     [else (values s 'prefix-op)]))
 
+(define (format-declaration decl)
+  (match decl
+    [(list 'sort sort-symbol)
+     (format-sort sort-symbol)]
+    [(list 'subsort sort-symbol-1 sort-symbol-2)
+     (list (format-sort sort-symbol-1)
+           " ⊆ "   ; MEDIUM MATHEMATICAL SPACE ; SUBSET OF OR EQUAL TO
+           (format-sort sort-symbol-2))]
+    [(list 'prefix-op op-symbol arg-sorts result-sort)
+     (list (symbol->string op-symbol)
+           (if (zero? (length arg-sorts))
+               ""
+               (list "(" (add-between (map format-sort arg-sorts) ", ") ")"))
+           " : "
+           (format-sort result-sort))]
+    [(list 'infix-op op-symbol (list arg-sort-1 arg-sort-2) result-sort)
+     (define-values (op-str _) (op-symbol-and-type op-symbol))
+     (list (format-sort arg-sort-1)
+           " " op-str " "
+           (format-sort arg-sort-2)
+           " : "
+           (format-sort result-sort))]
+    [(list 'special-op '|[]| (list f-arg-sort arg-sorts ... ) result-sort)
+     (list (format-sort f-arg-sort)
+           "["
+           (add-between (map format-sort arg-sorts) ", ")
+           "] : "
+           (format-sort result-sort))]
+    [(list 'special-op '_ (list arg-sort-1 arg-sort-2) result-sort)
+     (list (format-sort arg-sort-1)
+           (subscript (format-sort arg-sort-2))
+           " : "
+           (format-sort result-sort))]
+    [(list 'special-op '^ (list arg-sort-1 arg-sort-2) result-sort)
+     (list (format-sort arg-sort-1)
+           (superscript (format-sort arg-sort-2))
+           " : "
+           (format-sort result-sort))]))
+
 (define (parsed-declaration decl)
-  (nonbreaking
-   (match decl
-     [(list 'sort sort-symbol)
-      (format-sort sort-symbol)]
-     [(list 'subsort sort-symbol-1 sort-symbol-2)
-      (list (format-sort sort-symbol-1)
-            (elem #:style leibniz-style " ⊆ ")
-            ; MEDIUM MATHEMATICAL SPACE ; SUBSET OF OR EQUAL TO
-            (format-sort sort-symbol-2))]
-     [(list 'prefix-op op-symbol arg-sorts result-sort)
-      (elem #:style leibniz-style
-            (symbol->string op-symbol)
-            (if (zero? (length arg-sorts))
-                ""
-                (list "(" (add-between (map format-sort arg-sorts) ", ") ")"))
-            " : "
-            (format-sort result-sort))]
-     [(list 'infix-op op-symbol (list arg-sort-1 arg-sort-2) result-sort)
-      (define-values (op-str _) (op-symbol-and-type op-symbol))
-      (elem #:style leibniz-style
-            (format-sort arg-sort-1)
-            " " op-str " "
-            (format-sort arg-sort-2)
-            " : "
-            (format-sort result-sort))]
-     [(list 'special-op '|[]| (list f-arg-sort arg-sorts ... ) result-sort)
-      (elem #:style leibniz-style
-            (format-sort f-arg-sort)
-            "["
-            (add-between (map format-sort arg-sorts) ", ")
-            "] : "
-            (format-sort result-sort))]
-     [(list 'special-op '_ (list arg-sort-1 arg-sort-2) result-sort)
-      (elem #:style leibniz-style
-            (format-sort arg-sort-1)
-            (subscript (format-sort arg-sort-2))
-            " : "
-            (format-sort result-sort))]
-     [(list 'special-op '^ (list arg-sort-1 arg-sort-2) result-sort)
-      (elem #:style leibniz-style
-            (format-sort arg-sort-1)
-            (superscript (format-sort arg-sort-2))
-            " : "
-            (format-sort result-sort))])))
+  (nonbreaking (elem #:style leibniz-style (format-declaration decl))))
+
+(define (parsed-comment decl)
+  (nonbreaking (elem #:style leibniz-comment-style (format-declaration decl))))
 
 (define (term->string term)
   (let ([o (open-output-string)])
@@ -323,6 +332,7 @@
        (elem #:style leibniz-output-style
              (list "❌ " (format-term signature (third test)))))))
 
+
 ; Raise errors when Leibniz code is used outside of a context
 
 (define-syntax (sort stx)
@@ -339,6 +349,12 @@
 
 (define-syntax (equation stx)
   (raise-syntax-error #f "equation used outside context" stx))
+
+(define-syntax (comment-sort stx)
+  (raise-syntax-error #f "comment-sort used outside context" stx))
+
+(define-syntax (comment-op stx)
+  (raise-syntax-error #f "comment-op used outside context" stx))
 
 (define-syntax (test stx)
   (raise-syntax-error #f "test used outside context" stx))
