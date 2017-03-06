@@ -112,7 +112,7 @@
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
       [(_ name:str include:context-ref ... body:body-item ...)
-       #`(begin (set! #,leibniz-ref (add-context #,leibniz-ref name
+       #`(begin (set! #,leibniz-ref (new-context #,leibniz-ref name
                                                  (list include.ref ...)
                                                  #,(cons #'list (apply append (attribute body.decl)))))
                 (margin-note "Context " (italic name)

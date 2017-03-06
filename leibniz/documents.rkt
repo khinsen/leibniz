@@ -1,8 +1,8 @@
 #lang racket
 
 (provide empty-document
-         add-library add-builtin-context
-         add-context get-context
+         add-library add-context
+         new-context get-context
          make-term make-rule make-equation
          make-test)
 
@@ -36,8 +36,7 @@
     (op (_∧ boolean boolean) boolean)
     (op (a-test foo) boolean)
     (op (another-test foo) boolean)
-    (=> #:var (X foo) (a-foo X) a-foo #:if (_∧ (a-test X) (another-test X)))
-    ))
+    (=> #:var (X foo) (a-foo X) a-foo #:if (_∧ (a-test X) (another-test X)))))
 
 ; Re-raise exceptions with the source location information from the document
 
@@ -193,10 +192,10 @@
   (define (add-library name library-document)
     (document contexts (hash-set library name library-document)))
 
-  (define (add-builtin-context name context)
+  (define (add-context name context)
     (document (hash-set contexts name context) library))
 
-  (define (add-context name includes decls)
+  (define (new-context name includes decls)
     (define included-contexts
       (for/list ([name/loc includes])
         (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
@@ -263,19 +262,19 @@
 
 (module+ test
   (check-equal? (~> empty-document
-                    (add-context "test" empty
+                    (new-context "test" empty
                                  (list (cons '(sort foo) #f)
                                        (cons '(sort bar) #f)
                                        (cons '(subsort foo bar) #f)))
                     (get-context "test"))
                 test-context1)
   (check-equal? (~> empty-document
-                    (add-context "test" empty
+                    (new-context "test" empty
                                  (list (cons '(subsort foo bar) #f)))
                     (get-context "test"))
                 test-context1)
   (check-equal? (~> empty-document
-                    (add-context "test" empty
+                    (new-context "test" empty
                                  (list (cons '(sort foo) #f)
                                        (cons '(sort bar) #f)
                                        (cons '(subsort foo bar) #f)
@@ -286,7 +285,7 @@
                 test-context1)
 
   (check-equal? (~> empty-document
-                    (add-context "test" empty
+                    (new-context "test" empty
                                  (list (cons '(subsort foo bar) #f)
                                        (cons '(prefix-op a-foo () foo) #f)))
                     (make-term "test" '(term a-foo ()) #f)
@@ -294,7 +293,7 @@
                 "foo:a-foo")
 
   (check-equal? (~> empty-document
-                    (add-context "test" empty
+                    (new-context "test" empty
                                  (list (cons '(subsort foo bar) #f)
                                        (cons '(sort boolean) #f)
                                        (cons '(prefix-op a-foo () foo) #f)
@@ -314,8 +313,18 @@
                     (get-context "test"))
                 test-context2)
 
+  (check-exn exn:fail?
+             ; non-regular signature
+             (thunk
+              (~> empty-document
+                  (new-context "test" empty
+                               (list (cons '(subsort A B) #f)
+                                     (cons '(subsort A C) #f)
+                                     (cons '(prefix-op foo (B) B) #f)
+                                     (cons '(prefix-op foo (C) C) #f))))))
+
   (check-true (~> empty-document
-                  (add-context "test" empty
+                  (new-context "test" empty
                                (list (cons '(sort foo) #f)
                                      (cons '(prefix-op a-foo () foo) #f)
                                      (cons '(prefix-op a-foo (foo) foo) #f)

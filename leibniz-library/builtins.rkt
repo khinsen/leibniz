@@ -9,10 +9,10 @@
 ; The builtins document
 ;
 (define leibniz (~> empty-document
-                    (add-builtin-context "truth" truth)
-                    (add-builtin-context "integer" integers)
-                    (add-builtin-context "rational-numbers" rational-numbers)
-                    (add-builtin-context "real-numbers" real-numbers)
-                    (add-builtin-context "IEEE-floating-point" IEEE-floating-point)
-                    (add-builtin-context "IEEE-floating-point-with-conversion"
-                                         IEEE-floating-point-with-conversion)))
+                    (add-context "truth" truth)
+                    (add-context "integer" integers)
+                    (add-context "rational-numbers" rational-numbers)
+                    (add-context "real-numbers" real-numbers)
+                    (add-context "IEEE-floating-point" IEEE-floating-point)
+                    (add-context "IEEE-floating-point-with-conversion"
+                                 IEEE-floating-point-with-conversion)))
