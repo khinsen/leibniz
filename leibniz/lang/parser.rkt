@@ -202,6 +202,28 @@
                 (pure (list 'rational (/ (second num) den))))
             (pure num))))
 
+(define nn-fp/p
+  (do [integer-part <- (many+/p digit/p)]
+      (char/p #\.)
+      [fractional-part <- (many/p digit/p)]
+      [exponent <- (or/p (do (char/p #\e) integer/p)
+                         (pure (list 'integer 0)))]
+      (pure (read (open-input-string
+                   (string-append (apply string (append integer-part (list #\.)
+                                                        fractional-part (list #\e) ))
+                                  (format "~a" (second exponent))))))))
+
+(define floating-point/p
+  (or/p (do (char/p #\-)
+            [v <- nn-fp/p]
+            (pure  (list 'floating-point (- v))))
+        (do [v <- nn-fp/p]
+            (pure (list 'floating-point v)))))
+
+(define number/p
+  (or/p (try/p floating-point/p)
+        rational/p))
+
 (module+ test
   (check-parse integer/p "0" '(integer 0))
   (check-parse integer/p "-0" '(integer 0))
@@ -216,14 +238,26 @@
   (check-parse rational/p "2⁄3" '(rational 2/3)) ; fraction slash
   (check-parse rational/p "2/3" '(rational 2/3)) ; standard slash
   (check-parse rational/p "-2⁄3" '(rational -2/3))
-  (check-parse-failure rational/p "2⁄0"))
+  (check-parse-failure rational/p "2⁄0")
+  (check-parse floating-point/p "2.5" '(floating-point 2.5))
+  (check-parse floating-point/p "-2.5" '(floating-point -2.5))
+  (check-parse floating-point/p "2.5e2" '(floating-point 2.5e2))
+  (check-parse floating-point/p "-2.5e2" '(floating-point -2.5e2))
+  (check-parse floating-point/p "2.5e-2" '(floating-point 2.5e-2))
+  (check-parse floating-point/p "-2.5e-2" '(floating-point -2.5e-2))
+  (check-parse-failure floating-point/p ".5")
+  (check-parse-failure floating-point/p "+1.5")
+  (check-parse number/p "42" '(integer 42))
+  (check-parse number/p "42." '(floating-point 42.))
+  (check-parse number/p "4.2" '(floating-point 4.2))
+  (check-parse number/p "4/2" '(rational 2)))
 
 (define simple-term/p
   (or/p (do (char/p #\()
             [t <- term/p]
             (char/p #\))
             (pure t))
-        rational/p
+        number/p
         (do [op-id <- op-identifier/p]
             (or/p (do (char/p #\()
                       [args <- (many+/p term/p #:sep comma-with-whitespace/p)]

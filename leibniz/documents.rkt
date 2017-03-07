@@ -105,7 +105,8 @@
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
                  [(list 'integer n) n]
-                 [(list 'rational r) r])])
+                 [(list 'rational r) r]
+                 [(list 'floating-point fp) fp])])
     fn))
 
 (define (make-varset* signature clauses)
