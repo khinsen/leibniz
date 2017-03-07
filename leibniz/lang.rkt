@@ -4,7 +4,7 @@
                        scribble/base)
          empty-document
          import
-         context
+         context insert-context
          parsed-declaration parsed-term parsed-rule parsed-equation parsed-test parsed-comment
          sort op term rule equation
          comment-sort comment-op
@@ -24,8 +24,9 @@
                      data/applicative)
          "./condd.rkt"
          "./documents.rkt"
-         (prefix-in terms: "./terms.rkt")
+         (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
+         (prefix-in terms: "./terms.rkt")
          (prefix-in equations: "./equations.rkt")
          (prefix-in contexts: "./contexts.rkt"))
 
@@ -144,7 +145,14 @@
 (define leibniz-comment-style (style "LeibnizComment" (list leibniz-css)))
 
 (define (format-sort symbol)
-  (italic (symbol->string symbol)))
+  (if symbol
+      (italic (symbol->string symbol))
+      (italic "<any>")))
+
+(define (format-subsort-declaration sort1 sort2)
+  (list (format-sort sort1)
+        " ⊆ "   ; MEDIUM MATHEMATICAL SPACE ; SUBSET OF OR EQUAL TO
+        (format-sort sort2)))
 
 (define (op-symbol-and-type op-symbol)
   (define s (symbol->string op-symbol))
@@ -153,44 +161,49 @@
     [(string-prefix? s "_") (values (substring s 1) 'infix-op)]
     [else (values s 'prefix-op)]))
 
-(define (format-declaration decl)
-  (match decl
-    [(list 'sort sort-symbol)
-     (format-sort sort-symbol)]
-    [(list 'subsort sort-symbol-1 sort-symbol-2)
-     (list (format-sort sort-symbol-1)
-           " ⊆ "   ; MEDIUM MATHEMATICAL SPACE ; SUBSET OF OR EQUAL TO
-           (format-sort sort-symbol-2))]
-    [(list 'prefix-op op-symbol arg-sorts result-sort)
-     (list (symbol->string op-symbol)
+(define (format-op-declaration op-symbol arg-sorts result-sort)
+  (define-values (op-str op-type) (op-symbol-and-type op-symbol))
+  (case op-type
+    [(prefix-op)
+     (list op-str
            (if (zero? (length arg-sorts))
                ""
                (list "(" (add-between (map format-sort arg-sorts) ", ") ")"))
            " : "
            (format-sort result-sort))]
-    [(list 'infix-op op-symbol (list arg-sort-1 arg-sort-2) result-sort)
-     (define-values (op-str _) (op-symbol-and-type op-symbol))
-     (list (format-sort arg-sort-1)
+    [(infix-op)
+     (list (format-sort (first arg-sorts))
            " " op-str " "
-           (format-sort arg-sort-2)
+           (format-sort (second arg-sorts))
            " : "
            (format-sort result-sort))]
-    [(list 'special-op '|[]| (list f-arg-sort arg-sorts ... ) result-sort)
-     (list (format-sort f-arg-sort)
-           "["
-           (add-between (map format-sort arg-sorts) ", ")
-           "] : "
-           (format-sort result-sort))]
-    [(list 'special-op '_ (list arg-sort-1 arg-sort-2) result-sort)
-     (list (format-sort arg-sort-1)
-           (subscript (format-sort arg-sort-2))
-           " : "
-           (format-sort result-sort))]
-    [(list 'special-op '^ (list arg-sort-1 arg-sort-2) result-sort)
-     (list (format-sort arg-sort-1)
-           (superscript (format-sort arg-sort-2))
-           " : "
-           (format-sort result-sort))]))
+    [(special-op)
+     (case op-str
+       [("[]")
+        (list (format-sort (first arg-sorts))
+              "["
+              (add-between (map format-sort (rest arg-sorts)) ", ")
+              "] : "
+              (format-sort result-sort))]
+       [("_")
+        (list (format-sort (first arg-sorts))
+              (subscript (format-sort (second arg-sorts)))
+              " : "
+              (format-sort result-sort))]
+       [("^")
+        (list (format-sort (first arg-sorts))
+              (superscript (format-sort (second arg-sorts)))
+              " : "
+              (format-sort result-sort))])]))
+
+(define (format-declaration decl)
+  (match decl
+    [(list 'sort sort-symbol)
+     (format-sort sort-symbol)]
+    [(list 'subsort sort-symbol-1 sort-symbol-2)
+     (format-subsort-declaration sort-symbol-1 sort-symbol-2)]
+    [(list (or 'prefix-op 'infix-op 'special-op) op-symbol arg-sorts result-sort)
+     (format-op-declaration op-symbol arg-sorts result-sort)]))
 
 (define (parsed-declaration decl)
   (nonbreaking (elem #:style leibniz-style (format-declaration decl))))
@@ -247,6 +260,61 @@
     (list f-arg1 (subscript f-arg2))]
    [else (error (format "operator ~a of type ~a" op type))]))
 
+(define (format-rule rule context)
+  (define signature (contexts:context-signature context))
+  (define proc-rule? (procedure? (equations:rule-replacement rule)))
+  (define pattern-elem (format-term signature (equations:rule-pattern rule)))
+  (define replacement-elem
+    (if proc-rule? 
+        (italic "<procedure>")
+        (format-term signature (equations:rule-replacement rule))))
+  (define vars (terms:term.vars (equations:rule-pattern rule)))
+  (define cond (equations:rule-condition rule))
+  (define var-elems (for/list ([var (in-set vars)])
+                      (list (linebreak) (hspace 2)
+                            "∀ "
+                            (italic (symbol->string (terms:var-name var)))
+                            " : "
+                            (format-sort (terms:var-sort var)))))
+  (define cond-elem
+    (if cond
+        (elem #:style leibniz-style
+              (linebreak) (hspace 2)
+              "if "
+              (format-term signature cond))
+        ""))
+  (list pattern-elem
+        (if proc-rule? " → "  " ⇒ ")
+        replacement-elem
+        var-elems
+        cond-elem))
+
+(define (format-equation equation context)
+  (define signature (contexts:context-signature context))
+  (define vars (set-union (terms:term.vars (equations:equation-left equation))
+                          (terms:term.vars (equations:equation-right equation))))
+  (define cond (equations:equation-condition equation))
+  (define left-elem (format-term signature (equations:equation-left equation)))
+  (define right-elem (format-term signature (equations:equation-right equation)))
+  (define var-elems (for/list ([var (in-set vars)])
+                      (list (linebreak ) (hspace 2)
+                            "∀ "
+                            (italic (symbol->string (terms:var-name var)))
+                            " : "
+                            (format-sort (terms:var-sort var)))))
+  (define cond-elem
+    (if cond
+        (elem #:style leibniz-style
+              (linebreak) (hspace 2)
+              "if "
+              (format-term signature cond))
+        ""))
+  (list left-elem
+        " = "
+        right-elem
+        var-elems
+        cond-elem))
+
 (define (parsed-term leibniz-doc current-context parsed-term-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (contexts:context-signature context))
@@ -258,62 +326,15 @@
 
 (define (parsed-rule leibniz-doc current-context parsed-rule-expr loc)
   (define context (get-context leibniz-doc current-context))
-  (define signature (contexts:context-signature context))
   (define rule (make-rule leibniz-doc current-context parsed-rule-expr loc))
-  (define vars (terms:term.vars (equations:rule-pattern rule)))
-  (define cond (equations:rule-condition rule))
-  (define pattern-elem (format-term signature (equations:rule-pattern rule)))
-  (define replacement-elem (format-term signature (equations:rule-replacement rule)))
-  (define var-elems (for/list ([var (in-set vars)])
-                      (elem #:style leibniz-style
-                            (linebreak ) (hspace 2)
-                            "∀ "
-                            (italic (symbol->string (terms:var-name var)))
-                            " : "
-                            (format-sort (terms:var-sort var)))))
-  (define cond-elem
-    (if cond
-        (elem #:style leibniz-style
-              (linebreak) (hspace 2)
-              "if "
-              (format-term signature cond))
-        ""))
   (elem #:style leibniz-style
-        pattern-elem
-        " ⇒ "
-        replacement-elem
-        var-elems
-        cond-elem))
+        (format-rule rule context)))
 
 (define (parsed-equation leibniz-doc current-context parsed-equation-expr loc)
   (define context (get-context leibniz-doc current-context))
-  (define signature (contexts:context-signature context))
   (define equation (make-equation leibniz-doc current-context parsed-equation-expr loc))
-  (define vars (set-union (terms:term.vars (equations:equation-left equation))
-                          (terms:term.vars (equations:equation-right equation))))
-  (define cond (equations:equation-condition equation))
-  (define left-elem (format-term signature (equations:equation-left equation)))
-  (define right-elem (format-term signature (equations:equation-right equation)))
-  (define var-elems (for/list ([var (in-set vars)])
-                      (elem #:style leibniz-style
-                            (linebreak ) (hspace 2)
-                            "∀ "
-                            (italic (symbol->string (terms:var-name var)))
-                            " : "
-                            (format-sort (terms:var-sort var)))))
-  (define cond-elem
-    (if cond
-        (elem #:style leibniz-style
-              (linebreak) (hspace 2)
-              "if "
-              (format-term signature cond))
-        ""))
   (elem #:style leibniz-style
-        left-elem
-        " = "
-        right-elem
-        var-elems
-        cond-elem))
+        (format-equation equation context)))
 
 (define (parsed-test leibniz-doc current-context parsed-rule-expr loc)
   (define context (get-context leibniz-doc current-context))
@@ -358,6 +379,70 @@
 
 (define-syntax (test stx)
   (raise-syntax-error #f "test used outside context" stx))
+
+; Insert and format a context given as a data structure
+
+(define-syntax (insert-context stx)
+  (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
+    (syntax-parse stx
+      [(_ name:str context:expr)
+       #`(begin (set! #,leibniz-ref (add-context #,leibniz-ref name context))
+                (margin-note "Context " (italic name))
+                (format-context context))])))
+
+(define (format-context context)
+  (list
+   (format-signature (contexts:context-signature context))
+   "Rules:" (linebreak)
+   (for/list ([rule (equations:in-rules (contexts:context-rules context))])
+     (list (elem #:style leibniz-output-style
+                 (format-rule rule context))
+           (linebreak)))
+   "Equations:" (linebreak)
+   (for ([eq (equations:in-equations (contexts:context-equations context))])
+     (list (elem #:style leibniz-output-style
+                 (format-equation eq context))
+           (linebreak)))))
+
+(define (format-signature signature)
+  (list
+   (format-sort-graph (operators:signature-sort-graph signature))
+   "Operators:" (linebreak)
+   (for/list ([(symbol rank meta) (operators:all-ops signature)])
+     (list (elem #:style leibniz-output-style
+                 (format-op-declaration symbol (car rank) (cdr rank)))
+           (linebreak)))))
+
+(define (format-sort-graph sort-graph)
+  (define ccs (sorts:connected-components sort-graph))
+  (for/list ([cc ccs])
+
+    (define sorts (sorts:all-sorts cc))
+    (define subsorts (sorts:all-subsort-relations cc))
+
+    (list
+
+     (if (equal? (length ccs) 1)
+         ""
+         (list "Kind " (sorts:constraint->string cc sorts) (linebreak)))
+
+     (if (equal? (set-count sorts) 1) "Sort: " "Sorts: ")
+     (add-between
+      (for/list ([sort (in-set sorts)])
+        (elem #:style leibniz-output-style (format-sort sort)))
+      ", ")
+     (linebreak)
+
+     (if (zero? (set-count subsorts))
+         ""
+         (list
+          "Subsort relations: "
+          (add-between
+           (for/list ([ss (in-set subsorts)])
+             (elem #:style leibniz-output-style
+                   (format-subsort-declaration (car ss) (cdr ss))))
+           ", ")
+          (linebreak))))))
 
 ; Support code for nicer formatting
 
