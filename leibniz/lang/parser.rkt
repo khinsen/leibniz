@@ -111,7 +111,7 @@
                 (many+/p space/p)
                 [result-id <- sort-identifier/p]
                 eof/p
-                (pure `(prefix-op ,id1 ,ids ,result-id)))
+                (pure `(op ,id1 ,ids ,result-id)))
             (do (char/p #\[)
                 [ids <- (many+/p sort-identifier/p #:sep comma-with-whitespace/p)]
                 (char/p #\])
@@ -120,7 +120,7 @@
                 (many+/p space/p)
                 [result-id <- sort-identifier/p]
                 eof/p
-                (pure `(special-op |[]| ,(cons id1 ids) ,result-id)))
+                (pure `(op |[]| ,(cons id1 ids) ,result-id)))
             (do (char/p #\_)
                 (char/p #\{)
                 [id2 <- sort-identifier/p]
@@ -130,7 +130,7 @@
                 (many+/p space/p)
                 [result-id <- sort-identifier/p]
                 eof/p
-                (pure `(special-op _ (,id1 ,id2) ,result-id)))
+                (pure `(op _ (,id1 ,id2) ,result-id)))
             (do (char/p #\^)
                 (char/p #\{)
                 [id2 <- sort-identifier/p]
@@ -140,7 +140,7 @@
                 (many+/p space/p)
                 [result-id <- sort-identifier/p]
                 eof/p
-                (pure `(special-op ^ (,id1 ,id2) ,result-id)))
+                (pure `(op ^ (,id1 ,id2) ,result-id)))
             (do (many+/p space/p)
                 (or/p (do [op-id <- op-identifier/p]
                           (many+/p space/p)
@@ -150,36 +150,36 @@
                           (many+/p space/p)
                           [result-id <- sort-identifier/p]
                           eof/p
-                          (pure `(infix-op ,(mark-as-infix op-id) (,id1 ,id2) ,result-id)))
+                          (pure `(op ,(mark-as-infix op-id) (,id1 ,id2) ,result-id)))
                       (do (char/p #\:)
                           (many+/p space/p)
                           [result-id <- sort-identifier/p]
                           eof/p
-                          (pure `(prefix-op ,id1 () ,result-id))))))))
+                          (pure `(op ,id1 () ,result-id))))))))
 
 (module+ test
-  (check-parse operator/p "foo : bar" '(prefix-op foo () bar))
+  (check-parse operator/p "foo : bar" '(op foo () bar))
   (check-parse-failure operator/p "foo :bar")
   (check-parse-failure operator/p "foo: bar")
   (check-parse-failure operator/p "foo:bar")
 
-  (check-parse operator/p "foo(baz) : bar" '(prefix-op foo (baz) bar))
+  (check-parse operator/p "foo(baz) : bar" '(op foo (baz) bar))
   (check-parse-failure operator/p "foo(baz): bar")
   (check-parse-failure operator/p "foo(baz) :bar")
   (check-parse-failure operator/p "foo(baz):bar")
 
-  (check-parse operator/p "foo(baz1, baz2) : bar" '(prefix-op foo (baz1 baz2) bar))
-  (check-parse operator/p "foo(baz1 ,baz2) : bar" '(prefix-op foo (baz1 baz2) bar))
-  (check-parse operator/p "foo(baz1,baz2) : bar" '(prefix-op foo (baz1 baz2) bar))
+  (check-parse operator/p "foo(baz1, baz2) : bar" '(op foo (baz1 baz2) bar))
+  (check-parse operator/p "foo(baz1 ,baz2) : bar" '(op foo (baz1 baz2) bar))
+  (check-parse operator/p "foo(baz1,baz2) : bar" '(op foo (baz1 baz2) bar))
   (check-parse-failure operator/p "foo(baz1,baz2):bar")
   (check-parse-failure operator/p "foo(baz1, baz2): bar")
   (check-parse-failure operator/p "foo(baz1 , baz2) :bar")
 
-  (check-parse operator/p "foo[baz1, baz2] : bar" '(special-op |[]| (foo baz1 baz2) bar))
-  (check-parse operator/p "baz1_{baz2} : bar" '(special-op _ (baz1 baz2) bar))
-  (check-parse operator/p "baz1^{baz2} : bar" '(special-op ^ (baz1 baz2) bar))
+  (check-parse operator/p "foo[baz1, baz2] : bar" '(op |[]| (foo baz1 baz2) bar))
+  (check-parse operator/p "baz1_{baz2} : bar" '(op _ (baz1 baz2) bar))
+  (check-parse operator/p "baz1^{baz2} : bar" '(op ^ (baz1 baz2) bar))
 
-  (check-parse operator/p "baz1 foo baz2 : bar" '(infix-op _foo (baz1 baz2) bar))
+  (check-parse operator/p "baz1 foo baz2 : bar" '(op _foo (baz1 baz2) bar))
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
   (check-parse-failure operator/p "baz1 foo baz2:bar"))

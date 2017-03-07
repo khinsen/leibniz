@@ -71,7 +71,7 @@
                                    (sorts:add-sort s1)
                                    (sorts:add-sort s2)
                                    (sorts:add-subsort-relation s1 s2))]
-        [(list (or 'prefix-op 'infix-op 'special-op) op args rsort) (sorts:add-sort sorts rsort)]
+        [(list 'op op args rsort) (sorts:add-sort sorts rsort)]
         [_ sorts]))))
 
 (define (make-signature sort-graph includes decls)
@@ -85,11 +85,7 @@
       (define loc (cdr decl/loc))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
         (match (car decl/loc)
-          [(list 'prefix-op op args rsort)
-           (operators:add-op sig op args rsort #:meta loc)]
-          [(list 'infix-op op args rsort)
-           (operators:add-op sig op args rsort #:meta loc)]
-          [(list 'special-op op args rsort)
+          [(list 'op op args rsort)
            (operators:add-op sig op args rsort #:meta loc)]
           [_ sig]))))
   (define non-regular (operators:non-regular-op-example signature))
@@ -97,7 +93,7 @@
     (match-let ([(list op argsorts rsorts) non-regular])
       (define loc
         (for/first ([decl/loc decls]
-                    #:when (and (member (first (car decl/loc)) '(prefix-op infix-op special-op))
+                    #:when (and (equal? (first (car decl/loc)) 'op)
                                 (equal? op (second (car decl/loc)))))
           (cdr decl/loc)))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
@@ -287,7 +283,7 @@
   (check-equal? (~> empty-document
                     (new-context "test" empty
                                  (list (cons '(subsort foo bar) #f)
-                                       (cons '(prefix-op a-foo () foo) #f)))
+                                       (cons '(op a-foo () foo) #f)))
                     (make-term "test" '(term a-foo ()) #f)
                     (terms:term->string))
                 "foo:a-foo")
@@ -296,14 +292,14 @@
                     (new-context "test" empty
                                  (list (cons '(subsort foo bar) #f)
                                        (cons '(sort boolean) #f)
-                                       (cons '(prefix-op a-foo () foo) #f)
-                                       (cons '(prefix-op a-foo (bar) foo) #f)
-                                       (cons '(prefix-op a-bar (foo) bar) #f)
-                                       (cons '(prefix-op true () boolean) #f)
-                                       (cons '(prefix-op false () boolean) #f)
-                                       (cons '(prefix-op _∧ (boolean boolean) boolean) #f)
-                                       (cons '(prefix-op a-test (foo) boolean) #f)
-                                       (cons '(prefix-op another-test (foo) boolean) #f)
+                                       (cons '(op a-foo () foo) #f)
+                                       (cons '(op a-foo (bar) foo) #f)
+                                       (cons '(op a-bar (foo) bar) #f)
+                                       (cons '(op true () boolean) #f)
+                                       (cons '(op false () boolean) #f)
+                                       (cons '(op _∧ (boolean boolean) boolean) #f)
+                                       (cons '(op a-test (foo) boolean) #f)
+                                       (cons '(op another-test (foo) boolean) #f)
                                        (cons '(rule (term a-foo ((term X ())))
                                                     (term a-foo ())
                                                     ((var X foo)
@@ -320,14 +316,14 @@
                   (new-context "test" empty
                                (list (cons '(subsort A B) #f)
                                      (cons '(subsort A C) #f)
-                                     (cons '(prefix-op foo (B) B) #f)
-                                     (cons '(prefix-op foo (C) C) #f))))))
+                                     (cons '(op foo (B) B) #f)
+                                     (cons '(op foo (C) C) #f))))))
 
   (check-true (~> empty-document
                   (new-context "test" empty
                                (list (cons '(sort foo) #f)
-                                     (cons '(prefix-op a-foo () foo) #f)
-                                     (cons '(prefix-op a-foo (foo) foo) #f)
+                                     (cons '(op a-foo () foo) #f)
+                                     (cons '(op a-foo (foo) foo) #f)
                                      (cons '(rule (term a-foo ((term X ())))
                                                   (term a-foo ())
                                                   ((var X foo))) #f)))

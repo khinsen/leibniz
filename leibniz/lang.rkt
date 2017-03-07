@@ -202,7 +202,7 @@
      (format-sort sort-symbol)]
     [(list 'subsort sort-symbol-1 sort-symbol-2)
      (format-subsort-declaration sort-symbol-1 sort-symbol-2)]
-    [(list (or 'prefix-op 'infix-op 'special-op) op-symbol arg-sorts result-sort)
+    [(list 'op op-symbol arg-sorts result-sort)
      (format-op-declaration op-symbol arg-sorts result-sort)]))
 
 (define (parsed-declaration decl)
