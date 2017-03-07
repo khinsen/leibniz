@@ -28,6 +28,7 @@
                                          . -> . boolean?)]
   [conforming-sorts         (sort-graph? sort-constraint? . -> . set?)]
   [constraint->string       (sort-graph? sort-constraint? . -> . string?)]
+  [connected-components     (sort-graph? . -> . (listof sort-graph?))]
   [display-sort-graph       (sort-graph? natural-number/c output-port?
                                          . -> . void?)]))
 
@@ -216,9 +217,19 @@
                                  (set->list (maximal-sorts constraint)))
                             ","))]))
 
+  (define (connected-components)
+    (define components (list->set (hash-values kinds)))
+    (if (equal? (set-count components) 1)
+        (list this)
+        (for/list ([k components])
+          (sort-graph (for/hash ([s k]) (values s k))
+                      (for/hash ([s k]) (values s (hash-ref supersorts s)))
+                      (for/hash ([s k]) (values s (hash-ref subsorts s)))))))
+
   (define (display-sort-graph indentation port)
     (define prefix (make-string indentation #\space))
-    (for ([k (list->set (hash-values kinds))])
+    (for ([cc (connected-components)])
+      (define k (send cc all-sorts))
       (newline port)
       (display prefix port)
       (display "; kind " port)
@@ -232,12 +243,11 @@
       (display ")\n" port)
       (display prefix port)
       (display "(subsorts" port)
-      (for* ([sort (in-set k)]
-             [subsort (hash-ref subsorts sort)])
+      (for ([ss (in-set (send cc all-subsort-relations))])
         (display " [" port)
-        (display subsort port)
+        (display (car ss) port)
         (display " " port)
-        (display sort port)
+        (display (cdr ss) port)
         (display "]" port)) 
       (display ")" port)))
 
@@ -366,4 +376,17 @@
   (check-equal? (constraint->string two-kinds 'A) "A")
   (check-equal? (constraint->string two-kinds 'V) "V")
   (check-equal? (constraint->string two-kinds (kind two-kinds 'V)) "[W]")
-  (check-equal? (constraint->string two-kinds #f) "[*]"))
+  (check-equal? (constraint->string two-kinds #f) "[*]")
+
+  (check-equal? (connected-components an-s-graph)
+                (list an-s-graph))
+  (check-equal? (connected-components another-s-graph)
+                (list another-s-graph))
+  (check-equal? (connected-components merged)
+                (list merged))
+  (check-equal? (connected-components two-kinds)
+                (list an-s-graph
+                      (~> empty-sort-graph
+                          (add-sort 'V) (add-sort 'W)
+                          (add-subsort-relation 'V 'W))))
+)
