@@ -165,14 +165,14 @@
         (heron X ε)
         (heron X ε 1))
     ; If the current approximation is good enough, stop.
-    (=> #:vars ([X ℝnn] [ε ℝp] [≅√X ℝnn])
-        (heron X ε ≅√X)
-        ≅√X
-        #:if (_< (abs (_- X (_× ≅√X ≅√X))) ε))
+    (=> #:vars ([X ℝnn] [ε ℝp] [≈√X ℝnn])
+        (heron X ε ≈√X)
+        ≈√X
+        #:if (_< (abs (_- X (_× ≈√X ≈√X))) ε))
     ; One more iteration.
-    (=> #:vars ([X ℝnn] [ε ℝp] [≅√X ℝnn])
-        (heron X ε ≅√X)
-        (heron X ε (_× 1/2 (_+ ≅√X (_÷ X ≅√X))))))
+    (=> #:vars ([X ℝnn] [ε ℝp] [≈√X ℝnn])
+        (heron X ε ≈√X)
+        (heron X ε (_× 1/2 (_+ ≈√X (_÷ X ≈√X))))))
 
   (with-context heron
     (check-equal? (RT (heron 2 1/2)) (T 3/2))
