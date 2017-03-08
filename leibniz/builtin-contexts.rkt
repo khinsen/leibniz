@@ -435,6 +435,7 @@
   (op (_÷ ℝnn ℝp) ℝnn)
   (op (^ ℝp ℝnz) ℝp)
   (op (^ ℝnz ℤnz) ℝnz)
+  (op (^ ℝ ℕnz) ℝ)
   (op (abs ℝ) ℝnn)
   (op (abs ℝnz) ℝp)
   (op (√ ℝnn) ℝnn)
