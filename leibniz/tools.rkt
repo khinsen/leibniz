@@ -53,7 +53,9 @@
       [(context? sig) (context-signature sig)]
       [else (error "illegal input data")]))
   (define sorts (signature-sort-graph signature))
-  (define ranks (lookup-op-rank-list signature op-symbol arg-sorts))
+  (define ranks (for/list ([rank (lookup-op-rank-list signature op-symbol arg-sorts)])
+                  ; translate to the old return value of lookup-op-rank-list
+                  (cons (first rank) (second rank))) )
 
   (define (node-label rank)
     (apply string-append (map symbol->node (cons (cdr rank) (car rank)))))
