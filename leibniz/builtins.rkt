@@ -249,19 +249,46 @@
 (define IEEE-float-sorts
   (~> empty-sort-graph
       (add-sort 'IEEE-floating-point)
+      (add-sort 'IEEE-floating-point-number)
+      (add-sort 'IEEE-floating-point-NaN)
+      (add-sort 'IEEE-floating-point-inf)
+      (add-subsort-relation 'IEEE-floating-point-number 'IEEE-floating-point)
+      (add-subsort-relation 'IEEE-floating-point-NaN 'IEEE-floating-point)
+      (add-subsort-relation 'IEEE-floating-point-inf 'IEEE-floating-point)
+
       (add-sort 'IEEE-binary32)
+      (add-sort 'IEEE-binary32-number)
+      (add-sort 'IEEE-binary32-NaN)
+      (add-sort 'IEEE-binary32-inf)
       (add-subsort-relation 'IEEE-binary32 'IEEE-floating-point)
+      (add-subsort-relation 'IEEE-binary32-number 'IEEE-binary32)
+      (add-subsort-relation 'IEEE-binary32-number 'IEEE-floating-point-number)
+      (add-subsort-relation 'IEEE-binary32-NaN 'IEEE-binary32)
+      (add-subsort-relation 'IEEE-binary32-NaN 'IEEE-floating-point-NaN)
+      (add-subsort-relation 'IEEE-binary32-inf 'IEEE-binary32)
+      (add-subsort-relation 'IEEE-binary32-inf 'IEEE-floating-point-inf)
+
       (add-sort 'IEEE-binary64)
-      (add-subsort-relation 'IEEE-binary64 'IEEE-floating-point)))
+      (add-sort 'IEEE-binary64-number)
+      (add-sort 'IEEE-binary64-NaN)
+      (add-sort 'IEEE-binary64-inf)
+      (add-subsort-relation 'IEEE-binary64 'IEEE-floating-point)
+      (add-subsort-relation 'IEEE-binary64-number 'IEEE-binary64)
+      (add-subsort-relation 'IEEE-binary64-number 'IEEE-floating-point-number)
+      (add-subsort-relation 'IEEE-binary64-NaN 'IEEE-binary64)
+      (add-subsort-relation 'IEEE-binary64-NaN 'IEEE-floating-point-NaN)
+      (add-subsort-relation 'IEEE-binary64-inf 'IEEE-binary64)
+      (add-subsort-relation 'IEEE-binary64-inf 'IEEE-floating-point-inf)))
 
 (define IEEE-float-signature
   (~> (empty-signature IEEE-float-sorts #:builtins (set '*IEEE-floating-point*))
-      (merge-signatures truth-signature #f)
+      (merge-signatures integer-signature #f)
       (add-op '_+ (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '_- (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '_× (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '_÷ (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
       (add-op '^ (list 'IEEE-binary32 'IEEE-binary32) 'IEEE-binary32)
+      (add-op '^ (list 'IEEE-binary32 'ℤ) 'IEEE-binary32)
       (add-op 'abs (list 'IEEE-binary32) 'IEEE-binary32)
       (add-op '_< (list 'IEEE-binary32 'IEEE-binary32) 'boolean)
       (add-op '_> (list 'IEEE-binary32 'IEEE-binary32) 'boolean)
@@ -272,6 +299,7 @@
       (add-op '_× (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
       (add-op '_÷ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
       (add-op '^ (list 'IEEE-binary64 'IEEE-binary64) 'IEEE-binary64)
+      (add-op '^ (list 'IEEE-binary64 'ℤ) 'IEEE-binary64)
       (add-op 'abs (list 'IEEE-binary64) 'IEEE-binary64)
       (add-op '√ (list 'IEEE-binary64) 'IEEE-binary64)
       (add-op '_< (list 'IEEE-binary64 'IEEE-binary64) 'boolean)
@@ -325,8 +353,16 @@
 ;
 (define (number-term.sort x)
   (cond
-    [(single-flonum? x) 'IEEE-binary32]
-    [(double-flonum? x) 'IEEE-binary64]
+    [(single-flonum? x)
+     (case x
+       [(+nan.f) 'IEEE-binary32-NaN]
+       [(+inf.f -inf.f) 'IEEE-binary32-inf]
+       [else 'IEEE-binary32-number])]
+    [(double-flonum? x)
+     (case x
+       [(+nan.0) 'IEEE-binary64-NaN]
+       [(+inf.0 -inf.0) 'IEEE-binary64-inf]
+       [else 'IEEE-binary64-number])]
     [(inexact? x) (error "not supported")]
     [(zero? x) 'zero]
     [(integer? x) (if (positive? x) 'ℕnz 'ℤnz)]
