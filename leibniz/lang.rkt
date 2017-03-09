@@ -4,8 +4,7 @@
                        scribble/base)
          empty-document
          import
-         context insert-context
-         parsed-declaration parsed-term parsed-rule parsed-equation parsed-test parsed-comment
+         context insert-context show-context
          sort op term rule equation
          comment-sort comment-op
          test
@@ -96,6 +95,14 @@
              #:with expansion #`(parsed-test leibniz-doc current-context 
                                              (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
+    (pattern ((~literal show-context) name:str)
+             #:attr decl empty
+             #:with expansion #'(format-context-declarations
+                                 (get-context-declarations leibniz-doc name)))
+    (pattern ((~literal show-context))
+             #:attr decl empty
+             #:with expansion #'(format-context-declarations
+                                 (get-context-declarations leibniz-doc current-context)))
     (pattern (element args:arg-or-kw-arg ...)
              #:attr decl (apply append (attribute args.decl))
              #:with expansion
@@ -112,7 +119,24 @@
 (define-syntax (context stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
-      [(_ name:str include:context-ref ... body:body-item ...)
+      [(_ name:str
+          include:context-ref ...
+          (~seq #:from-context context:expr)
+          body:body-item ...)
+       #`(begin (set! #,leibniz-ref (add-context #,leibniz-ref name
+                                                 (list include.ref ...)
+                                                 context))
+                (unless (empty? #,(cons 'list (apply append (attribute body.decl))))
+                  (error "Inserted context may not be extended"))
+                (margin-note "Context " (italic name)
+                             (list (linebreak)
+                                   "uses " (italic include.name)) ...)
+                (let ([leibniz-doc #,leibniz-ref]
+                      [current-context name])
+                  (list body.expansion ...)))]
+      [(_ name:str
+          include:context-ref ...
+          body:body-item ...)
        #`(begin (set! #,leibniz-ref (new-context #,leibniz-ref name
                                                  (list include.ref ...)
                                                  #,(cons #'list (apply append (attribute body.decl)))))
@@ -160,6 +184,10 @@
     [(member s '("[]" "^" "_")) (values s 'special-op)]
     [(string-prefix? s "_") (values (substring s 1) 'infix-op)]
     [else (values s 'prefix-op)]))
+
+(define (op-type op-symbol)
+  (define-values (op-str type) (op-symbol-and-type op-symbol))
+  type)
 
 (define (format-op-declaration op-symbol arg-sorts result-sort)
   (define-values (op-str op-type) (op-symbol-and-type op-symbol))
@@ -319,7 +347,8 @@
   (define context (get-context leibniz-doc current-context))
   (define signature (contexts:context-signature context))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
-  (define sort-str(symbol->string (terms:term.sort term)))
+  (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
+                                            (terms:term.sort term)))
   (define term-elem (format-term signature term))
   (elem #:style (style "Leibniz" (list leibniz-css (hover-property sort-str)))
         term-elem))
@@ -380,13 +409,133 @@
 (define-syntax (test stx)
   (raise-syntax-error #f "test used outside context" stx))
 
+; Insert and format a context referred to by name
+
+; This syntax transformer is only used outside of a context block.
+(define-syntax (show-context stx)
+  (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
+    (syntax-parse stx
+      [(_ name:str)
+       #`(format-context-declarations (get-context-declarations #,leibniz-ref name))])))
+
+(define (format-context-declarations decls)
+  (list (format-sort-declarations (hash-ref decls 'sorts))
+        (format-op-declarations (hash-ref decls 'ops))
+        (format-rule-declarations (hash-ref decls 'rules))))
+
+(define (format-sort-declarations sort-decls)
+  (define sorts
+    (for/list ([sd sort-decls]
+               #:when (equal? (first sd) 'sort))
+      (elem #:style leibniz-output-style
+            (format-sort (second sd)))))
+  (define subsorts
+    (for/list ([sd sort-decls]
+               #:when (equal? (first sd) 'sort))
+      (elem #:style leibniz-output-style
+            (format-subsort-declaration (second sd) (third sd)))))
+  (if (empty? sort-decls)
+      ""
+      (list (if (empty? sorts)
+                ""
+                (list "Sorts: " (add-between sorts ", ") (linebreak)))
+            (if (empty? sorts)
+                ""
+                (list "Subsort relations: " (add-between subsorts ", ") (linebreak))))))
+
+(define (format-op-declarations op-decls)
+  (define ops
+    (for/list ([od op-decls])
+      (elem #:style leibniz-output-style
+            (apply format-op-declaration (rest od)))))
+  (if (empty? op-decls)
+      ""
+      (list "Operators:" (linebreak)
+            (apply nested
+                   (add-between ops (linebreak))
+                   #:style 'inset)
+            (linebreak))))
+
+(define (format-rule-declarations rule-decls)
+  (define rules
+    (for/list ([rd rule-decls])
+      (elem #:style leibniz-output-style
+            (format-rule-declaration rd))))
+  (if (empty? rule-decls)
+      ""
+      (list "Rules:" (linebreak)
+            (apply nested
+                   (add-between rules (linebreak))
+                   #:style 'inset)
+            (linebreak))))
+
+(define (format-rule-declaration decl)
+  (define pattern-elem (format-decl-term (second decl)))
+  (define proc-rule? (procedure? (second decl)))
+  (define replacement-elem
+    (if proc-rule?
+        (italic "<procedure>")
+        (format-decl-term (third decl))))
+  (define clause-elems
+    (for/list ([clause (fourth decl)])
+      (if (equal? (first clause) 'var)
+          (list (linebreak) (hspace 2)
+                "∀ "
+                (italic (symbol->string (second clause)))
+                " : "
+                (format-sort (third clause)))
+          (list (linebreak) (hspace 2)
+                "if "
+                (format-decl-term clause)))))
+  (list* pattern-elem
+         (if proc-rule? " → "  " ⇒ ")
+         replacement-elem
+         clause-elems))
+
+(define (format-decl-term decl-term)
+
+  (define (infix-decl-term? decl-term)
+    (and (equal? (first decl-term) 'term)
+         (equal? (op-type (second decl-term)) 'infix-op)))
+
+  (match decl-term
+    [(list 'term raw-op args)
+     (define-values (op type) (op-symbol-and-type raw-op))
+     (condd
+      [(zero? (length args))               ; no args implies prefix-op
+       op]
+      [(equal? type 'prefix-op)
+       (list op
+             "("
+             (add-between (for/list ([arg args]) (format-decl-term arg)) ", ")
+             ")")]
+      #:do (define arg1 (first args))
+      #:do (define f-arg1 (format-decl-term arg1))
+      [(equal? op "[]")
+       (list (parenthesize f-arg1 (infix-decl-term? arg1))
+             "["
+             (add-between (for/list ([arg (rest args)]) (format-decl-term arg)) ", ")
+             "]")]
+      #:do (define arg2 (second args))
+      #:do (define f-arg2 (format-decl-term arg2))
+      [(equal? type 'infix-op)
+       (list (parenthesize f-arg1 (infix-decl-term? arg1))
+             " " op  " " f-arg2)]
+      [(equal? op "^")
+       (list f-arg1 (superscript f-arg2))]
+      [(equal? op "_")
+       (list f-arg1 (subscript f-arg2))])]
+    [(list (or 'integer 'rational 'floating-point) n)
+     (term->string n)]
+    [_ (error (format "illegal term ~a" decl-term))]))
+
 ; Insert and format a context given as a data structure
 
 (define-syntax (insert-context stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
       [(_ name:str context:expr)
-       #`(begin (set! #,leibniz-ref (add-context #,leibniz-ref name context))
+       #`(begin (set! #,leibniz-ref (add-context #,leibniz-ref name empty context))
                 (margin-note "Context " (italic name))
                 (format-context context))])))
 
