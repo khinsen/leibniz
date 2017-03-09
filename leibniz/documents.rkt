@@ -2,7 +2,7 @@
 
 (provide empty-document
          add-library add-context
-         new-context get-context
+         new-context get-context get-context-declarations
          make-term make-rule make-equation
          make-test)
 
@@ -57,37 +57,58 @@
 
 ; Make a signature from a sequence of declarations
 
+(define (add-if-missing element list)
+  (if (member element list)
+      list
+      (cons element list)))
+
 (define (make-sort-graph includes decls)
   (define after-includes
     (for/fold ([ms sorts:empty-sort-graph])
               ([c includes])
       (sorts:merge-sort-graphs ms (contexts:context-sort-graph c))))
-  (for/fold ([sorts after-includes])
-            ([decl/loc decls])
-    (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
-      (match (car decl/loc)
-        [(list 'sort s) (sorts:add-sort sorts s)]
-        [(list 'subsort s1 s2) (~> sorts
-                                   (sorts:add-sort s1)
-                                   (sorts:add-sort s2)
-                                   (sorts:add-subsort-relation s1 s2))]
-        [(list 'op op args rsort) (sorts:add-sort sorts rsort)]
-        [_ sorts]))))
+  (define-values (sort-graph sort-decls)
+    (for/fold ([sorts after-includes]
+               [sort-decls empty])
+              ([decl/loc decls])
+      (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
+        (define decl (car decl/loc))
+        (match decl
+          [(list 'sort s)
+           (values (sorts:add-sort sorts s)
+                   (add-if-missing decl sort-decls))]
+          [(list 'subsort s1 s2)
+           (values (~> sorts
+                       (sorts:add-sort s1)
+                       (sorts:add-sort s2)
+                       (sorts:add-subsort-relation s1 s2))
+                   (~>> sort-decls
+                        (add-if-missing (list 'sort s1))
+                        (add-if-missing (list 'sort s2))
+                        (add-if-missing decl)))]
+          [(list 'op op args rsort)
+           (values (sorts:add-sort sorts rsort)
+                   (add-if-missing (list 'sort rsort) sort-decls))]
+          [_ (values sorts sort-decls)]))))
+  (values sort-graph (reverse sort-decls)))
 
 (define (make-signature sort-graph includes decls)
   (define after-includes
     (for/fold ([msig (operators:empty-signature sort-graph)])
               ([c includes])
       (operators:merge-signatures msig (contexts:context-signature c) sort-graph)))
-  (define signature
-    (for/fold ([sig after-includes])
+  (define-values (signature op-decls)
+    (for/fold ([sig after-includes]
+               [op-decls empty])
               ([decl/loc decls])
+      (define decl (car decl/loc))
       (define loc (cdr decl/loc))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
-        (match (car decl/loc)
+        (match decl
           [(list 'op op args rsort)
-           (operators:add-op sig op args rsort #:meta loc)]
-          [_ sig]))))
+           (values (operators:add-op sig op args rsort #:meta loc)
+                   (add-if-missing decl op-decls))]
+          [_ (values sig op-decls)]))))
   (define non-regular (operators:non-regular-op-example signature))
   (when non-regular
     (match-let ([(list op argsorts rsorts) non-regular])
@@ -98,7 +119,7 @@
           (cdr decl/loc)))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
         (error (format "operator ~a~a has ambiguous sorts ~a" op argsorts rsorts)))))
-  signature)
+  (values signature (reverse op-decls)))
 
 (define (make-term* signature)
   (letrec ([fn (match-lambda
@@ -157,13 +178,18 @@
     (for/fold ([mrl equations:empty-rulelist])
               ([c includes])
       (equations:merge-rulelists mrl (contexts:context-rules c) signature)))
-  (for/fold ([rl after-includes])
-            ([decl/loc decls])
-    (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
-      (define rule (make-rule* signature (car decl/loc)))
-      (if rule
-          (equations:add-rule rl rule)
-          rl))))
+  (define-values (rules rule-decls)
+    (for/fold ([rl after-includes]
+               [rule-decls empty])
+              ([decl/loc decls])
+      (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
+        (define decl (car decl/loc))
+        (define rule (make-rule* signature decl))
+        (if rule
+            (values (equations:add-rule rl rule)
+                    (add-if-missing decl rule-decls))
+            (values rl rule-decls)))))
+  (values rules (reverse rule-decls)))
 
 (define (make-equation* signature equation-expr)
   (match equation-expr
@@ -177,36 +203,141 @@
                                 #f))]
     [_ #f]))
 
+; Generate a list of declarations that extends base-context to full-context
+
+(define (sort-graph-diff base-sort-graph full-sort-graph)
+  (define base-sorts (sorts:all-sorts base-sort-graph))
+  (define base-subsorts (sorts:all-subsort-relations base-sort-graph))
+  (append*
+   (for/list ([cc (sorts:connected-components full-sort-graph)])
+     (append
+      (for/list ([s (in-set (set-subtract (sorts:all-sorts cc) base-sorts))])
+        (list 'sort s))
+      (for/list ([ss (in-set (set-subtract (sorts:all-subsort-relations cc) base-subsorts))])
+        (list 'subsort (car ss) (cdr ss)))))))
+
+(define (op-diff base-signature full-signature)
+  (define base-ops
+    (for/set ([(symbol rank meta) (operators:all-ops base-signature)])
+      (cons symbol rank)))
+  (for/list ([(symbol rank meta) (operators:all-ops full-signature)]
+             #:unless (set-member? base-ops (cons symbol rank)))
+    (list 'op symbol (car rank) (cdr rank))))
+
+(define (term->decl term)
+  (define-values (op args) (terms:term.op-and-args term))
+  (cond
+    [op
+     (list 'term op (map term->decl args))]
+    [(terms:var? term)
+     (list 'term (terms:var-name term) empty)]
+    [(integer? term)
+     (list 'integer term)]
+    [(and (number? term) (exact? term))
+     (list 'rational term)]
+    [(flonum? term)
+     (list 'floating-point term)]
+    [else
+     (error (format "illegal term ~a" term))]))
+
+(define (rule->decl rule)
+  (define pattern (equations:rule-pattern rule))
+  (define replacement (equations:rule-replacement rule))
+  (define condition (equations:rule-condition rule))
+  (define vars (terms:term.vars pattern))
+  (define decl-pattern(term->decl pattern))
+  (define decl-replacement (if (procedure? replacement)
+                               replacement
+                               (term->decl replacement)))
+  (define var-clauses
+    (for/list ([var (in-set vars)])
+      (list 'var (terms:var-name var) (terms:var-sort var))))
+  (define decl-clauses
+    (if condition
+        (cons (term->decl condition) var-clauses)
+        var-clauses))
+  (list 'rule decl-pattern decl-replacement decl-clauses))
+
+(define (rulelist-diff base-rulelist full-rulelist)
+  (define base-rules (for/set ([rule (equations:in-rules base-rulelist)])
+                       (rule->decl rule)))
+  (define full-rules (for/list ([rule (equations:in-rules full-rulelist)])
+                       (rule->decl rule)))
+  (filter (λ (r) (not (set-member? base-rules r))) full-rules))
+
+(define (context-diff base-context full-context)
+  (define base-signature (contexts:context-signature base-context))
+  (define full-signature (contexts:context-signature full-context))
+  (define base-sort-graph (operators:signature-sort-graph base-signature))
+  (define full-sort-graph (operators:signature-sort-graph full-signature))
+  (hash 'sorts (sort-graph-diff base-sort-graph full-sort-graph)
+        'ops (op-diff base-signature full-signature)
+        'rules (rulelist-diff (contexts:context-rules base-context)
+                              (contexts:context-rules full-context))))
 
 ; Documents track declarations and expressions embedded in a Scribble document
 
 (define-class document
 
-  (field contexts library)
-                                        ; contexts: a hash mapping context names (strings) to contexts
-                                        ; library: a hash mapping document names to documents
+  (field contexts includes decls library)
+  ; contexts: a hash mapping context names (strings) to contexts
+  ; includes: a hash mapping context names (strings) to lists of includes (strings)
+  ; decls: a hash with keys 'sorts 'ops 'rules, values are lists of the declarations
+  ;        in each category
+  ; library: a hash mapping document names to documents
 
   (define (add-library name library-document)
-    (document contexts (hash-set library name library-document)))
+    (document contexts
+              includes
+              decls
+              (hash-set library name library-document)))
 
-  (define (add-context name context)
-    (document (hash-set contexts name context) library))
-
-  (define (new-context name includes decls)
+  (define (add-context name include-refs context)
     (define included-contexts
-      (for/list ([name/loc includes])
+      (for/list ([name/loc include-refs])
         (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
           (get-context (car name/loc)))))
-    (define sorts (make-sort-graph included-contexts decls))
-    (define signature (make-signature sorts included-contexts decls))
-    (define rules (make-rulelist signature included-contexts decls))
+    (define-values (sorts sort-decls)
+      (make-sort-graph included-contexts empty))
+    (define-values (signature op-decls)
+      (make-signature sorts included-contexts empty))
+    (define-values (rules rule-decls)
+      (make-rulelist signature included-contexts empty))
+    (define inclusion-context
+      (contexts:builtin-context sorts
+                                signature
+                                (terms:empty-varset sorts)
+                                rules
+                                equations:empty-equationset))
+    (define new-context
+      (contexts:merge-contexts inclusion-context context))
+    (define added-decls (context-diff inclusion-context new-context))
+    (document (hash-set contexts name new-context)
+              (hash-set includes name (map car include-refs))
+              (hash-set decls name added-decls)
+              library))
+
+  (define (new-context name include-refs context-decls)
+    (define included-contexts
+      (for/list ([name/loc include-refs])
+        (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
+          (get-context (car name/loc)))))
+    (define-values (sorts sort-decls)
+      (make-sort-graph included-contexts context-decls))
+    (define-values (signature op-decls)
+      (make-signature sorts included-contexts context-decls))
+    (define-values (rules rule-decls)
+      (make-rulelist signature included-contexts context-decls))
     (define context
       (contexts:builtin-context sorts
                                 signature
                                 (terms:empty-varset sorts)
                                 rules
                                 equations:empty-equationset))
-    (document (hash-set contexts name context) library))
+    (document (hash-set contexts name context)
+              (hash-set includes name (map car include-refs))
+              (hash-set decls name (hash 'sorts sort-decls 'ops op-decls 'rules rule-decls))
+              library))
 
   (define (get-context name)
     (define elements (map string-trim (string-split name "/")))
@@ -220,6 +351,21 @@
          (error (format "no library named ~a" (first elements))))
        (define library-doc (hash-ref library (first elements)))
        (send library-doc get-context (second elements))]
+      [else
+       (error (format "illegal context specification ~a" name))]))
+
+  (define (get-context-declarations name)
+    (define elements (map string-trim (string-split name "/")))
+    (case (length elements)
+      [(1)
+       (unless (hash-has-key? contexts (first elements))
+         (error (format "no context named ~a" name)))
+       (hash-ref decls (first elements))]
+      [(2)
+       (unless (hash-has-key? library (first elements))
+         (error (format "no library named ~a" (first elements))))
+       (define library-doc (hash-ref library (first elements)))
+       (send library-doc get-context-declarations (second elements))]
       [else
        (error (format "illegal context specification ~a" name))]))
 
@@ -255,7 +401,7 @@
         [_ (error "test may not contain rule clauses")]))))
 
 
-(define empty-document (document (hash) (hash)))
+(define empty-document (document (hash) (hash) (hash)  (hash)))
 
 (module+ test
   (check-equal? (~> empty-document
@@ -309,6 +455,28 @@
                                        ))
                     (get-context "test"))
                 test-context2)
+
+  (check-equal? (~> empty-document
+                    (new-context "test" empty
+                                 (list (cons '(subsort foo bar) #f)
+                                       (cons '(op a-foo () foo) #f)
+                                       (cons '(op a-foo (bar) foo) #f)
+                                       (cons '(op a-bar (foo) bar) #f)
+                                       (cons '(rule (term a-foo ((term X ())))
+                                                    (term a-foo ())
+                                                    ((var X foo))) #f)))
+                    (get-context-declarations "test"))
+                (hash 'sorts (list '(sort foo)
+                                   '(sort bar)
+                                   '(subsort foo bar))
+                      'ops (list 
+                            '(op a-foo () foo)
+                            '(op a-foo (bar) foo)
+                            '(op a-bar (foo) bar))
+                      'rules (list
+                              '(rule (term a-foo ((term X ())))
+                                     (term a-foo ())
+                                     ((var X foo))))))
 
   (check-exn exn:fail?
              ; non-regular signature
