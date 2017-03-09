@@ -26,6 +26,7 @@
                         (listof (list/c (listof sort-constraint?) sort-or-kind? any/c)))]
   [ops-by-kind-arity (signature? . -> . (sequence/c symbol? list?))]
   [all-ops           (signature? . -> . (sequence/c symbol? pair? any/c))]
+  [builtin-term-types (signature? . -> . (set/c symbol?))]
   [display-signature (signature? natural-number/c output-port? . -> . void?)]))
 
 (require "./lightweight-class.rkt"
@@ -479,6 +480,9 @@
      (for* ([(symbol op) operators]
             [rank (all-ranks op)])
        (yield symbol (cons (first rank) (second rank)) (third rank)))))
+
+  (define (builtin-term-types)
+    builtins)
 
   (define (merge-signatures other new-sort-graph)
     (define merged-sort-graph
