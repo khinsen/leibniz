@@ -2,8 +2,8 @@
 
 (provide
  (contract-out
-  [real->IEEE-binary32 (context? . -> . context?)]
-  [real->IEEE-binary64 (context? . -> . context?)]))
+  [real->FP32 (context? . -> . context?)]
+  [real->FP64 (context? . -> . context?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -20,7 +20,7 @@
 ; arithmetic
 ;
 ; The principle is to replace all sorts in kind [Real] that are not subsorts of Integer
-; by IEEE-binary32 or IEEE-binary64. Some precautions must be taken to make this work:
+; by FP32 or FP64. Some precautions must be taken to make this work:
 ;
 ;  1. The basic arithmetic (operators and rules) from context
 ;     real-numbers is excluded in this conversion. Its place is taken by
@@ -30,11 +30,11 @@
 ;  3. Rewrite rules that replace a float expression by an integer expression
 ;     are converted by adding an int->float conversion on the replacement term.
 
-(define (real->IEEE-binary32 context)
-  (real->float context 'IEEE-binary32 'ℤ->IEEE-binary32))
+(define (real->FP32 context)
+  (real->float context 'FP32 'ℤ->FP32))
 
-(define (real->IEEE-binary64 context)
-  (real->float context 'IEEE-binary64 'ℤ->IEEE-binary64))
+(define (real->FP64 context)
+  (real->float context 'FP64 'ℤ->FP64))
 
 (define (real->float context float-sort from-integer)
 
@@ -79,8 +79,8 @@
     (if (or (set-member? real-sorts (term.sort x))
             (equal? result-sort float-sort))
         (case float-sort
-          [(IEEE-binary32) (real->single-flonum x)]
-          [(IEEE-binary64) (real->double-flonum x)])
+          [(FP32) (real->single-flonum x)]
+          [(FP64) (real->double-flonum x)])
         x))
 
   (define (translate-term* term result-sort)
@@ -180,7 +180,7 @@
     (check-equal? (RT (heron 2 1/100)) (T 17/12))
     (check-equal? (RT (heron 2 1/200)) (T 577/408)))
 
-  (define float-heron (real->IEEE-binary64 heron))
+  (define float-heron (real->FP64 heron))
   (with-context float-heron
     (check-equal? (RT (heron 2.0 0.5)) (T 1.5))
     (check-true (<  (abs (- (RT (heron 2.0 0.1)) (sqrt 2)))

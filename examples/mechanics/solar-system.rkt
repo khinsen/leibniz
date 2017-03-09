@@ -112,7 +112,7 @@ module+ test
 ; Switch to floating-point calculations
 
 define sun-earth-system-floating-point
-  real->IEEE-binary64
+  real->FP64
      context
        include sun-earth-system-with-simplification
        op force-unit ForceMagnitude

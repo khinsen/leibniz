@@ -7,5 +7,5 @@
 
 (provide define-context context with-context T RT R A S eq tr
          reduce
-         real->IEEE-binary32 real->IEEE-binary64
+         real->FP32 real->FP64
          (all-from-out "./builtin-contexts.rkt"))
