@@ -173,6 +173,16 @@
       (italic (symbol->string symbol))
       (italic "<any>")))
 
+(define (format-var name sort)
+  (list (italic (symbol->string name))
+        ":"
+        (format-sort sort)))
+
+(define (format-var-or-sort var-or-sort-decl)
+  (match var-or-sort-decl
+    [(list 'sort sort) (format-sort sort)]
+    [(list 'var name sort) (format-var name sort)]))
+
 (define (format-subsort-declaration sort1 sort2)
   (list (format-sort sort1)
         " ⊆ "   ; MEDIUM MATHEMATICAL SPACE ; SUBSET OF OR EQUAL TO
@@ -189,38 +199,38 @@
   (define-values (op-str type) (op-symbol-and-type op-symbol))
   type)
 
-(define (format-op-declaration op-symbol arg-sorts result-sort)
+(define (format-op-declaration op-symbol arg-decls result-sort)
   (define-values (op-str op-type) (op-symbol-and-type op-symbol))
   (case op-type
     [(prefix-op)
      (list op-str
-           (if (zero? (length arg-sorts))
+           (if (zero? (length arg-decls))
                ""
-               (list "(" (add-between (map format-sort arg-sorts) ", ") ")"))
+               (list "(" (add-between (map format-var-or-sort arg-decls) ", ") ")"))
            " : "
            (format-sort result-sort))]
     [(infix-op)
-     (list (format-sort (first arg-sorts))
+     (list (format-var-or-sort (first arg-decls))
            " " op-str " "
-           (format-sort (second arg-sorts))
+           (format-var-or-sort (second arg-decls))
            " : "
            (format-sort result-sort))]
     [(special-op)
      (case op-str
        [("[]")
-        (list (format-sort (first arg-sorts))
+        (list (format-var-or-sort (first arg-decls))
               "["
-              (add-between (map format-sort (rest arg-sorts)) ", ")
+              (add-between (map format-var-or-sort (rest arg-decls)) ", ")
               "] : "
               (format-sort result-sort))]
        [("_")
-        (list (format-sort (first arg-sorts))
-              (subscript (format-sort (second arg-sorts)))
+        (list (format-var-or-sort (first arg-decls))
+              (subscript (format-var-or-sort (second arg-decls)))
               " : "
               (format-sort result-sort))]
        [("^")
-        (list (format-sort (first arg-sorts))
-              (superscript (format-sort (second arg-sorts)))
+        (list (format-var-or-sort (first arg-decls))
+              (superscript (format-var-or-sort (second arg-decls)))
               " : "
               (format-sort result-sort))])]))
 

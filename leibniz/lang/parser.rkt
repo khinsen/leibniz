@@ -91,6 +91,28 @@
   (check-parse sort-or-subsort/p "foo⊆bar" '(sort foo⊆bar))
   (check-parse-failure sort-or-subsort/p "foo⊆ bar"))
 
+(define var-identifier/p non-reserved-identifier/p)
+
+(define colon/p
+  (do (char/p #\:)))
+
+(define colon-with-spaces/p
+  (do (many+/p space/p)
+      (char/p #\:)
+      (many+/p space/p)))
+
+(define var/p
+  (do [name <- var-identifier/p]
+      colon/p
+      [sort <- sort-identifier/p]
+      (pure `(var ,name ,sort))))
+
+(module+ test
+  (check-parse var/p "foo:bar" '(var foo bar))
+  (check-parse-failure var/p "foo: bar")
+  (check-parse-failure var/p "foo :bar")
+  (check-parse-failure var/p "foo : bar"))
+
 (define comma-with-whitespace/p
   (do (many/p space/p)
       (char/p #\,)
@@ -101,61 +123,61 @@
 
 (define op-identifier/p non-reserved-identifier/p)
 
+(define var-or-sort/p
+  (do [id1 <- non-reserved-identifier/p]
+      (or/p (try/p (do colon/p
+                       [id2 <- sort-identifier/p]
+                       (pure `(var ,id1 ,id2))))
+            (pure `(sort ,id1)))))
+
 (define operator/p
   (do [id1 <- non-reserved-identifier/p] ; sort or op, depending on what follows
       (or/p (do (char/p #\()
-                [ids <- (many+/p sort-identifier/p #:sep comma-with-whitespace/p)]
+                [args <- (many+/p var-or-sort/p #:sep comma-with-whitespace/p)]
                 (char/p #\))
-                (many+/p space/p)
-                (char/p #\:)
-                (many+/p space/p)
+                colon-with-spaces/p
                 [result-id <- sort-identifier/p]
                 eof/p
-                (pure `(op ,id1 ,ids ,result-id)))
-            (do (char/p #\[)
-                [ids <- (many+/p sort-identifier/p #:sep comma-with-whitespace/p)]
-                (char/p #\])
-                (many+/p space/p)
-                (char/p #\:)
-                (many+/p space/p)
-                [result-id <- sort-identifier/p]
-                eof/p
-                (pure `(op |[]| ,(cons id1 ids) ,result-id)))
-            (do (char/p #\_)
-                (char/p #\{)
-                [id2 <- sort-identifier/p]
-                (char/p #\})
-                (many+/p space/p)
-                (char/p #\:)
-                (many+/p space/p)
-                [result-id <- sort-identifier/p]
-                eof/p
-                (pure `(op _ (,id1 ,id2) ,result-id)))
-            (do (char/p #\^)
-                (char/p #\{)
-                [id2 <- sort-identifier/p]
-                (char/p #\})
-                (many+/p space/p)
-                (char/p #\:)
-                (many+/p space/p)
-                [result-id <- sort-identifier/p]
-                eof/p
-                (pure `(op ^ (,id1 ,id2) ,result-id)))
-            (do (many+/p space/p)
-                (or/p (do [op-id <- op-identifier/p]
-                          (many+/p space/p)
-                          [id2 <- sort-identifier/p]
-                          (many+/p space/p)
-                          (char/p #\:)
-                          (many+/p space/p)
+                (pure `(op ,id1 ,args ,result-id)))
+            (try/p (do colon-with-spaces/p
+                       [result-id <- sort-identifier/p]
+                       eof/p
+                       (pure `(op ,id1 () ,result-id))))
+            (do [arg1 <- (or/p (do colon/p
+                                   [sort-id <- sort-identifier/p]
+                                 (pure`(var ,id1 ,sort-id)))
+                               (pure `(sort ,id1)))]
+                (or/p (do (char/p #\[)
+                          [args <- (many+/p var-or-sort/p #:sep comma-with-whitespace/p)]
+                          (char/p #\])
+                          colon-with-spaces/p
                           [result-id <- sort-identifier/p]
                           eof/p
-                          (pure `(op ,(mark-as-infix op-id) (,id1 ,id2) ,result-id)))
-                      (do (char/p #\:)
-                          (many+/p space/p)
+                          (pure `(op |[]| ,(cons arg1 args) ,result-id)))
+                      (do (char/p #\_)
+                          (char/p #\{)
+                          [arg2 <- var-or-sort/p]
+                          (char/p #\})
+                          colon-with-spaces/p
                           [result-id <- sort-identifier/p]
                           eof/p
-                          (pure `(op ,id1 () ,result-id))))))))
+                          (pure `(op _ (,arg1 ,arg2) ,result-id)))
+                      (do (char/p #\^)
+                          (char/p #\{)
+                          [arg2 <- var-or-sort/p]
+                          (char/p #\})
+                          colon-with-spaces/p
+                          [result-id <- sort-identifier/p]
+                          eof/p
+                          (pure `(op ^ (,arg1 ,arg2) ,result-id)))
+                      (do (many+/p space/p)
+                          (do [op-id <- op-identifier/p]
+                              (many+/p space/p)
+                              [arg2 <- var-or-sort/p]
+                              colon-with-spaces/p
+                              [result-id <- sort-identifier/p]
+                              eof/p
+                              (pure `(op ,(mark-as-infix op-id) (,arg1 ,arg2) ,result-id)))))))))
 
 (module+ test
   (check-parse operator/p "foo : bar" '(op foo () bar))
@@ -163,23 +185,39 @@
   (check-parse-failure operator/p "foo: bar")
   (check-parse-failure operator/p "foo:bar")
 
-  (check-parse operator/p "foo(baz) : bar" '(op foo (baz) bar))
+  (check-parse operator/p "foo(baz) : bar" '(op foo ((sort baz)) bar))
+  (check-parse operator/p "foo(baz:bar) : bar" '(op foo ((var baz bar)) bar))
   (check-parse-failure operator/p "foo(baz): bar")
-  (check-parse-failure operator/p "foo(baz) :bar")
+  (check-parse-failure operator/p "foo(baz:bar) :bar")
   (check-parse-failure operator/p "foo(baz):bar")
 
-  (check-parse operator/p "foo(baz1, baz2) : bar" '(op foo (baz1 baz2) bar))
-  (check-parse operator/p "foo(baz1 ,baz2) : bar" '(op foo (baz1 baz2) bar))
-  (check-parse operator/p "foo(baz1,baz2) : bar" '(op foo (baz1 baz2) bar))
-  (check-parse-failure operator/p "foo(baz1,baz2):bar")
-  (check-parse-failure operator/p "foo(baz1, baz2): bar")
-  (check-parse-failure operator/p "foo(baz1 , baz2) :bar")
+  (check-parse operator/p "foo(baz1:bar, baz2) : bar"
+               '(op foo ((var baz1 bar) (sort baz2)) bar))
+  (check-parse operator/p "foo(baz1:bar ,baz2) : bar"
+               '(op foo ((var baz1 bar) (sort baz2)) bar))
+  (check-parse operator/p "foo(baz1:bar,baz2) : bar"
+               '(op foo ((var baz1 bar) (sort baz2)) bar))
+  (check-parse-failure operator/p "foo(baz1:bar,baz2):bar")
+  (check-parse-failure operator/p "foo(baz1:bar, baz2): bar")
+  (check-parse-failure operator/p "foo(baz1:bar , baz2) :bar")
 
-  (check-parse operator/p "foo[baz1, baz2] : bar" '(op |[]| (foo baz1 baz2) bar))
-  (check-parse operator/p "baz1_{baz2} : bar" '(op _ (baz1 baz2) bar))
-  (check-parse operator/p "baz1^{baz2} : bar" '(op ^ (baz1 baz2) bar))
+  (check-parse operator/p "foo[baz1, baz2] : bar"
+               '(op |[]| ((sort foo) (sort baz1) (sort baz2)) bar))
+  (check-parse operator/p "foo:bar[baz1:bar, baz2:bar] : bar"
+               '(op |[]| ((var foo bar) (var baz1 bar) (var baz2 bar)) bar))
+  (check-parse operator/p "baz1_{baz2} : bar"
+               '(op _ ((sort baz1) (sort baz2)) bar))
+  (check-parse operator/p "baz1:bar_{baz2:bar} : bar"
+               '(op _ ((var baz1 bar) (var baz2 bar)) bar))
+  (check-parse operator/p "baz1^{baz2} : bar"
+               '(op ^ ((sort baz1) (sort baz2)) bar))
+  (check-parse operator/p "baz1:bar^{baz2:bar} : bar"
+               '(op ^ ((var baz1 bar) (var baz2 bar)) bar))
 
-  (check-parse operator/p "baz1 foo baz2 : bar" '(op _foo (baz1 baz2) bar))
+  (check-parse operator/p "baz1 foo baz2 : bar"
+               '(op _foo ((sort baz1) (sort baz2)) bar))
+  (check-parse operator/p "baz1:bar foo baz2:bar : bar"
+               '(op _foo ((var baz1 bar) (var baz2 bar)) bar))
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
   (check-parse-failure operator/p "baz1 foo baz2 :bar")
   (check-parse-failure operator/p "baz1 foo baz2:bar"))
@@ -307,24 +345,19 @@
   (check-parse term/p "(foo + bar) + baz" '(term _+ ((term _+ ((term foo ()) (term bar ()))) (term baz ()) )))
   (check-parse term/p "(foo + 2) - 3⁄4" '(term _- ((term _+ ((term foo ()) (integer 2))) (rational 3/4)))))
 
-(define var/p
+(define var-clause/p
   (do (char/p #\∀)
       (many+/p space/p)
-      [name <- op-identifier/p]
-      (many*/p space/p)
-      (char/p #\:)
-      (many*/p space/p)
-      [sort <- sort-identifier/p]
-      (pure `(var ,name ,sort))))
+      var/p))
 
-(define condition/p
+(define condition-clause/p
   (do (string/p "if")
       (many+/p space/p)
       term/p))
 
 (define clause/p
   (do (many+/p space/p)
-      (or/p var/p condition/p)))
+      (or/p var-clause/p condition-clause/p)))
 
 (define rule/p
   (do [pattern <- term/p]
@@ -347,10 +380,10 @@
       (pure `(equation ,left ,right ,clauses))))
 
 (module+ test
-  (check-parse var/p "∀ foo:bar" '(var foo bar))
-  (check-parse var/p "∀ foo : bar" '(var foo bar))
-  (check-parse var/p "∀ foo :bar" '(var foo bar))
-  (check-parse var/p "∀ foo: bar" '(var foo bar))
+  (check-parse var-clause/p "∀ foo:bar" '(var foo bar))
+  (check-parse-failure var-clause/p "∀ foo : bar")
+  (check-parse-failure var-clause/p "∀ foo :bar")
+  (check-parse-failure var-clause/p "∀ foo: bar")
   (check-parse rule/p "a ⇒ b"
                '(rule (term a ())
                       (term b ())

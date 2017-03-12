@@ -92,7 +92,12 @@
           [_ (values sorts sort-decls)]))))
   (values sort-graph (reverse sort-decls)))
 
+
 (define (make-signature sort-graph includes decls)
+  (define (argsort sort-or-var-decl)
+    (match sort-or-var-decl
+      [(list 'sort sort-id) sort-id]
+      [(list 'var var-name sort-id) sort-id]))
   (define after-includes
     (for/fold ([msig (operators:empty-signature sort-graph)])
               ([c includes])
@@ -106,7 +111,7 @@
       (with-handlers ([exn:fail? (re-raise-exn loc)])
         (match decl
           [(list 'op op args rsort)
-           (values (operators:add-op sig op args rsort #:meta loc)
+           (values (operators:add-op sig op (map argsort args) rsort #:meta loc)
                    (add-if-missing decl op-decls))]
           [_ (values sig op-decls)]))))
   (define non-regular (operators:non-regular-op-example signature))
@@ -222,7 +227,7 @@
       (cons symbol rank)))
   (for/list ([(symbol rank meta) (operators:all-ops full-signature)]
              #:unless (set-member? base-ops (cons symbol rank)))
-    (list 'op symbol (car rank) (cdr rank))))
+    (list 'op symbol (map (λ (s) `(sort ,s)) (car rank)) (cdr rank))))
 
 (define (term->decl term)
   (define-values (op args) (terms:term.op-and-args term))
@@ -440,13 +445,13 @@
                                  (list (cons '(subsort foo bar) #f)
                                        (cons '(sort boolean) #f)
                                        (cons '(op a-foo () foo) #f)
-                                       (cons '(op a-foo (bar) foo) #f)
-                                       (cons '(op a-bar (foo) bar) #f)
+                                       (cons '(op a-foo ((sort bar)) foo) #f)
+                                       (cons '(op a-bar ((sort foo)) bar) #f)
                                        (cons '(op true () boolean) #f)
                                        (cons '(op false () boolean) #f)
-                                       (cons '(op _∧ (boolean boolean) boolean) #f)
-                                       (cons '(op a-test (foo) boolean) #f)
-                                       (cons '(op another-test (foo) boolean) #f)
+                                       (cons '(op _∧ ((sort boolean) (sort boolean)) boolean) #f)
+                                       (cons '(op a-test ((sort foo)) boolean) #f)
+                                       (cons '(op another-test ((sort foo)) boolean) #f)
                                        (cons '(rule (term a-foo ((term X ())))
                                                     (term a-foo ())
                                                     ((var X foo)
@@ -460,8 +465,8 @@
                     (new-context "test" empty
                                  (list (cons '(subsort foo bar) #f)
                                        (cons '(op a-foo () foo) #f)
-                                       (cons '(op a-foo (bar) foo) #f)
-                                       (cons '(op a-bar (foo) bar) #f)
+                                       (cons '(op a-foo ((sort bar)) foo) #f)
+                                       (cons '(op a-bar ((var X foo)) bar) #f)
                                        (cons '(rule (term a-foo ((term X ())))
                                                     (term a-foo ())
                                                     ((var X foo))) #f)))
@@ -471,8 +476,8 @@
                                    '(subsort foo bar))
                       'ops (list 
                             '(op a-foo () foo)
-                            '(op a-foo (bar) foo)
-                            '(op a-bar (foo) bar))
+                            '(op a-foo ((sort bar)) foo)
+                            '(op a-bar ((var X foo)) bar))
                       'rules (list
                               '(rule (term a-foo ((term X ())))
                                      (term a-foo ())
@@ -485,14 +490,14 @@
                   (new-context "test" empty
                                (list (cons '(subsort A B) #f)
                                      (cons '(subsort A C) #f)
-                                     (cons '(op foo (B) B) #f)
-                                     (cons '(op foo (C) C) #f))))))
+                                     (cons '(op foo ((sort B)) B) #f)
+                                     (cons '(op foo ((sort C)) C) #f))))))
 
   (check-true (~> empty-document
                   (new-context "test" empty
                                (list (cons '(sort foo) #f)
                                      (cons '(op a-foo () foo) #f)
-                                     (cons '(op a-foo (foo) foo) #f)
+                                     (cons '(op a-foo ((var X foo)) foo) #f)
                                      (cons '(rule (term a-foo ((term X ())))
                                                   (term a-foo ())
                                                   ((var X foo))) #f)))
