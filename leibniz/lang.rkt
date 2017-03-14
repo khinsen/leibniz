@@ -5,7 +5,7 @@
          empty-document
          import
          context insert-context show-context
-         sort op term rule equation
+         sort var op term rule equation
          comment-sort comment-op
          test
          inset)
@@ -59,6 +59,10 @@
   (define-syntax-class body-item
     (pattern ((~literal sort) sort-decl:str ...)
              #:attr parsed (parse-scribble-text (syntax/p sort-or-subsort/p) #'(sort-decl ...))
+             #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
+             #:with expansion  #`(parsed-declaration (quote parsed)))
+    (pattern ((~literal var) var-decl:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p (to-eof/p var/p)) #'(var-decl ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
              #:with expansion  #`(parsed-declaration (quote parsed)))
     (pattern ((~literal op) op-decl:str ...)
@@ -241,7 +245,9 @@
     [(list 'subsort sort-symbol-1 sort-symbol-2)
      (format-subsort-declaration sort-symbol-1 sort-symbol-2)]
     [(list 'op op-symbol arg-sorts result-sort)
-     (format-op-declaration op-symbol arg-sorts result-sort)]))
+     (format-op-declaration op-symbol arg-sorts result-sort)]
+    [(list 'var name sort)
+     (format-var name sort)]))
 
 (define (parsed-declaration decl)
   (nonbreaking (elem #:style leibniz-style (format-declaration decl))))
@@ -300,6 +306,7 @@
 
 (define (format-rule rule context)
   (define signature (contexts:context-signature context))
+  (define c-vars (terms:all-vars (contexts:context-vars context)))
   (define proc-rule? (procedure? (equations:rule-replacement rule)))
   (define pattern-elem (format-term signature (equations:rule-pattern rule)))
   (define replacement-elem
@@ -308,7 +315,11 @@
         (format-term signature (equations:rule-replacement rule))))
   (define vars (terms:term.vars (equations:rule-pattern rule)))
   (define cond (equations:rule-condition rule))
-  (define var-elems (for/list ([var (in-set vars)])
+  (define var-elems (for/list ([var (in-set vars)]
+                               #:unless (equal? (hash-ref c-vars
+                                                          (terms:var-name var)
+                                                          #f)
+                                                (terms:var-sort var)))
                       (list (linebreak) (hspace 2)
                             "∀ "
                             (italic (symbol->string (terms:var-name var)))
@@ -356,6 +367,7 @@
 (define (parsed-term leibniz-doc current-context parsed-term-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (contexts:context-signature context))
+  (define vars (contexts:context-vars context))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
   (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
                                             (terms:term.sort term)))
@@ -398,6 +410,9 @@
 (define-syntax (sort stx)
   (raise-syntax-error #f "sort used outside context" stx))
 
+(define-syntax (var stx)
+  (raise-syntax-error #f "var used outside context" stx))
+
 (define-syntax (op stx)
   (raise-syntax-error #f "op used outside context" stx))
 
@@ -431,7 +446,8 @@
 (define (format-context-declarations decls)
   (list (format-sort-declarations (hash-ref decls 'sorts))
         (format-op-declarations (hash-ref decls 'ops))
-        (format-rule-declarations (hash-ref decls 'rules))))
+        (format-var-declarations (hash-ref decls 'vars))
+        (format-rule-declarations (hash-ref decls 'rules) (hash-ref decls 'vars))))
 
 (define (format-sort-declarations sort-decls)
   (define sorts
@@ -451,7 +467,8 @@
                 (list "Sorts: " (add-between sorts ", ") (linebreak)))
             (if (empty? sorts)
                 ""
-                (list "Subsort relations: " (add-between subsorts ", ") (linebreak))))))
+                (list "Subsort relations: " (add-between subsorts ", ") (linebreak)))
+            (linebreak))))
 
 (define (format-op-declarations op-decls)
   (define ops
@@ -463,23 +480,36 @@
       (list "Operators:" (linebreak)
             (apply nested
                    (add-between ops (linebreak))
-                   #:style 'inset)
+                   #:style 'inset))))
+
+(define (format-var-declarations var-decls)
+  (define vars
+    (for/list ([vd var-decls])
+      (elem #:style leibniz-output-style
+            (format-var (second vd) (third vd)))))
+  (if (empty? var-decls)
+      ""
+      (list "Vars: "
+            (add-between vars ", ")
+            (linebreak)
             (linebreak))))
 
-(define (format-rule-declarations rule-decls)
+(define (format-rule-declarations rule-decls var-decls)
+  (define context-vars
+    (for/hash ([vd var-decls])
+      (values (second vd) (third vd))))
   (define rules
     (for/list ([rd rule-decls])
       (elem #:style leibniz-output-style
-            (format-rule-declaration rd))))
+            (format-rule-declaration rd context-vars))))
   (if (empty? rule-decls)
       ""
       (list "Rules:" (linebreak)
             (apply nested
                    (add-between rules (linebreak))
-                   #:style 'inset)
-            (linebreak))))
+                   #:style 'inset))))
 
-(define (format-rule-declaration decl)
+(define (format-rule-declaration decl context-vars)
   (define pattern-elem (format-decl-term (second decl)))
   (define proc-rule? (procedure? (second decl)))
   (define replacement-elem
@@ -489,11 +519,13 @@
   (define clause-elems
     (for/list ([clause (fourth decl)])
       (if (equal? (first clause) 'var)
-          (list (linebreak) (hspace 2)
-                "∀ "
-                (italic (symbol->string (second clause)))
-                " : "
-                (format-sort (third clause)))
+          (let ([name (second clause)]
+                [sort (third clause)])
+            (if (equal? (hash-ref context-vars name #f) sort)
+                ""
+                (list (linebreak) (hspace 2)
+                      "∀ "
+                      (format-var name sort))))
           (list (linebreak) (hspace 2)
                 "if "
                 (format-decl-term clause)))))

@@ -126,8 +126,37 @@
         (error (format "operator ~a~a has ambiguous sorts ~a" op argsorts rsorts)))))
   (values signature (reverse op-decls)))
 
-(define (make-term* signature)
+(define (make-varset signature includes decls)
+  (define sorts (operators:signature-sort-graph signature))
+  (define after-includes
+    (for/fold ([mv (terms:empty-varset sorts)])
+              ([c includes])
+      (terms:merge-varsets mv (contexts:context-vars c) sorts)))
+  (for/fold ([vs after-includes]
+             [var-decls empty])
+            ([decl/loc decls])
+    (define decl (car decl/loc))
+    (define loc (cdr decl/loc))
+    (with-handlers ([exn:fail? (re-raise-exn loc)])
+      (match decl
+        [(list 'var name sort)
+         (values (terms:add-var vs name sort)
+                 (add-if-missing decl var-decls))]
+        [(list 'op op args rsort)
+         (for/fold ([vs vs]
+                    [var-decls var-decls])
+                   ([arg args])
+           (match arg
+             [(list 'var name sort)
+              (values (terms:add-var vs name sort)
+                      (add-if-missing decl var-decls))]
+             [_ (values vs var-decls)]))]
+        [_ (values vs var-decls)]))))
+
+(define (make-term* signature varset)
   (letrec ([fn (match-lambda
+                 [(list 'term name '())
+                  (terms:make-var-or-term signature varset name)]
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
                  [(list 'integer n) n]
@@ -135,11 +164,11 @@
                  [(list 'floating-point fp) fp])])
     fn))
 
-(define (make-varset* signature clauses)
+(define (make-local-varset* signature varset decls)
   (define sorts (operators:signature-sort-graph signature))
-  (for/fold ([vs (terms:empty-varset sorts)])
-            ([c clauses])
-    (match c
+  (for/fold ([vs varset])
+            ([decl decls])
+    (match decl
       [(list 'var name sort)
        (terms:add-var vs name sort)]
       [_ vs])))
@@ -153,7 +182,8 @@
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
                  [(list 'integer n) n]
-                 [(list 'rational r) r])])
+                 [(list 'rational r) r]
+                 [(list 'floating-point fp) fp])])
     fn))
 
 (define (make-condition* clauses)
@@ -167,10 +197,10 @@
              (list 'term '_∧ (list condition term))
              term)])))
 
-(define (make-rule* signature rule-expr)
+(define (make-rule* signature varset rule-expr)
   (match rule-expr
     [(list 'rule pattern replacement clauses)
-     (let* ([varset (make-varset* signature clauses)]
+     (let* ([varset (make-local-varset* signature varset clauses)]
             [mp (make-pattern* signature varset)])
        (equations:make-rule signature (mp pattern)
                             (mp (make-condition* clauses))
@@ -178,7 +208,7 @@
                             #f #t))]
     [_ #f]))
 
-(define (make-rulelist signature includes decls)
+(define (make-rulelist signature varset includes decls)
   (define after-includes
     (for/fold ([mrl equations:empty-rulelist])
               ([c includes])
@@ -189,17 +219,17 @@
               ([decl/loc decls])
       (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
         (define decl (car decl/loc))
-        (define rule (make-rule* signature decl))
+        (define rule (make-rule* signature varset decl))
         (if rule
             (values (equations:add-rule rl rule)
                     (add-if-missing decl rule-decls))
             (values rl rule-decls)))))
   (values rules (reverse rule-decls)))
 
-(define (make-equation* signature equation-expr)
+(define (make-equation* signature varset equation-expr)
   (match equation-expr
     [(list 'equation left right clauses)
-     (let* ([varset (make-varset* signature clauses)]
+     (let* ([varset (make-local-varset* signature varset clauses)]
             [mp (make-pattern* signature varset)])
        (equations:make-equation signature
                                 (mp left)
@@ -228,6 +258,12 @@
   (for/list ([(symbol rank meta) (operators:all-ops full-signature)]
              #:unless (set-member? base-ops (cons symbol rank)))
     (list 'op symbol (map (λ (s) `(sort ,s)) (car rank)) (cdr rank))))
+
+(define (varset-diff base-varset full-varset)
+  (define base-vars (terms:all-vars base-varset))
+  (for/list ([(name sort) (in-hash (terms:all-vars full-varset))]
+             #:unless (hash-has-key? base-vars name))
+    (list 'var name sort)))
 
 (define (term->decl term)
   (define-values (op args) (terms:term.op-and-args term))
@@ -275,8 +311,11 @@
   (define full-signature (contexts:context-signature full-context))
   (define base-sort-graph (operators:signature-sort-graph base-signature))
   (define full-sort-graph (operators:signature-sort-graph full-signature))
+  (define base-varset (contexts:context-vars base-context))
+  (define full-varset (contexts:context-vars full-context))
   (hash 'sorts (sort-graph-diff base-sort-graph full-sort-graph)
         'ops (op-diff base-signature full-signature)
+        'vars (varset-diff base-varset full-varset)
         'rules (rulelist-diff (contexts:context-rules base-context)
                               (contexts:context-rules full-context))))
 
@@ -287,8 +326,8 @@
   (field contexts includes decls library)
   ; contexts: a hash mapping context names (strings) to contexts
   ; includes: a hash mapping context names (strings) to lists of includes (strings)
-  ; decls: a hash with keys 'sorts 'ops 'rules, values are lists of the declarations
-  ;        in each category
+  ; decls: a hash with keys 'sorts 'ops 'vars 'rules,
+  ;        values are lists of the declarations in each category
   ; library: a hash mapping document names to documents
 
   (define (add-library name library-document)
@@ -307,7 +346,8 @@
     (define-values (signature op-decls)
       (make-signature sorts included-contexts empty))
     (define-values (rules rule-decls)
-      (make-rulelist signature included-contexts empty))
+      (make-rulelist signature (contexts:context-vars context)
+                     included-contexts empty))
     (define inclusion-context
       (contexts:builtin-context sorts
                                 signature
@@ -331,17 +371,23 @@
       (make-sort-graph included-contexts context-decls))
     (define-values (signature op-decls)
       (make-signature sorts included-contexts context-decls))
+    (define-values (varset var-decls)
+      (make-varset signature included-contexts context-decls))
     (define-values (rules rule-decls)
-      (make-rulelist signature included-contexts context-decls))
+      (make-rulelist signature varset included-contexts context-decls))
     (define context
       (contexts:builtin-context sorts
                                 signature
-                                (terms:empty-varset sorts)
+                                varset
                                 rules
                                 equations:empty-equationset))
     (document (hash-set contexts name context)
               (hash-set includes name (map car include-refs))
-              (hash-set decls name (hash 'sorts sort-decls 'ops op-decls 'rules rule-decls))
+              (hash-set decls name
+                        (hash 'sorts sort-decls
+                              'ops op-decls
+                              'vars var-decls
+                              'rules rule-decls))
               library))
 
   (define (get-context name)
@@ -377,28 +423,30 @@
   (define (make-term context-name term-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
+    (define vars (contexts:context-vars context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      ((make-term* signature) term-expr)))
+      ((make-term* signature vars) term-expr)))
 
   (define (make-rule context-name rule-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (make-rule* signature rule-expr)))
+      (make-rule* signature (contexts:context-vars context) rule-expr)))
 
   (define (make-equation context-name equation-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (make-equation* signature equation-expr)))
+      (make-equation* signature (contexts:context-vars context) equation-expr)))
 
   (define (make-test context-name rule-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
+    (define varset (contexts:context-vars context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (match rule-expr
         [(list 'rule pattern replacement '())
-         (let* ([mt (make-term* signature)]
+         (let* ([mt (make-pattern* signature varset)]
                 [term (mt pattern)]
                 [expected (mt replacement)]
                 [rterm (rewrite:reduce context term)])
@@ -478,6 +526,7 @@
                             '(op a-foo () foo)
                             '(op a-foo ((sort bar)) foo)
                             '(op a-bar ((var X foo)) bar))
+                      'vars empty
                       'rules (list
                               '(rule (term a-foo ((term X ())))
                                      (term a-foo ())
