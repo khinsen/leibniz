@@ -8,12 +8,14 @@
          sort var op term rule equation
          comment-sort comment-op
          test eval-term
-         inset)
+         inset
+         xml)
 
 (require scribble/doclang
          scribble/base
          scribble/core
          scribble/html-properties
+         sxml
          (for-syntax syntax/parse
                      racket/syntax
                      racket/list
@@ -542,7 +544,7 @@
 
 (define (format-rule-declaration decl context-vars)
   (define pattern-elem (format-decl-term (second decl)))
-  (define proc-rule? (procedure? (second decl)))
+  (define proc-rule? (procedure? (third decl)))
   (define replacement-elem
     (if proc-rule?
         (italic "<procedure>")
@@ -675,3 +677,19 @@
                (linebreak)
                element))
          #:style 'inset))
+
+; XML output
+
+(define-syntax (xml stx)
+  (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
+    (syntax-parse stx
+      [(_ filename:str)
+       #`(begin (write-xml #,leibniz-ref filename)
+                (margin-note (hyperlink filename "XML")))])))
+
+(define (write-xml leibniz-doc filename)
+  (define sxml (get-document-sxml leibniz-doc))
+  (call-with-output-file filename
+    (λ (output-port)
+      (srl:sxml->xml sxml output-port))
+    #:mode 'text #:exists 'replace))

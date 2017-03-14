@@ -3,6 +3,7 @@
 (provide empty-document
          add-library add-context
          new-context get-context get-context-declarations
+         get-document-sxml get-context-sxml
          make-term make-rule make-equation
          make-test)
 
@@ -149,7 +150,7 @@
            (match arg
              [(list 'var name sort)
               (values (terms:add-var vs name sort)
-                      (add-if-missing decl var-decls))]
+                      (add-if-missing arg var-decls))]
              [_ (values vs var-decls)]))]
         [_ (values vs var-decls)]))))
 
@@ -324,11 +325,11 @@
 (define-class document
 
   (field contexts includes decls library)
-  ; contexts: a hash mapping context names (strings) to contexts
-  ; includes: a hash mapping context names (strings) to lists of includes (strings)
-  ; decls: a hash with keys 'sorts 'ops 'vars 'rules,
-  ;        values are lists of the declarations in each category
-  ; library: a hash mapping document names to documents
+                                        ; contexts: a hash mapping context names (strings) to contexts
+                                        ; includes: a hash mapping context names (strings) to lists of includes (strings)
+                                        ; decls: a hash mapping context names to hashes with keys 'sorts 'ops 'vars 'rules,
+                                        ;        values are lists of the declarations in each category
+                                        ; library: a hash mapping document names to documents
 
   (define (add-library name library-document)
     (document contexts
@@ -419,6 +420,61 @@
        (send library-doc get-context-declarations (second elements))]
       [else
        (error (format "illegal context specification ~a" name))]))
+
+  (define (get-document-sxml)
+    `(*TOP* (context-collection
+             ,@(for/list ([name (hash-keys contexts)])
+                 (get-context-sxml name)))))
+
+  (define (get-context-sxml name)
+
+    (define (term->sxml term)
+      (match term
+        [(list 'term op args)
+         `(term (@ (op ,(symbol->string op)))
+                ,@(for/list ([arg args])
+                    (term->sxml arg)))]
+        [(list (and number-tag (or 'integer 'rational 'floating-point)) x)
+         `(,number-tag (@ (value ,(format "~a" x))))]))
+
+    `(context (@ (id ,name))
+              (includes ,@(for/list ([name (hash-ref includes name)])
+                            `(context-ref ,name)))
+              (sorts ,@(for/list ([sd (hash-ref (hash-ref decls name) 'sorts)]
+                                  #:when (equal? (first sd) 'sort))
+                         `(sort (@ (id ,(symbol->string (second sd)))))))
+              (subsorts ,@(for/list ([sd (hash-ref (hash-ref decls name) 'sorts)]
+                                     #:when (equal? (first sd) 'subsort))
+                            `(subsort (@ (subsort ,(symbol->string (second sd)))
+                                         (supersort ,(symbol->string (third sd)))))))
+              (vars ,@(for/list ([vd (hash-ref (hash-ref decls name) 'vars)])
+                        `(var (@ (id ,(symbol->string (second vd)))
+                                 (sort ,(symbol->string (third vd)))))))
+              (ops ,@(for/list ([od (hash-ref (hash-ref decls name) 'ops)])
+                       `(op (@ (id ,(symbol->string (second od))))
+                            (arity ,@(for/list ([sv (third od)])
+                                       (if (equal? (first sv) 'sort)
+                                           `(sort (@ (id ,(symbol->string (second sv)))))
+                                           `(var (@ (id ,(symbol->string (second sv)))
+                                                    (sort ,(symbol->string (third sv))))))))
+                            (sort (@ (id ,(symbol->string (fourth od))))))))
+              (rules ,@(for/list ([rd (hash-ref (hash-ref decls name) 'rules)])
+                         (match-let
+                             ([(list 'rule pattern replacement clauses) rd])
+                           (let* ([is-var? (λ (c) (equal? (first c) 'var))]
+                                  [conditions (filter (λ (c) (not (is-var? c))) clauses)]
+                                  [vars (filter is-var? clauses)])
+                             `(rule (vars ,@(for/list ([vd vars])
+                                              `(var (@ (id ,(symbol->string (second vd)))
+                                                       (sort ,(symbol->string (third vd)))))))
+                                    (pattern ,(term->sxml pattern))
+                                    ,(if (empty? conditions)
+                                         `(condition)
+                                         `(condition ,(term->sxml (first conditions))))
+                                    (replacement ,(term->sxml replacement)))))))
+              (equations)))
+
+  
 
   (define (make-term context-name term-expr loc)
     (define context (get-context context-name))
