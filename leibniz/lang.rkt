@@ -184,8 +184,8 @@
 
 (define (format-sort symbol)
   (if symbol
-      (italic (symbol->string symbol))
-      (italic "<any>")))
+      (symbol->string symbol)
+      "<any>"))
 
 (define (format-var name sort)
   (list (italic (symbol->string name))
