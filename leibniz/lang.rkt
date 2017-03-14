@@ -7,7 +7,7 @@
          context insert-context show-context
          sort var op term rule equation
          comment-sort comment-op
-         test
+         test eval-term
          inset)
 
 (require scribble/doclang
@@ -27,7 +27,8 @@
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
          (prefix-in equations: "./equations.rkt")
-         (prefix-in contexts: "./contexts.rkt"))
+         (prefix-in contexts: "./contexts.rkt")
+         (prefix-in rewrite: "./rewrite.rkt"))
 
 ; Translate the location information from a syntax object into strings and numbers
 ; that can be used at runtime.
@@ -99,6 +100,15 @@
              #:with expansion #`(parsed-test leibniz-doc current-context 
                                              (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
+    (pattern ((~literal eval-term) term-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p))
+                                                #'(term-expr ...))
+             #:attr decl empty
+             #:with expansion #`(parsed-eval-term leibniz-doc current-context
+                                                  (quote parsed)
+                                                  #,(source-loc
+                                                     (first (syntax->list
+                                                             #'(term-expr ...))))))
     (pattern ((~literal show-context) name:str)
              #:attr decl empty
              #:with expansion #'(format-context-declarations
@@ -404,6 +414,24 @@
        (elem #:style leibniz-output-style
              (list "❌ " (format-term signature (third test)))))))
 
+(define (parsed-eval-term leibniz-doc current-context parsed-term-expr loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (contexts:context-signature context))
+  (define vars (contexts:context-vars context))
+  (define term (make-term leibniz-doc current-context parsed-term-expr loc))
+  (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
+                                            (terms:term.sort term)))
+  (define term-elem (format-term signature term))
+  (define rterm (rewrite:reduce context term))
+  (define rsort-str(sorts:constraint->string (operators:signature-sort-graph signature)
+                                             (terms:term.sort rterm)))
+  (define rterm-elem (format-term signature rterm))
+  (list
+   (elem #:style (style "Leibniz" (list leibniz-css (hover-property sort-str)))
+         term-elem)
+   (elem #:style (style "LeibnizOutput" (list leibniz-css (hover-property rsort-str)))
+         (list " ⇒ "
+               rterm-elem))))
 
 ; Raise errors when Leibniz code is used outside of a context
 
@@ -433,6 +461,9 @@
 
 (define-syntax (test stx)
   (raise-syntax-error #f "test used outside context" stx))
+
+(define-syntax (eval-term stx)
+  (raise-syntax-error #f "eval-term used outside context" stx))
 
 ; Insert and format a context referred to by name
 
