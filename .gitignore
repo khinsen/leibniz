@@ -3,6 +3,7 @@
 *.html
 *.js
 *.css
+*.xml
 compiled/
 doc/
 graphs/
