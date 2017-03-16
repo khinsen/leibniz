@@ -9,7 +9,7 @@
          comment-sort comment-op
          test eval-term
          inset
-         xml)
+         xml signature-graphs)
 
 (require scribble/doclang
          scribble/base
@@ -693,3 +693,12 @@
     (λ (output-port)
       (srl:sxml->xml sxml output-port))
     #:mode 'text #:exists 'replace))
+
+; Graphviz output
+
+(define-syntax (signature-graphs stx)
+  (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
+    (syntax-parse stx
+      [(_ directory:str)
+       #`(write-signature-graphs #,leibniz-ref directory)])))
+

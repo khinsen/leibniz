@@ -5,14 +5,17 @@
          new-context get-context get-context-declarations
          get-document-sxml get-context-sxml
          make-term make-rule make-equation
-         make-test)
+         make-test
+         write-signature-graphs)
 
 (require (prefix-in sorts: "./sorts.rkt")
+         (only-in "./sorts.rkt" sort-graph? empty-sort-graph)
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
          (prefix-in equations: "./equations.rkt")
          (prefix-in contexts: "./contexts.rkt")
          (prefix-in rewrite: "./rewrite.rkt")
+         (prefix-in tools: "./tools.rkt")
          "./lightweight-class.rkt"
          threading)
 
@@ -502,7 +505,43 @@
                 [expected (mt replacement)]
                 [rterm (rewrite:reduce context term)])
            (list term expected rterm))]
-        [_ (error "test may not contain rule clauses")]))))
+        [_ (error "test may not contain rule clauses")])))
+
+  (define (write-signature-graphs directory)
+
+    (define (delete-directory-recursive directory)
+      (when (directory-exists? directory)
+        (for ([item (directory-list directory)])
+          (define path (build-path directory item))
+          (cond
+            [(file-exists? path)
+             (delete-file path)]
+            [(directory-exists? path)
+             (delete-directory-recursive path)]))
+        (delete-directory directory)))
+
+    (define (recursive-file-list directory)
+      (flatten
+       (for/list ([item (directory-list directory)])
+         (define path (build-path directory item))
+         (cond
+           [(file-exists? path)
+            path]
+           [(directory-exists? path)
+            (recursive-file-list path)]))))
+
+    (delete-directory-recursive directory)
+    (for ([(name context) (in-hash contexts)])
+      (define path (build-path directory name))
+      (tools:signature->graphviz path context))
+
+    (define dot (find-executable-path "dot"))
+    (unless dot
+      (displayln "Warning: dot executable not found"))
+    (for ([dot-file (recursive-file-list directory)])
+      (with-output-to-file (path-replace-extension dot-file #".png")
+        (thunk (system* dot "-Tpng" dot-file)))
+      (delete-file dot-file))))
 
 
 (define empty-document (document (hash) (hash) (hash)  (hash)))
