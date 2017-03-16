@@ -1,12 +1,13 @@
 #lang racket
 
 (provide 
- (rename-out [context builtin-context]
+ (rename-out [is-context? context?]
              [context- context])
  define-context
  with-context eq tr
  (contract-out
-  [context?           (any/c . -> . boolean?)]
+  [make-context       (sort-graph? signature? varset? rulelist? equationset?
+                       . -> . context?)]
   [check-regularity   (context? . -> . void?)]
   [context-sort-graph (context? . -> . sort-graph?)]
   [context-signature  (context? . -> . signature?)]
@@ -60,6 +61,12 @@
              (display "\n  " port)
              (write eq port))
            (display ")\n" port))])
+
+(define (make-context sort-graph signature vars rules equations)
+  (context sort-graph signature vars rules equations))
+
+(define (is-context? c)
+  (context? c))
 
 (define (valid-context? context)
   (condd

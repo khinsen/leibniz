@@ -149,7 +149,7 @@
               ([eq (in-equations (context-equations context))])
       (add-equation eqs (translate-equation eq))))
 
-  (builtin-context sorts signature vars rules equations))
+  (make-context sorts signature vars rules equations))
 
 
 (module+ test

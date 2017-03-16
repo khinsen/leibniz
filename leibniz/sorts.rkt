@@ -1,8 +1,8 @@
 #lang racket
 
 (provide
+ (rename-out [is-sort-graph? sort-graph?])
  (contract-out
-  [sort-graph?              (any/c . -> . boolean?)]
   [empty-sort-graph         sort-graph?]
   [validate-sort            (sort-graph? symbol? . -> . void?)]
   [add-sort                 (sort-graph? symbol? . -> . sort-graph?)]
@@ -258,6 +258,9 @@
 
 (define empty-sort-graph
   (sort-graph (hash) (hash) (hash)))
+
+(define (is-sort-graph? x)
+  (sort-graph? x))
 
 ;
 ; Tests for sorts and sort constraints

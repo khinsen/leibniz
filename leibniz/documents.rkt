@@ -350,11 +350,11 @@
       (make-rulelist signature (contexts:context-vars context)
                      included-contexts empty))
     (define inclusion-context
-      (contexts:builtin-context sorts
-                                signature
-                                (terms:empty-varset sorts)
-                                rules
-                                equations:empty-equationset))
+      (contexts:make-context sorts
+                             signature
+                             (terms:empty-varset sorts)
+                             rules
+                             equations:empty-equationset))
     (define new-context
       (contexts:merge-contexts inclusion-context context))
     (define added-decls (context-diff inclusion-context new-context))
@@ -377,11 +377,11 @@
     (define-values (rules rule-decls)
       (make-rulelist signature varset included-contexts context-decls))
     (define context
-      (contexts:builtin-context sorts
-                                signature
-                                varset
-                                rules
-                                equations:empty-equationset))
+      (contexts:make-context sorts
+                             signature
+                             varset
+                             rules
+                             equations:empty-equationset))
     (document (hash-set contexts name context)
               (hash-set includes name (map car include-refs))
               (hash-set decls name

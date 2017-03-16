@@ -13,7 +13,7 @@
 (require "./builtins.rkt"
          "./terms.rkt"
          "./equations.rkt"
-         (only-in "./contexts.rkt" context? define-context builtin-context)
+         (only-in "./contexts.rkt" context? define-context make-context)
          threading)
 
 (module+ test
@@ -24,7 +24,7 @@
 ; Truth
 ;
 (define truth
-  (builtin-context
+  (make-context
    truth-sorts truth-signature
    (empty-varset truth-sorts)
    (~> empty-rulelist
@@ -124,12 +124,12 @@
 ; Symbols and strings (to be completed)
 ;
 (define symbol*
-  (builtin-context symbol-sorts symbol-signature
-                   (empty-varset symbol-sorts) empty-rulelist empty-equationset))
+  (make-context symbol-sorts symbol-signature
+                (empty-varset symbol-sorts) empty-rulelist empty-equationset))
 
 (define string*
-  (builtin-context string-sorts string-signature
-                   (empty-varset string-sorts) empty-rulelist empty-equationset))
+  (make-context string-sorts string-signature
+                (empty-varset string-sorts) empty-rulelist empty-equationset))
 
 ;
 ; Integers and rational numbers
@@ -176,9 +176,9 @@
   (expt x y))
 
 (define integer*
-  (builtin-context integer-sorts integer-signature
-                   (empty-varset integer-sorts)
-                   empty-rulelist empty-equationset))
+  (make-context integer-sorts integer-signature
+                (empty-varset integer-sorts)
+                empty-rulelist empty-equationset))
 
 (define-context integers
   (include integer*)
@@ -287,9 +287,9 @@
      #:= (RT (^ 0 an-int)) (T (^ 0 an-int)))))
 
 (define rationals*
-  (builtin-context rational-sorts rational-signature
-                   (empty-varset rational-sorts)
-                   empty-rulelist empty-equationset))
+  (make-context rational-sorts rational-signature
+                (empty-varset rational-sorts)
+                empty-rulelist empty-equationset))
 
 (define-context rationals**
   (include rationals*)
@@ -501,9 +501,9 @@
 ; Floating-point numbers (IEEE binary32 and binary64)
 ;
 (define IEEE-float*
-  (builtin-context IEEE-float-sorts IEEE-float-signature
-                   (empty-varset IEEE-float-sorts)
-                   empty-rulelist empty-equationset))
+  (make-context IEEE-float-sorts IEEE-float-signature
+                (empty-varset IEEE-float-sorts)
+                empty-rulelist empty-equationset))
 
 (define-context IEEE-floating-point
   (include IEEE-float*)
