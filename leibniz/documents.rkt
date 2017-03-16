@@ -118,13 +118,8 @@
   (define non-regular (operators:non-regular-op-example signature))
   (when non-regular
     (match-let ([(list op argsorts rsorts) non-regular])
-      (define loc
-        (for/first ([decl/loc decls]
-                    #:when (and (equal? (first (car decl/loc)) 'op)
-                                (equal? op (second (car decl/loc)))))
-          (cdr decl/loc)))
-      (with-handlers ([exn:fail? (re-raise-exn loc)])
-        (error (format "operator ~a~a has ambiguous sorts ~a" op argsorts rsorts)))))
+      (displayln (format "Warning: operator ~a~a has ambiguous sorts ~a"
+                         op argsorts rsorts))))
   (values signature (reverse op-decls)))
 
 (define (make-varset signature includes decls)
@@ -588,15 +583,15 @@
                                      (term a-foo ())
                                      ((var X foo))))))
 
-  (check-exn exn:fail?
-             ; non-regular signature
-             (thunk
-              (~> empty-document
-                  (new-context "test" empty
-                               (list (cons '(subsort A B) #f)
-                                     (cons '(subsort A C) #f)
-                                     (cons '(op foo ((sort B)) B) #f)
-                                     (cons '(op foo ((sort C)) C) #f))))))
+  ;; (check-exn exn:fail?
+  ;;            ; non-regular signature
+  ;;            (thunk
+  ;;             (~> empty-document
+  ;;                 (new-context-from-source "test" empty
+  ;;                              (list (cons '(subsort A B) #f)
+  ;;                                    (cons '(subsort A C) #f)
+  ;;                                    (cons '(op foo ((sort B)) B) #f)
+  ;;                                    (cons '(op foo ((sort C)) C) #f))))))
 
   (check-true (~> empty-document
                   (new-context "test" empty
