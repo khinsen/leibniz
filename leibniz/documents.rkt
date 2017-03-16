@@ -582,7 +582,7 @@
                             '(op a-foo () foo)
                             '(op a-foo ((sort bar)) foo)
                             '(op a-bar ((var X foo)) bar))
-                      'vars empty
+                      'vars (list '(var X foo))
                       'rules (list
                               '(rule (term a-foo ((term X ())))
                                      (term a-foo ())
