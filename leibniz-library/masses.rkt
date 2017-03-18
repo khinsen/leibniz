@@ -24,22 +24,20 @@ The quotient of two @sort{mass}es is a positive number:
 
 @subsection{Simplification rules}
 
+In the following, we use the variables @var{M:mass}, @var{M1:mass}, @var{M2:mass}
+and @var{F:ℝp}, @var{F1:ℝp}, @var{F2:ℝp}.
+
 Combine multiples of the same mass:
-  @inset{@rule{(F1 × M) + F2 × M ⇒ (F1 + F2) × M
-               ∀ M:mass ∀ F1:ℝp ∀ F2:ℝp}}
+  @inset{@rule{(F1 × M) + F2 × M ⇒ (F1 + F2) × M}}
 
 Replace multiple prefactors and divisions by simple prefactors:
-  @inset{@rule{F1 × F2 × M ⇒ (F1 × F2) × M
-               ∀ M:mass ∀ F1:ℝp ∀ F2:ℝp}
-         @rule{M ÷ F ⇒ (1 ÷ F) × M
-               ∀ M:mass ∀ F:ℝp}}
+  @inset{@rule{F1 × F2 × M ⇒ (F1 × F2) × M}
+         @rule{M ÷ F ⇒ (1 ÷ F) × M}}
 
 Reduce quotients of two @sort{mass}es to a number if possible:
-  @inset{@rule{M1 ÷ F × M2 ⇒ (M1 ÷ F) ÷ M2
-               ∀ M1:mass ∀ M2:mass ∀ F:ℝp}
-         @rule{(F × M1) ÷ M2 ⇒ F × M1 ÷ M2
-               ∀ M1:mass ∀ M2:mass ∀ F:ℝp}
-         @rule{M ÷ M ⇒ 1 ∀ M:mass}}
+  @inset{@rule{M1 ÷ F × M2 ⇒ (M1 ÷ F) ÷ M2}
+         @rule{(F × M1) ÷ M2 ⇒ F × M1 ÷ M2}
+         @rule{M ÷ M ⇒ 1}}
 }
 
 @context["mass-units" #:use "mass" #:use "boolean/boolean"]{
@@ -66,16 +64,16 @@ pivot unit:
 
 @subsection{Simplification rules}
 
+Additional variables: @var{MU:mass-unit}, @var{MU1:mass-unit}, @var{MU2:mass-unit}.
+
 The following rule achieves unit conversion in concertation with the mass
 simplification rules, which reduce the quotient to a number with the help
 of the conversion factors:
-  @inset{@rule{M in MU ⇒ (M ÷ MU) × MU  ∀ M:mass ∀ MU:mass-unit}}
+  @inset{@rule{M in MU ⇒ (M ÷ MU) × MU}}
 
 Moreover, the quotient of two mass units is reduced to the quotient of their
 conversion factors with respect to the pivot unit:
   @inset{@rule{MU1 ÷ MU2 ⇒ (MU1 ÷ kg) ÷ MU2 ÷ kg
-         ∀ MU1:mass-unit
-         ∀ MU2:mass-unit
          if ¬(MU2 == kg)}}
 
 @subsection{Tests}
@@ -87,3 +85,5 @@ conversion factors with respect to the pivot unit:
          @test{(2 × g) in mg ⇒ 2000 × mg}}
 
 }
+
+@xml["masses.xml"]

@@ -4,6 +4,7 @@
 *.js
 *.css
 *.xml
+*.sig
 compiled/
 doc/
 graphs/

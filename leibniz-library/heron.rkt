@@ -77,3 +77,4 @@ The deviation is always smaller than the prescribed tolerance.
 }
 
 @xml["heron.xml"]
+@signature-graphs["heron.sig"]

@@ -3,6 +3,8 @@
 @title[#:version ""]{Classical point mechanics}
 @author{Konrad Hinsen}
 
+@import["boolean" leibniz-library/boolean]
+
 @context["kinematics"]{
 
 @section{Kinematics}
