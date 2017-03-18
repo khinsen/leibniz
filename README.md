@@ -27,18 +27,21 @@ at [Guaana](https://www.guaana.com/).
 
 ## Status
 
-The support code for Leibniz is now sufficiently advanced that first
-examples for digital scientific knowledge can be developed. They
-are located (no surprise) under `examples`. For a first contact
-with Leibniz, I suggest looking at `examples/quantities/mass.rkt`,
-which shows how physical quantities and units can be defined. For a much
-more elaborate example, see `examples/mechanics/solar-system.rkt`, which
-defines gravitational interactions in a system of celestial bodies. In
-`examples/quick-guide.md` you can find essential background information
-for understanding the examples.
+In a word: experimental. The major milestone that the implementation has
+reached is to work like a digital scientific notation: Leibniz specifications
+are embedded into the plain text discourse written for human readers, just
+like traditional semi-formal mathematical notation. This matters because
+it eliminates an important source of mistakes: the translation from human-readable
+and peer-reviewed descriptions of models and methods into computer-readable code.
 
-Readers interested in the implementation should start by looking at
-the file `notes.md` for an overview of the code structure.
+However, many features that I have planned for the language are still missing: built-in
+collection types (lists/arrays, sets, ...) interfaces to databases and external datasets,
+support for workflow.
+
+For a first contact with Leibniz, I suggest studying the examples under
+`leibniz-library`, and reading `leibniz-library/quick-guide.md`. Readers interested
+in the implementation should start by looking at the file `notes.md` for
+an overview of the code structure.
 
 I will announce any significant progress on my
 [Guaana project](https://www.guaana.com/projects/scientific-notations-for-the-digital-era).
@@ -123,6 +126,7 @@ for better readability.
 To install Leibniz and its dependencies, type:
 ```bash
    raco pkg install git://github.com/khinsen/leibniz\?path=leibniz
+   raco pkg install git://github.com/khinsen/leibniz\?path=leibniz-library
 ```
 
 To run the Leibniz test suite, type
@@ -143,6 +147,6 @@ by the [CRAPL](http://matt.might.net/articles/crapl/) license.
 
 ## Branch notes
 
-This branch contains work on a Leibniz authoring environment based on
-Scribble. Leibniz declarations are embedded into a Scribble document
-from which contexts can then be extracted.
+Most branches of this repository contain experiments that test the utility and feasibility of ideas for improvements and new features. Each branch has a short note in this place that explains its reason for being. This branch (master) always contains the version currently considered most useful.
+
+Note that all branches except master may be rebased, or modified in other ways. If you want to fork this repository, please don't rely on any branch other than master.

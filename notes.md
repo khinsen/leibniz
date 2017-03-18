@@ -31,6 +31,13 @@ bottom):
  - `builtin-contexts.rkt` implements a few built-in contexts
    (truth, boolean, numbers).
 
+ - `documents.rkt` implements the interface between the low-level support
+   code and the Scribble-based language that Leibniz authors use.
+   
+ - `lang.rkt` and everything under `lang` implement the Leibniz language,
+   which is an extension of `scribble/base` that adds commands for
+   defining sorts, operators, rules etc.
+ 
 Three modules are not part of this stack:
 
  - `condd.rkt` and `lightweight-class.rkt` provide generic utilities
@@ -49,3 +56,14 @@ particular needs to be defined properly.
 ### Labels in rules and equations
 
 Labels are not required to be unique, which may turn out to be a bad choice.
+
+### The context data structure
+
+There are two internal data structures for contexts at this time: the low-level
+one is defined in `contexts.rkt`, and is used in validation and rewriting.
+The higher-level one is defined in `documents.rkt`. It is a parsed version
+of what Leibniz authors write, and it is also what the XML representation encodes.
+t isn't clear to me yet what the best data structure is for implementing code
+transformations, which will be an important part of the Leibniz infrastructure.
+These data structures are therefore likely to change over time, and perhaps just
+one will survive.
