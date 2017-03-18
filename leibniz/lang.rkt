@@ -25,6 +25,7 @@
                      data/applicative)
          "./condd.rkt"
          "./documents.rkt"
+         "./transformations.rkt"
          (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
@@ -152,10 +153,30 @@
                   (list body.expansion ...)))]
       [(_ name:str
           include:context-ref ...
+          (~seq #:transform-context base-name:str (tr:expr ...))
           body:body-item ...)
-       #`(begin (set! #,leibniz-ref (new-context #,leibniz-ref name
-                                                 (list include.ref ...)
-                                                 #,(cons #'list (apply append (attribute body.decl)))))
+       #`(begin (set! #,leibniz-ref
+                      (new-context-from-declarations
+                           #,leibniz-ref name
+                           (list include.ref ...)
+                           (transform-context-declarations
+                            (get-context-declarations #,leibniz-ref base-name)
+                            (list (quote tr) ...))))
+                (unless (empty? #,(cons 'list (apply append (attribute body.decl))))
+                  (error "Transformed context may not be extended"))
+                (margin-note "Context " (italic name)
+                             (list (linebreak)
+                                   "uses " (italic include.name)) ...)
+                (let ([leibniz-doc #,leibniz-ref]
+                      [current-context name])
+                  (list body.expansion ...)))]
+      [(_ name:str
+          include:context-ref ...
+          body:body-item ...)
+       #`(begin (set! #,leibniz-ref
+                      (new-context-from-source #,leibniz-ref name
+                                               (list include.ref ...)
+                                               #,(cons #'list (apply append (attribute body.decl)))))
                 (margin-note "Context " (italic name)
                              (list (linebreak)
                                    "uses " (italic include.name)) ...)
@@ -490,7 +511,7 @@
             (format-sort (second sd)))))
   (define subsorts
     (for/list ([sd sort-decls]
-               #:when (equal? (first sd) 'sort))
+               #:when (equal? (first sd) 'subsort))
       (elem #:style leibniz-output-style
             (format-subsort-declaration (second sd) (third sd)))))
   (if (empty? sort-decls)

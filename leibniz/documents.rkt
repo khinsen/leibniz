@@ -2,7 +2,8 @@
 
 (provide empty-document
          add-library add-context
-         new-context get-context get-context-declarations
+         new-context-from-declarations new-context-from-source
+         get-context get-context-declarations
          get-document-sxml get-context-sxml
          make-term make-rule make-equation
          make-test
@@ -75,8 +76,11 @@
     (for/fold ([sorts after-includes]
                [sort-decls empty])
               ([decl/loc decls])
-      (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
-        (define decl (car decl/loc))
+      (define-values (decl loc)
+        (if (list? (car decl/loc))
+            (values (car decl/loc) (cdr decl/loc))
+            (values decl/loc #f)))
+      (with-handlers ([exn:fail? (re-raise-exn loc)])
         (match decl
           [(list 'sort s)
            (values (sorts:add-sort sorts s)
@@ -110,8 +114,10 @@
     (for/fold ([sig after-includes]
                [op-decls empty])
               ([decl/loc decls])
-      (define decl (car decl/loc))
-      (define loc (cdr decl/loc))
+      (define-values (decl loc)
+        (if (list? (car decl/loc))
+            (values (car decl/loc) (cdr decl/loc))
+            (values decl/loc #f)))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
         (match decl
           [(list 'op op args rsort)
@@ -134,8 +140,10 @@
   (for/fold ([vs after-includes]
              [var-decls empty])
             ([decl/loc decls])
-    (define decl (car decl/loc))
-    (define loc (cdr decl/loc))
+    (define-values (decl loc)
+      (if (list? (car decl/loc))
+          (values (car decl/loc) (cdr decl/loc))
+          (values decl/loc #f)))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (match decl
         [(list 'var name sort)
@@ -216,8 +224,11 @@
     (for/fold ([rl after-includes]
                [rule-decls empty])
               ([decl/loc decls])
-      (with-handlers ([exn:fail? (re-raise-exn (cdr decl/loc))])
-        (define decl (car decl/loc))
+      (define-values (decl loc)
+        (if (list? (car decl/loc))
+            (values (car decl/loc) (cdr decl/loc))
+            (values decl/loc #f)))
+      (with-handlers ([exn:fail? (re-raise-exn loc)])
         (define rule (make-rule* signature varset decl))
         (if rule
             (values (equations:add-rule rl rule)
@@ -323,11 +334,11 @@
 (define-class document
 
   (field contexts includes decls library)
-                                        ; contexts: a hash mapping context names (strings) to contexts
-                                        ; includes: a hash mapping context names (strings) to lists of includes (strings)
-                                        ; decls: a hash mapping context names to hashes with keys 'sorts 'ops 'vars 'rules,
-                                        ;        values are lists of the declarations in each category
-                                        ; library: a hash mapping document names to documents
+  ; contexts: a hash mapping context names (strings) to contexts
+  ; includes: a hash mapping context names (strings) to lists of includes (strings)
+  ; decls: a hash mapping context names to hashes with keys 'sorts 'ops 'vars 'rules,
+  ;        values are lists of the declarations in each category
+  ; library: a hash mapping document names to documents
 
   (define (add-library name library-document)
     (document contexts
@@ -361,7 +372,35 @@
               (hash-set decls name added-decls)
               library))
 
-  (define (new-context name include-refs context-decls)
+  (define (new-context-from-declarations name include-refs context-decls)
+    (define included-contexts
+      (for/list ([name/loc include-refs])
+        (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
+          (get-context (car name/loc)))))
+    (define-values (sorts sort-decls)
+      (make-sort-graph included-contexts (hash-ref context-decls 'sorts)))
+    (define-values (signature op-decls)
+      (make-signature sorts included-contexts (hash-ref context-decls 'ops)))
+    (define-values (varset var-decls)
+      (make-varset signature included-contexts (hash-ref context-decls 'vars)))
+    (define-values (rules rule-decls)
+      (make-rulelist signature varset included-contexts (hash-ref context-decls 'rules)))
+    (define context
+      (contexts:make-context sorts
+                             signature
+                             varset
+                             rules
+                             equations:empty-equationset))
+    (document (hash-set contexts name context)
+              (hash-set includes name (map car include-refs))
+              (hash-set decls name
+                        (hash 'sorts sort-decls
+                              'ops op-decls
+                              'vars var-decls
+                              'rules rule-decls))
+              library))
+
+  (define (new-context-from-source name include-refs context-decls)
     (define included-contexts
       (for/list ([name/loc include-refs])
         (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
@@ -548,66 +587,71 @@
 
 (module+ test
   (check-equal? (~> empty-document
-                    (new-context "test" empty
-                                 (list (cons '(sort foo) #f)
-                                       (cons '(sort bar) #f)
-                                       (cons '(subsort foo bar) #f)))
+                    (new-context-from-source
+                     "test" empty
+                     (list (cons '(sort foo) #f)
+                           (cons '(sort bar) #f)
+                           (cons '(subsort foo bar) #f)))
                     (get-context "test"))
                 test-context1)
   (check-equal? (~> empty-document
-                    (new-context "test" empty
-                                 (list (cons '(subsort foo bar) #f)))
+                    (new-context-from-source
+                     "test" empty
+                     (list (cons '(subsort foo bar) #f)))
                     (get-context "test"))
                 test-context1)
   (check-equal? (~> empty-document
-                    (new-context "test" empty
-                                 (list (cons '(sort foo) #f)
-                                       (cons '(sort bar) #f)
-                                       (cons '(subsort foo bar) #f)
-                                       (cons '(sort bar) #f)
-                                       (cons '(subsort foo bar) #f)
-                                       (cons '(sort foo) #f)))
+                    (new-context-from-source
+                     "test" empty
+                     (list (cons '(sort foo) #f)
+                           (cons '(sort bar) #f)
+                           (cons '(subsort foo bar) #f)
+                           (cons '(sort bar) #f)
+                           (cons '(subsort foo bar) #f)
+                           (cons '(sort foo) #f)))
                     (get-context "test"))
                 test-context1)
 
   (check-equal? (~> empty-document
-                    (new-context "test" empty
-                                 (list (cons '(subsort foo bar) #f)
-                                       (cons '(op a-foo () foo) #f)))
+                    (new-context-from-source
+                     "test" empty
+                     (list (cons '(subsort foo bar) #f)
+                           (cons '(op a-foo () foo) #f)))
                     (make-term "test" '(term a-foo ()) #f)
                     (terms:term->string))
                 "foo:a-foo")
 
   (check-equal? (~> empty-document
-                    (new-context "test" empty
-                                 (list (cons '(subsort foo bar) #f)
-                                       (cons '(sort boolean) #f)
-                                       (cons '(op a-foo () foo) #f)
-                                       (cons '(op a-foo ((sort bar)) foo) #f)
-                                       (cons '(op a-bar ((sort foo)) bar) #f)
-                                       (cons '(op true () boolean) #f)
-                                       (cons '(op false () boolean) #f)
-                                       (cons '(op _∧ ((sort boolean) (sort boolean)) boolean) #f)
-                                       (cons '(op a-test ((sort foo)) boolean) #f)
-                                       (cons '(op another-test ((sort foo)) boolean) #f)
-                                       (cons '(rule (term a-foo ((term X ())))
-                                                    (term a-foo ())
-                                                    ((var X foo)
-                                                     (term a-test ((term X ())))
-                                                     (term another-test ((term X ()))))) #f)
-                                       ))
+                    (new-context-from-source
+                     "test" empty
+                     (list (cons '(subsort foo bar) #f)
+                           (cons '(sort boolean) #f)
+                           (cons '(op a-foo () foo) #f)
+                           (cons '(op a-foo ((sort bar)) foo) #f)
+                           (cons '(op a-bar ((sort foo)) bar) #f)
+                           (cons '(op true () boolean) #f)
+                           (cons '(op false () boolean) #f)
+                           (cons '(op _∧ ((sort boolean) (sort boolean)) boolean) #f)
+                           (cons '(op a-test ((sort foo)) boolean) #f)
+                           (cons '(op another-test ((sort foo)) boolean) #f)
+                           (cons '(rule (term a-foo ((term X ())))
+                                        (term a-foo ())
+                                        ((var X foo)
+                                         (term a-test ((term X ())))
+                                         (term another-test ((term X ()))))) #f)))
                     (get-context "test"))
                 test-context2)
 
   (check-equal? (~> empty-document
-                    (new-context "test" empty
-                                 (list (cons '(subsort foo bar) #f)
-                                       (cons '(op a-foo () foo) #f)
-                                       (cons '(op a-foo ((sort bar)) foo) #f)
-                                       (cons '(op a-bar ((var X foo)) bar) #f)
-                                       (cons '(rule (term a-foo ((term X ())))
-                                                    (term a-foo ())
-                                                    ((var X foo))) #f)))
+                    (new-context-from-source
+                     "test" empty
+                     (list (cons '(subsort foo bar) #f)
+                           (cons '(op a-foo () foo) #f)
+                           (cons '(op a-foo ((sort bar)) foo) #f)
+                           (cons '(op a-bar ((var X foo)) bar) #f)
+                           (cons '(rule (term a-foo ((term X ())))
+                                        (term a-foo ())
+                                        ((var X foo))) #f)))
                     (get-context-declarations "test"))
                 (hash 'sorts (list '(sort foo)
                                    '(sort bar)
@@ -633,13 +677,14 @@
   ;;                                    (cons '(op foo ((sort C)) C) #f))))))
 
   (check-true (~> empty-document
-                  (new-context "test" empty
-                               (list (cons '(sort foo) #f)
-                                     (cons '(op a-foo () foo) #f)
-                                     (cons '(op a-foo ((var X foo)) foo) #f)
-                                     (cons '(rule (term a-foo ((term X ())))
-                                                  (term a-foo ())
-                                                  ((var X foo))) #f)))
+                  (new-context-from-source
+                   "test" empty
+                   (list (cons '(sort foo) #f)
+                         (cons '(op a-foo () foo) #f)
+                         (cons '(op a-foo ((var X foo)) foo) #f)
+                         (cons '(rule (term a-foo ((term X ())))
+                                      (term a-foo ())
+                                      ((var X foo))) #f)))
                   (make-test "test" '(rule (term a-foo ((term a-foo ())))
                                            (term a-foo ())
                                            ())
