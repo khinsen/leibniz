@@ -414,8 +414,9 @@
 ;
 (define-class signature
 
-  (field sort-graph operators builtins)
+  (field sort-graph optimized-sort-graph operators builtins)
   ; sort-graph: the sort graph everything is based on
+  ; optimized-sort-graph: sort-graph optimized for subsort lookup
   ; operators: a hash mapping operator names (symbols) to operators
   ; builtins: the builtin special term types included in this signature
   ;           (a set of symbols)
@@ -432,12 +433,12 @@
                                              (exn-message exn))))])
       (let ([ops (hash-update operators symbol
                               (λ (op) (add-rank op arity sort meta))
-                              (thunk (add-rank (empty-operator sort-graph)
+                              (thunk (add-rank (empty-operator optimized-sort-graph)
                                                arity sort meta)))])
         (for ([(symbol op) ops])
           (unless (monotonic-op? op)
             (error "found non-monotonic rank in " symbol)))
-        (signature sort-graph ops builtins))))
+        (signature sort-graph optimized-sort-graph ops builtins))))
 
   (define (lookup-op-meta symbol arity)
     (define op (hash-ref operators symbol #f))
@@ -520,8 +521,7 @@
           (display (cons symbol (car rank)) port))
       (display " " port)
       (display (cdr rank) port)
-      (display ")" port))
-    )
+      (display ")" port)))
 
   (define (*display* port mode)
     (display "(signature" port)
@@ -532,7 +532,7 @@
   (add-op* signature symbol arity sort meta))
 
 (define (empty-signature sort-graph #:builtins [builtins (set)])
-  (signature sort-graph (hash) builtins))
+  (signature sort-graph (optimize-subsort-lookup sort-graph) (hash) builtins))
 
 (module+ test
   (define a-signature

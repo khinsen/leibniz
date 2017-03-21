@@ -166,10 +166,14 @@
                                    (cons s1 s2)))))))
 
   (define (all-subsorts sort)
-    (define ss (hash-ref subsorts sort))
-    (for/fold ([ss ss])
-              ([s ss])
-      (set-union ss (all-subsorts s))))
+    (cond
+      [subsort-cache
+       (hash-ref subsort-cache sort)]
+      [else
+       (define ss (hash-ref subsorts sort))
+       (for/fold ([ss ss])
+                 ([s ss])
+         (set-union ss (all-subsorts s)))]))
 
   (define (kind sort-or-kind)
     (if (sort? sort-or-kind)
