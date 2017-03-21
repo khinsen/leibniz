@@ -8,6 +8,7 @@
   [add-sort                 (sort-graph? symbol? . -> . sort-graph?)]
   [add-subsort-relation     (sort-graph? symbol? symbol? . -> . sort-graph?)]
   [merge-sort-graphs        (sort-graph? sort-graph? . -> . sort-graph?)]
+  [optimize-subsort-lookup  (sort-graph? . -> . sort-graph?)]
   [all-sorts                (sort-graph? . -> . set?)]
   [all-subsort-relations    (sort-graph? . -> . set?)]
   [all-subsorts             (sort-graph? sort? . -> . set?)]
@@ -62,11 +63,13 @@
 ;
 (define-class sort-graph
 
-  (field kinds supersorts subsorts)
+  (field kinds supersorts subsorts subsort-cache)
   ; kinds: a hash mapping sorts to their kinds, each kind being a set of sorts
   ; supersorts: a hash mapping sorts to their immediate supersorts
   ; subsorts: a hash mapping sorts to their immediate subsorts
-
+  ; subsort-cache: #f or a hash mapping sorts tp a set of all their
+  ;                subsorts, immediate and indirect.
+  ;
   ; The information in supersorts and subsorts is identical (a
   ; directed graph); each hash can be created from the other. The set
   ; of kinds can also be computed from the subsort relations. All
@@ -78,13 +81,17 @@
     (hash-has-key? subsorts sort))
 
   (define (is-subsort? sort1 sort2)
-    (validate-sort sort1)
-    (validate-sort sort2)
-    (or (equal? sort1 sort2)
-        (let ([ss (hash-ref subsorts sort2)])
-          (or (set-member? ss sort1)
-              (for/or ([s (in-set ss)])
-                (is-subsort? sort1 s))))))
+    (cond
+      [subsort-cache
+       (set-member? (hash-ref subsort-cache sort2) sort1)]
+      [else
+       (validate-sort sort1)
+       (validate-sort sort2)
+       (or (equal? sort1 sort2)
+           (let ([ss (hash-ref subsorts sort2)])
+             (or (set-member? ss sort1)
+                 (for/or ([s (in-set ss)])
+                   (is-subsort? sort1 s)))))]))
   
   (define (validate-sort sort)
     (unless (has-sort? sort)
@@ -97,7 +104,8 @@
         this
         (sort-graph (hash-set kinds new-sort (set new-sort))
                     (hash-set supersorts new-sort (set))
-                    (hash-set subsorts new-sort (set)))))
+                    (hash-set subsorts new-sort (set))
+                    #f)))
 
   (define (add-subsort-relation subsort supersort)
     (validate-sort subsort)
@@ -114,7 +122,8 @@
                 (hash-update supersorts subsort
                              (λ (s) (set-add s supersort)))
                 (hash-update subsorts supersort
-                                 (λ (s) (set-add s subsort)))))
+                                 (λ (s) (set-add s subsort)))
+                #f))
 
   (define (merge-sort-graphs s-graph)
     (let ([sg
@@ -124,6 +133,27 @@
       (for/fold ([sg sg])
                 ([ss-relation (send s-graph all-subsort-relations)])
         (send sg add-subsort-relation (car ss-relation) (cdr ss-relation)))))
+
+  (define (optimize-subsort-lookup)
+    (define (full-subsort-set acc sort)
+      (cond
+        [(hash-has-key? acc sort) acc]
+        [else
+         (define i-ss (hash-ref subsorts sort))
+         (for/fold ([acc (hash-set acc sort (set-add i-ss sort))])
+                   ([s (in-set i-ss)])
+          (define new-acc (full-subsort-set acc s))
+           (hash-update new-acc sort
+                        (λ (ss) (set-union ss (hash-ref new-acc s)))))]))
+    (cond
+      [subsort-cache
+       this]
+      [else
+       (define cache
+         (for/fold ([acc (hash)])
+                   ([sort (hash-keys subsorts)])
+           (full-subsort-set acc sort)))
+       (sort-graph kinds supersorts subsorts cache)]))
 
   (define (all-sorts)
     (list->set (hash-keys subsorts)))
@@ -224,7 +254,8 @@
         (for/list ([k components])
           (sort-graph (for/hash ([s k]) (values s k))
                       (for/hash ([s k]) (values s (hash-ref supersorts s)))
-                      (for/hash ([s k]) (values s (hash-ref subsorts s)))))))
+                      (for/hash ([s k]) (values s (hash-ref subsorts s)))
+                      #f))))
 
   (define (display-sort-graph indentation port)
     (define prefix (make-string indentation #\space))
@@ -257,7 +288,7 @@
     (display ")\n" port)))
 
 (define empty-sort-graph
-  (sort-graph (hash) (hash) (hash)))
+  (sort-graph (hash) (hash) (hash) #f))
 
 (define (is-sort-graph? x)
   (sort-graph? x))
@@ -392,4 +423,29 @@
                       (~> empty-sort-graph
                           (add-sort 'V) (add-sort 'W)
                           (add-subsort-relation 'V 'W))))
-)
+
+  (check-equal? (~> an-s-graph
+                    (optimize-subsort-lookup)
+                    (sort-graph-subsort-cache))
+                (hash 'A (set 'A)
+                      'B (set 'A 'B)
+                      'C (set 'A 'B 'C)
+                      'D (set 'A 'D)))
+  (check-equal? (~> merged
+                    (optimize-subsort-lookup)
+                    (sort-graph-subsort-cache))
+                (hash 'A (set 'A)
+                      'B (set 'A 'B)
+                      'C (set 'A 'B 'C)
+                      'D (set 'A 'D)
+                      'X (set 'A 'X)
+                      'Y (set 'A 'X 'Y)))
+  (check-equal? (~> two-kinds
+                    (optimize-subsort-lookup)
+                    (sort-graph-subsort-cache))
+                (hash 'A (set 'A)
+                      'B (set 'A 'B)
+                      'C (set 'A 'B 'C)
+                      'D (set 'A 'D)
+                      'V (set 'V)
+                      'W (set 'V 'W))))
