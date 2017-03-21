@@ -85,7 +85,7 @@
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
     (pattern ((~literal equation) equation-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
-             #:attr decl empty
+             #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
              #:with expansion #`(parsed-equation leibniz-doc current-context 
                                                  (quote parsed)
                                                  #,(source-loc (first (syntax->list #'(equation-expr ...))))))
@@ -366,7 +366,7 @@
               (format-term signature cond))
         ""))
   (list pattern-elem
-        (if proc-rule? " → "  " ⇒ ")
+        (if proc-rule? " ↣ "  " ⇒ ")
         replacement-elem
         var-elems
         cond-elem))

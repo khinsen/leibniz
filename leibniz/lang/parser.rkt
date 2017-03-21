@@ -39,7 +39,7 @@
       [rest <-  (many/p letter-or-symbol-or-digit/p)]
       (pure (string->symbol (apply string (append (list first) rest))))))
 
-(define reserved-identifiers (set '⊆ '→ '⇒ '= '∀ 'if))
+(define reserved-identifiers (set '⊆ '↣ '⇒ '= '∀ 'if))
 
 (define non-reserved-identifier/p
   (guard/p identifier/p (λ (x) (not (set-member? reserved-identifiers x)))
