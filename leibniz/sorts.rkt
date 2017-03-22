@@ -12,6 +12,7 @@
   [all-sorts                (sort-graph? . -> . set?)]
   [all-subsort-relations    (sort-graph? . -> . set?)]
   [all-subsorts             (sort-graph? sort? . -> . set?)]
+  [has-multiple-supersorts? (sort-graph? sort? . -> . boolean?)]
   [has-sort?                (sort-graph? symbol? . -> . boolean?)]
   [is-subsort?              (sort-graph? symbol? symbol? . -> . boolean?)]
   [kind                     (sort-graph? sort-or-kind? . -> . set?)]
@@ -174,6 +175,9 @@
        (for/fold ([ss ss])
                  ([s ss])
          (set-union ss (all-subsorts s)))]))
+
+  (define (has-multiple-supersorts? sort)
+    (> (set-count (hash-ref supersorts sort (set))) 1))
 
   (define (kind sort-or-kind)
     (if (sort? sort-or-kind)

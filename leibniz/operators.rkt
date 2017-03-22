@@ -210,12 +210,16 @@
     (monotonic* ranks))
 
   (define (non-regularity-example-ranks)
-    ; Do a brute-force search over all possible argument sorts
-    ; and yield those for which there is no unique least value sort.
+    ; Do a brute-force search over all argument sorts that have
+    ; more than one immediate supersort, and yield those for which
+    ; there is no unique least value sort.
     (in-generator #:arity 2
-     (for ([arg-sorts (cartesian-product
-                       (map (λ (c) (conforming-sorts sort-graph c))
-                            (first k-rank)))])
+     (for ([arg-sorts
+            (cartesian-product
+             (for/list ([c (first k-rank)])
+               (for/set ([s (in-set (conforming-sorts sort-graph c))]
+                         #:when (has-multiple-supersorts? sort-graph s))
+                 s)))])
        (define value-sorts (map second (matching-ranks-for-arity arg-sorts)))
        (unless (or (< (length value-sorts) 2)
                    (for/and ([vs (rest value-sorts)])
@@ -435,9 +439,6 @@
                               (λ (op) (add-rank op arity sort meta))
                               (thunk (add-rank (empty-operator optimized-sort-graph)
                                                arity sort meta)))])
-        (for ([(symbol op) ops])
-          (unless (monotonic-op? op)
-            (error "found non-monotonic rank in " symbol)))
         (signature sort-graph optimized-sort-graph ops builtins))))
 
   (define (lookup-op-meta symbol arity)
