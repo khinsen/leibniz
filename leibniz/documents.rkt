@@ -413,36 +413,37 @@
               (hash-set decls name added-decls)
               library))
 
-  (define (new-context-from-declarations name include-refs context-decls)
-    (define included-contexts
-      (for/list ([name/loc include-refs])
-        (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
-          (get-context (car name/loc)))))
-    (define-values (sorts sort-decls)
-      (make-sort-graph included-contexts (hash-ref context-decls 'sorts)))
-    (define-values (signature op-decls)
-      (make-signature sorts included-contexts (hash-ref context-decls 'ops)))
-    (define-values (varset var-decls)
-      (make-varset signature included-contexts (hash-ref context-decls 'vars)))
-    (define-values (rules rule-decls)
-      (make-rulelist signature varset included-contexts (hash-ref context-decls 'rules)))
-    (define-values (equations eq-decls)
-      (make-equationset signature varset included-contexts (hash-ref context-decls 'equations)))
-    (define context
-      (contexts:make-context sorts
-                             signature
-                             varset
-                             rules
-                             equations))
-    (document (hash-set contexts name context)
-              (hash-set includes name (map car include-refs))
-              (hash-set decls name
-                        (hash 'sorts sort-decls
-                              'ops op-decls
-                              'vars var-decls
-                              'rules rule-decls
-                              'equations eq-decls))
-              library))
+  (define (new-context-from-declarations name include-refs context-decls loc)
+    (with-handlers ([exn:fail? (re-raise-exn loc)])
+      (define included-contexts
+        (for/list ([name/loc include-refs])
+          (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
+            (get-context (car name/loc)))))
+      (define-values (sorts sort-decls)
+        (make-sort-graph included-contexts (hash-ref context-decls 'sorts)))
+      (define-values (signature op-decls)
+        (make-signature sorts included-contexts (hash-ref context-decls 'ops)))
+      (define-values (varset var-decls)
+        (make-varset signature included-contexts (hash-ref context-decls 'vars)))
+      (define-values (rules rule-decls)
+        (make-rulelist signature varset included-contexts (hash-ref context-decls 'rules)))
+      (define-values (equations eq-decls)
+        (make-equationset signature varset included-contexts (hash-ref context-decls 'equations)))
+      (define context
+        (contexts:make-context sorts
+                               signature
+                               varset
+                               rules
+                               equations))
+      (document (hash-set contexts name context)
+                (hash-set includes name (map car include-refs))
+                (hash-set decls name
+                          (hash 'sorts sort-decls
+                                'ops op-decls
+                                'vars var-decls
+                                'rules rule-decls
+                                'equations eq-decls))
+                library)))
 
   (define (new-context-from-source name include-refs context-decls)
     (define included-contexts

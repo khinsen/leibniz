@@ -161,7 +161,8 @@
                            (list include.ref ...)
                            (transform-context-declarations
                             (get-context-declarations #,leibniz-ref base-name)
-                            (list (quote tr) ...))))
+                            (list (quote tr) ...))
+                           #,(source-loc stx)))
                 (unless (empty? #,(cons 'list (apply append (attribute body.decl))))
                   (error "Transformed context may not be extended"))
                 (margin-note "Context " (italic name)
