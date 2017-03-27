@@ -64,16 +64,6 @@
 
 ; Make a signature from a sequence of declarations
 
-(define (add-if-missing element list)
-  (if (member element list)
-      list
-      (cons element list)))
-
-(define (decl-and-loc decl/loc)
-  (if (list? (car decl/loc))
-            (values (car decl/loc) (cdr decl/loc))
-            (values decl/loc #f)))
-
 (define (get-loc locs decl)
   (cond
     [(procedure? locs)
@@ -98,37 +88,7 @@
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ss))])
       (sorts:add-subsort-relation sorts (car ss) (cdr ss)))))
 
-(define (make-sort-graph+ includes decls)
-  (define after-includes
-    (for/fold ([ms sorts:empty-sort-graph])
-              ([c includes])
-      (sorts:merge-sort-graphs ms (contexts:context-sort-graph c))))
-  (define-values (sort-graph sort-decls)
-    (for/fold ([sorts after-includes]
-               [sort-decls empty])
-              ([decl/loc decls])
-      (define-values (decl loc) (decl-and-loc decl/loc))
-      (with-handlers ([exn:fail? (re-raise-exn loc)])
-        (match decl
-          [(list 'sort s)
-           (values (sorts:add-sort sorts s)
-                   (add-if-missing decl sort-decls))]
-          [(list 'subsort s1 s2)
-           (values (~> sorts
-                       (sorts:add-sort s1)
-                       (sorts:add-sort s2)
-                       (sorts:add-subsort-relation s1 s2))
-                   (~>> sort-decls
-                        (add-if-missing (list 'sort s1))
-                        (add-if-missing (list 'sort s2))
-                        (add-if-missing decl)))]
-          [(list 'op op args rsort)
-           (values (sorts:add-sort sorts rsort)
-                   (add-if-missing (list 'sort rsort) sort-decls))]
-          [_ (values sorts sort-decls)]))))
-  (values sort-graph (reverse sort-decls)))
-
-(define (make-signature- sorts includes op-decls locs)
+(define (make-signature sorts includes op-decls locs)
   (define (argsort sort-or-var-decl)
     (match sort-or-var-decl
       [(list 'sort sort-id) sort-id]
@@ -153,34 +113,7 @@
                          op arity rsorts))))
   signature)
 
-(define (make-signature sort-graph includes decls)
-  (define (argsort sort-or-var-decl)
-    (match sort-or-var-decl
-      [(list 'sort sort-id) sort-id]
-      [(list 'var var-name sort-id) sort-id]))
-  (define after-includes
-    (for/fold ([msig (operators:empty-signature sort-graph)])
-              ([c includes])
-      (operators:merge-signatures msig (contexts:context-signature c) sort-graph)))
-  (define-values (signature op-decls)
-    (for/fold ([sig after-includes]
-               [op-decls empty])
-              ([decl/loc decls])
-      (define-values (decl loc) (decl-and-loc decl/loc))
-      (with-handlers ([exn:fail? (re-raise-exn loc)])
-        (match decl
-          [(list 'op op args rsort)
-           (values (operators:add-op sig op (map argsort args) rsort #:meta loc)
-                   (add-if-missing decl op-decls))]
-          [_ (values sig op-decls)]))))
-  (define non-regular (operators:non-regular-op-example signature))
-  (when non-regular
-    (match-let ([(list op argsorts rsorts) non-regular])
-      (displayln (format "Warning: operator ~a~a has ambiguous sorts ~a"
-                         op argsorts rsorts))))
-  (values signature (reverse op-decls)))
-
-(define (make-varset- signature includes var-decls locs)
+(define (make-varset signature includes var-decls locs)
   (define sorts (operators:signature-sort-graph signature))
   (define after-includes
     (for/fold ([mv (terms:empty-varset sorts)])
@@ -191,32 +124,6 @@
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs vd))])
       (match-define (list 'var name sort) vd)
       (terms:add-var vs name sort))))
-
-(define (make-varset signature includes decls)
-  (define sorts (operators:signature-sort-graph signature))
-  (define after-includes
-    (for/fold ([mv (terms:empty-varset sorts)])
-              ([c includes])
-      (terms:merge-varsets mv (contexts:context-vars c) sorts)))
-  (for/fold ([vs after-includes]
-             [var-decls empty])
-            ([decl/loc decls])
-    (define-values (decl loc) (decl-and-loc decl/loc))
-    (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (match decl
-        [(list 'var name sort)
-         (values (terms:add-var vs name sort)
-                 (add-if-missing decl var-decls))]
-        [(list 'op op args rsort)
-         (for/fold ([vs vs]
-                    [var-decls var-decls])
-                   ([arg args])
-           (match arg
-             [(list 'var name sort)
-              (values (terms:add-var vs name sort)
-                      (add-if-missing arg var-decls))]
-             [_ (values vs var-decls)]))]
-        [_ (values vs var-decls)]))))
 
 (define (make-term* signature varset)
   (letrec ([fn (match-lambda
@@ -273,7 +180,7 @@
                             #f #t))]
     [_ #f]))
 
-(define (make-rulelist- signature varset includes rule-decls locs)
+(define (make-rulelist signature varset includes rule-decls locs)
   (define after-includes
     (for/fold ([mrl equations:empty-rulelist])
               ([c includes])
@@ -282,24 +189,6 @@
             ([rd rule-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs rd))])
       (equations:add-rule rl (make-rule* signature varset rd)))))
-
-(define (make-rulelist signature varset includes decls)
-  (define after-includes
-    (for/fold ([mrl equations:empty-rulelist])
-              ([c includes])
-      (equations:merge-rulelists mrl (contexts:context-rules c) signature)))
-  (define-values (rules rule-decls)
-    (for/fold ([rl after-includes]
-               [rule-decls empty])
-              ([decl/loc decls])
-      (define-values (decl loc) (decl-and-loc decl/loc))
-      (with-handlers ([exn:fail? (re-raise-exn loc)])
-        (define rule (make-rule* signature varset decl))
-        (if rule
-            (values (equations:add-rule rl rule)
-                    (add-if-missing decl rule-decls))
-            (values rl rule-decls)))))
-  (values rules (reverse rule-decls)))
 
 (define (make-equation* signature varset equation-expr)
   (match equation-expr
@@ -313,7 +202,7 @@
                                 #f))]
     [_ #f]))
 
-(define (make-equationset- signature varset includes eq-decls locs)
+(define (make-equationset signature varset includes eq-decls locs)
     (define after-includes
     (for/fold ([mes equations:empty-equationset])
               ([c includes])
@@ -323,23 +212,6 @@
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ed))])
       (equations:add-equation eq (make-equation* signature varset ed)))))
 
-(define (make-equationset signature varset includes decls)
-  (define after-includes
-    (for/fold ([mes equations:empty-equationset])
-              ([c includes])
-      (equations:merge-equationsets mes (contexts:context-equations c) signature)))
-  (define-values (equations equation-decls)
-    (for/fold ([eq after-includes]
-               [equation-decls empty])
-              ([decl/loc decls])
-      (define-values (decl loc) (decl-and-loc decl/loc))
-      (with-handlers ([exn:fail? (re-raise-exn loc)])
-        (define equation (make-equation* signature varset decl))
-        (if equation
-            (values (equations:add-equation eq equation)
-                    (add-if-missing decl equation-decls))
-            (values eq equation-decls)))))
-  (values equations (reverse equation-decls)))
 
 ; Generate a list of declarations that extends base-context to full-context
 
@@ -473,35 +345,6 @@
                         (hash-set added-decls 'includes (map car include-refs)))
               library))
 
-  (define (add-context+ name include-refs context)
-    (define included-contexts
-      (for/list ([name/loc include-refs])
-        (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
-          (get-context (car name/loc)))))
-    (define-values (sorts sort-decls)
-      (make-sort-graph+ included-contexts empty))
-    (define-values (signature op-decls)
-      (make-signature sorts included-contexts empty))
-    (define-values (rules rule-decls)
-      (make-rulelist signature (contexts:context-vars context)
-                     included-contexts empty))
-    (define-values (equations eq-decls)
-      (make-equationset signature (contexts:context-vars context)
-                        included-contexts empty))
-    (define inclusion-context
-      (contexts:make-context sorts
-                             signature
-                             (terms:empty-varset sorts)
-                             rules
-                             equations))
-    (define new-context
-      (contexts:merge-contexts inclusion-context context))
-    (define added-decls (context-diff inclusion-context new-context))
-    (document (hash-set contexts name new-context)
-              (hash-set decls name
-                        (hash-set added-decls 'includes (map car include-refs)))
-              library))
-
   (define (new-context-from-source name include-refs context-decls)
 
     (define (add-loc decls decl loc)
@@ -606,18 +449,18 @@
                                    (hash-ref cdecls 'sorts)
                                    (hash-ref cdecls 'subsorts)
                                    locs))
-    (define signature (make-signature- sorts included-contexts
-                                       (hash-ref cdecls 'ops)
-                                       locs))
-    (define varset (make-varset- signature included-contexts
-                                 (hash-ref cdecls 'vars)
+    (define signature (make-signature sorts included-contexts
+                                      (hash-ref cdecls 'ops)
+                                      locs))
+    (define varset (make-varset signature included-contexts
+                                (hash-ref cdecls 'vars)
+                                locs))
+    (define rules (make-rulelist signature varset included-contexts
+                                 (hash-ref cdecls 'rules)
                                  locs))
-    (define rules (make-rulelist- signature varset included-contexts
-                                  (hash-ref cdecls 'rules)
-                                  locs))
-    (define equations (make-equationset- signature varset included-contexts
-                                         (hash-ref cdecls 'equations)
-                                         locs))
+    (define equations (make-equationset signature varset included-contexts
+                                        (hash-ref cdecls 'equations)
+                                        locs))
     (define context (contexts:make-context sorts
                                            signature
                                            varset
