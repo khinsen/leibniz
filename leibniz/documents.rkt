@@ -514,7 +514,7 @@
                                 'equations eq-decls))
                 library)))
   
-  (define (new-context-from-source name include-refs context-decls)
+  (define (new-context-from-source+ name include-refs context-decls)
     (define included-contexts
       (for/list ([name/loc include-refs])
         (with-handlers ([exn:fail? (re-raise-exn (cdr name/loc))])
@@ -545,7 +545,7 @@
                               'equations eq-decls))
               library))
   
-  (define (new-context-from-source- name include-refs context-decls)
+  (define (new-context-from-source name include-refs context-decls)
 
     (define (add-loc decls decl loc)
       (hash-update decls 'locs
@@ -910,25 +910,25 @@
                                             ()) #f)))
                     (get-context-declarations "test"))
                 (hash 'includes empty
-                      'sorts (list '(sort foo)
-                                   '(sort bar)
-                                   '(subsort foo bar))
-                      'ops (list 
-                            '(op a-foo () foo)
-                            '(op a-foo ((sort bar)) foo)
-                            '(op a-bar ((var X foo)) bar))
-                      'vars (list '(var X foo))
+                      'locs (hash)
+                      'sorts (set 'foo 'bar)
+                      'subsorts (set (cons 'foo 'bar))
+                      'ops (set 
+                            '(a-foo () foo)
+                            '(a-foo ((sort bar)) foo)
+                            '(a-bar ((var X foo)) bar))
+                      'vars (set '(var X foo))
                       'rules (list
                               '(rule (term a-foo ((term X ())))
                                      (term a-foo ())
                                      ((var X foo))))
-                      'equations (list
+                      'equations (set
                                   '(equation (term a-foo ())
                                              (term a-foo ((term a-foo ())))
                                              ()))))
 
   (check-equal? (~> empty-document
-                    (new-context-from-source-
+                    (new-context-from-source
                      "test" empty
                      (list (cons '(subsort foo bar) #f)
                            (cons '(op a-foo () foo) #f)
@@ -970,7 +970,7 @@
   ;;                                    (cons '(op foo ((sort C)) C) #f))))))
 
   (check-true (~> empty-document
-                  (new-context-from-source-
+                  (new-context-from-source
                    "test" empty
                    (list (cons '(sort foo) #f)
                          (cons '(op a-foo () foo) #f)
