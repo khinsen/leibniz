@@ -18,6 +18,7 @@
          (prefix-in rewrite: "./rewrite.rkt")
          (prefix-in tools: "./tools.rkt")
          "./lightweight-class.rkt"
+         racket/hash
          threading)
 
 (module+ test
@@ -334,29 +335,26 @@
 ; Generate a list of declarations that extends base-context to full-context
 
 (define (sort-graph-diff base-sort-graph full-sort-graph)
-  (define base-sorts (sorts:all-sorts base-sort-graph))
-  (define base-subsorts (sorts:all-subsort-relations base-sort-graph))
-  (append*
-   (for/list ([cc (sorts:connected-components full-sort-graph)])
-     (append
-      (for/list ([s (in-set (set-subtract (sorts:all-sorts cc) base-sorts))])
-        (list 'sort s))
-      (for/list ([ss (in-set (set-subtract (sorts:all-subsort-relations cc) base-subsorts))])
-        (list 'subsort (car ss) (cdr ss)))))))
+  (hash 'sorts (set-subtract (sorts:all-sorts full-sort-graph)
+                             (sorts:all-sorts base-sort-graph))
+        'subsorts (set-subtract (sorts:all-subsort-relations full-sort-graph)
+                                (sorts:all-subsort-relations base-sort-graph))))
 
 (define (op-diff base-signature full-signature)
   (define base-ops
     (for/set ([(symbol rank meta) (operators:all-ops base-signature)])
       (cons symbol rank)))
-  (for/list ([(symbol rank meta) (operators:all-ops full-signature)]
-             #:unless (set-member? base-ops (cons symbol rank)))
-    (list 'op symbol (map (λ (s) `(sort ,s)) (car rank)) (cdr rank))))
+  (hash 'ops
+        (for/set ([(symbol rank meta) (operators:all-ops full-signature)]
+                  #:unless (set-member? base-ops (cons symbol rank)))
+          (list symbol (map (λ (s) `(sort ,s)) (car rank)) (cdr rank)))))
 
 (define (varset-diff base-varset full-varset)
   (define base-vars (terms:all-vars base-varset))
-  (for/list ([(name sort) (in-hash (terms:all-vars full-varset))]
-             #:unless (hash-has-key? base-vars name))
-    (list 'var name sort)))
+  (hash 'vars
+        (for/set ([(name sort) (in-hash (terms:all-vars full-varset))]
+                  #:unless (hash-has-key? base-vars name))
+          (list 'var name sort))))
 
 (define (term->decl term)
   (define-values (op args) (terms:term.op-and-args term))
@@ -413,14 +411,16 @@
                        (rule->decl rule)))
   (define full-rules (for/list ([rule (equations:in-rules full-rulelist)])
                        (rule->decl rule)))
-  (filter (λ (r) (not (set-member? base-rules r))) full-rules))
+  (hash 'rules
+        (filter (λ (r) (not (set-member? base-rules r))) full-rules)))
 
 (define (equationset-diff base-equationset full-equationset)
   (define base-equations (for/set ([eq (equations:in-equations base-equationset)])
                            (eq->decl eq)))
   (define full-equations (for/list ([eq (equations:in-equations full-equationset)])
                            (eq->decl eq)))
-  (filter (λ (eq) (not (set-member? base-equations eq))) full-equations))
+  (hash 'equations
+        (filter (λ (eq) (not (set-member? base-equations eq))) full-equations)))
 
 (define (context-diff base-context full-context)
   (define base-signature (contexts:context-signature base-context))
@@ -429,13 +429,13 @@
   (define full-sort-graph (operators:signature-sort-graph full-signature))
   (define base-varset (contexts:context-vars base-context))
   (define full-varset (contexts:context-vars full-context))
-  (hash 'sorts (sort-graph-diff base-sort-graph full-sort-graph)
-        'ops (op-diff base-signature full-signature)
-        'vars (varset-diff base-varset full-varset)
-        'rules (rulelist-diff (contexts:context-rules base-context)
-                              (contexts:context-rules full-context))
-        'equations (equationset-diff (contexts:context-equations base-context)
-                                     (contexts:context-equations full-context))))
+  (hash-union (sort-graph-diff base-sort-graph full-sort-graph)
+              (op-diff base-signature full-signature)
+              (varset-diff base-varset full-varset)
+              (rulelist-diff (contexts:context-rules base-context)
+                             (contexts:context-rules full-context))
+              (equationset-diff (contexts:context-equations base-context)
+                                (contexts:context-equations full-context))))
 
 ; Documents track declarations and expressions embedded in a Scribble document
 
