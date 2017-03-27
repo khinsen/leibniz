@@ -500,36 +500,34 @@
 
 (define (format-context-declarations decls)
   (list (format-sort-declarations (hash-ref decls 'sorts))
+        (format-subsort-declarations (hash-ref decls 'subsorts))
         (format-op-declarations (hash-ref decls 'ops))
         (format-var-declarations (hash-ref decls 'vars))
         (format-rule-declarations (hash-ref decls 'rules) (hash-ref decls 'vars))))
 
 (define (format-sort-declarations sort-decls)
   (define sorts
-    (for/list ([sd sort-decls]
-               #:when (equal? (first sd) 'sort))
+    (for/list ([s sort-decls])
       (elem #:style leibniz-output-style
-            (format-sort (second sd)))))
-  (define subsorts
-    (for/list ([sd sort-decls]
-               #:when (equal? (first sd) 'subsort))
-      (elem #:style leibniz-output-style
-            (format-subsort-declaration (second sd) (third sd)))))
-  (if (empty? sort-decls)
+            (format-sort s))))
+  (if (empty? sorts)
       ""
-      (list (if (empty? sorts)
-                ""
-                (list "Sorts: " (add-between sorts ", ") (linebreak)))
-            (if (empty? sorts)
-                ""
-                (list "Subsort relations: " (add-between subsorts ", ") (linebreak)))
-            (linebreak))))
+      (list "Sorts: " (add-between sorts ", ") (linebreak))))
+
+(define (format-subsort-declarations subsort-decls)
+  (define subsorts
+    (for/list ([sd subsort-decls])
+      (elem #:style leibniz-output-style
+            (format-subsort-declaration (car sd) (cdr sd)))))
+  (if (empty? subsorts)
+      ""
+      (list "Subsort relations: " (add-between subsorts ", ") (linebreak))))
 
 (define (format-op-declarations op-decls)
   (define ops
     (for/list ([od op-decls])
       (elem #:style leibniz-output-style
-            (apply format-op-declaration (rest od)))))
+            (apply format-op-declaration od))))
   (if (empty? op-decls)
       ""
       (list "Operators:" (linebreak)
