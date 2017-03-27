@@ -370,17 +370,15 @@
 
 (define-class document
 
-  (field contexts includes decls library)
+  (field contexts decls library)
   ; contexts: a hash mapping context names (strings) to contexts
-  ; includes: a hash mapping context names (strings) to lists of includes (strings)
   ; decls: a hash mapping context names to hashes with keys
-  ;        'sorts 'ops 'vars 'rules 'equations,
+  ;        'includes 'sorts 'ops 'vars 'rules 'equations,
   ;        values are lists of the declarations in each category
   ; library: a hash mapping document names to documents
 
   (define (add-library name library-document)
     (document contexts
-              includes
               decls
               (hash-set library name library-document)))
 
@@ -409,8 +407,8 @@
       (contexts:merge-contexts inclusion-context context))
     (define added-decls (context-diff inclusion-context new-context))
     (document (hash-set contexts name new-context)
-              (hash-set includes name (map car include-refs))
-              (hash-set decls name added-decls)
+              (hash-set decls name
+                        (hash-set added-decls 'includes (map car include-refs)))
               library))
 
   (define (new-context-from-declarations name include-refs context-decls loc)
@@ -436,9 +434,9 @@
                                rules
                                equations))
       (document (hash-set contexts name context)
-                (hash-set includes name (map car include-refs))
                 (hash-set decls name
-                          (hash 'sorts sort-decls
+                          (hash 'includes (map car include-refs)
+                                'sorts sort-decls
                                 'ops op-decls
                                 'vars var-decls
                                 'rules rule-decls
@@ -467,9 +465,9 @@
                              rules
                              equations))
     (document (hash-set contexts name context)
-              (hash-set includes name (map car include-refs))
               (hash-set decls name
-                        (hash 'sorts sort-decls
+                        (hash 'includes (map car include-refs)
+                              'sorts sort-decls
                               'ops op-decls
                               'vars var-decls
                               'rules rule-decls
@@ -539,7 +537,7 @@
           `(condition ,(term->sxml (first conditions)))))
 
     `(context (@ (id ,name))
-              (includes ,@(for/list ([name (hash-ref includes name)])
+              (includes ,@(for/list ([name (hash-ref (hash-ref decls name) 'includes)])
                             `(context-ref ,name)))
               (sorts ,@(for/list ([sd (hash-ref (hash-ref decls name) 'sorts)]
                                   #:when (equal? (first sd) 'sort))
@@ -646,7 +644,7 @@
       (delete-file dot-file))))
 
 
-(define empty-document (document (hash) (hash) (hash)  (hash)))
+(define empty-document (document (hash) (hash)  (hash)))
 
 (module+ test
   (check-equal? (~> empty-document
@@ -722,7 +720,8 @@
                                             (term a-foo ((term a-foo ())))
                                             ()) #f)))
                     (get-context-declarations "test"))
-                (hash 'sorts (list '(sort foo)
+                (hash 'includes empty
+                      'sorts (list '(sort foo)
                                    '(sort bar)
                                    '(subsort foo bar))
                       'ops (list 
