@@ -4,10 +4,6 @@
 
 (require threading)
 
-(define (tr x)
-  (displayln x)
-  x)
-
 (define (transform-context-declarations decls transformations)
   (for/fold ([decls decls])
             ([tr transformations])
@@ -18,10 +14,9 @@
     ['hide-vars
      (~> decls
          (hash-update 'rules (add-context-vars (hash-ref decls 'vars)))
-         (hash-set 'vars empty))]
+         (hash-set 'vars (set)))]
     [(list 'rename-sort sort1 sort2)
-     (for/hash ([(key value) (in-hash decls)])
-       (values key (rename-sort sort1 sort2 value)))]))
+     (rename-sort sort1 sort2 decls)]))
 
 (define ((add-context-vars var-decls) rule-decls)
   (for/list ([d rule-decls])
@@ -33,23 +28,49 @@
        (list 'rule pattern replacement
              (append clauses
                      (filter (λ (vd) (not (set-member? local-var-names (second vd))))
-                             var-decls)))])))
+                             (set->list var-decls))))])))
 
 (define (rename-sort sort1 sort2 decls)
 
   (define (new-sort s)
     (if (equal? s sort1) sort2 s))
 
-  (for/list ([decl decls])
-    (match decl
-      [(list 'sort s)
-       (list 'sort (new-sort s))]
-      [(list 'subsort s1 s2)
-       (list 'subsort (new-sort s1) (new-sort s2))]
-      [(list 'op name args rsort)
-       (list 'op name (rename-sort sort1 sort2 args) (new-sort rsort))]
-      [(list 'var name s)
-       (list 'var  name (new-sort s))]
-      [(list 'rule pattern replacement clauses)
-       (list 'rule pattern replacement (rename-sort sort1 sort2 clauses))]
-      [decl decl])))
+  (define (rename* x)
+    (match x
+      [(list 'var name sort)
+       (list 'var name (new-sort sort))]
+      [(list 'sort sort)
+       (list 'sort (new-sort sort))]
+      [other other]))
+
+  (~> decls
+      (hash-update 'sorts
+                   (λ (sorts)
+                     (for/set ([s sorts])
+                       (new-sort s))))
+      (hash-update 'subsorts
+                   (λ (subsorts)
+                     (for/set ([ss subsorts])
+                       (cons (new-sort (car ss)) (new-sort (cdr ss))))))
+      (hash-update 'ops
+                   (λ (ops)
+                     (for/set ([op ops])
+                       (match-define (list name arity rsort) op)
+                       (list name
+                             (map rename* arity)
+                             (new-sort rsort)))))
+      (hash-update 'vars
+                   (λ (vars)
+                     (for/set ([v vars])
+                       (rename* v))))
+      (hash-update 'rules
+                   (λ (rules)
+                     (for/list ([r rules])
+                       (match-define (list 'rule pattern replacement clauses) r)
+                       (list 'rule pattern replacement (map rename* clauses)))))
+      (hash-update 'equations
+                   (λ (eqs)
+                     (for/list ([eq eqs])
+                       (match-define (list 'equation left right clauses) eq)
+                       (list 'equation left right (map rename* clauses)))))
+      (hash-set 'locs (hash))))

@@ -74,6 +74,15 @@
             (values (car decl/loc) (cdr decl/loc))
             (values decl/loc #f)))
 
+(define (get-loc locs decl)
+  (cond
+    [(procedure? locs)
+     (locs decl)]
+    [(hash? locs)
+     (hash-ref locs decl #f)]
+    [else
+     #f]))
+
 (define (make-sort-graph- includes sort-decls subsort-decls locs)
   (define after-includes
     (for/fold ([ms sorts:empty-sort-graph])
@@ -82,11 +91,11 @@
   (define after-sorts
     (for/fold ([sorts after-includes])
               ([s sort-decls])
-      (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs s #f))])
+      (with-handlers ([exn:fail? (re-raise-exn (get-loc locs s))])
         (sorts:add-sort sorts s))))
   (for/fold ([sorts after-sorts])
             ([ss subsort-decls])
-    (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs ss #f))])
+    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ss))])
       (sorts:add-subsort-relation sorts (car ss) (cdr ss)))))
 
 (define (make-sort-graph includes decls)
@@ -133,10 +142,10 @@
   (define signature
     (for/fold ([sig after-includes])
               ([od op-decls])
-      (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs od #f))])
+      (with-handlers ([exn:fail? (re-raise-exn (get-loc locs od))])
         (match-define (list name arity rsort) od)
         (operators:add-op sig name (map argsort arity) rsort
-                          #:meta (hash-ref locs od #f)))))
+                          #:meta (get-loc locs od)))))
   (define non-regular (operators:non-regular-op-example signature))
   (when non-regular
     (match-let ([(list op arity rsorts) non-regular])
@@ -179,7 +188,7 @@
       (terms:merge-varsets mv (contexts:context-vars c) sorts)))
   (for/fold ([vs after-includes])
             ([vd var-decls])
-    (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs vd #f))])
+    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs vd))])
       (match-define (list 'var name sort) vd)
       (terms:add-var vs name sort))))
 
@@ -271,7 +280,7 @@
       (equations:merge-rulelists mrl (contexts:context-rules c) signature)))
   (for/fold ([rl after-includes])
             ([rd rule-decls])
-    (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs rd #f))])
+    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs rd))])
       (equations:add-rule rl (make-rule* signature varset rd)))))
 
 (define (make-rulelist signature varset includes decls)
@@ -311,7 +320,7 @@
       (equations:merge-equationsets mes (contexts:context-equations c) signature)))
   (for/fold ([eq after-includes])
             ([ed eq-decls])
-    (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs ed #f))])
+    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ed))])
       (equations:add-equation eq (make-equation* signature varset ed)))))
 
 (define (make-equationset signature varset includes decls)
@@ -482,7 +491,7 @@
                         (hash-set added-decls 'includes (map car include-refs)))
               library))
 
-  (define (new-context-from-declarations name include-refs context-decls loc)
+  (define (new-context-from-declarations+ name include-refs context-decls loc)
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (define included-contexts
         (for/list ([name/loc include-refs])
@@ -630,13 +639,20 @@
             )
           (hash-update 'rules reverse)))
 
-    (new-context-from-declarations- name decls))
+    (new-context- name decls))
 
-  (define (new-context-from-declarations- name cdecls)
+  (define (new-context-from-declarations name include-refs context-decls loc)
+    (new-context- name
+                  (~> context-decls
+                      (hash-update 'includes
+                                   (λ (is) (append is (map car include-refs))))
+                      (hash-set 'locs (λ (x) loc)))))
+
+  (define (new-context- name cdecls)
     (define locs (hash-ref cdecls 'locs))
     (define included-contexts
         (for/list ([name (hash-ref cdecls 'includes)])
-          (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs name #f))])
+          (with-handlers ([exn:fail? (re-raise-exn (get-loc locs name))])
             (get-context name))))
     (define sorts (make-sort-graph- included-contexts
                                     (hash-ref cdecls 'sorts)
