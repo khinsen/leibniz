@@ -73,6 +73,21 @@
             (values (car decl/loc) (cdr decl/loc))
             (values decl/loc #f)))
 
+(define (make-sort-graph- includes sort-decls subsort-decls locs)
+  (define after-includes
+    (for/fold ([ms sorts:empty-sort-graph])
+              ([c includes])
+      (sorts:merge-sort-graphs ms (contexts:context-sort-graph c))))
+  (define after-sorts
+    (for/fold ([sorts after-includes])
+              ([s sort-decls])
+      (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs s #f))])
+        (sorts:add-sort sorts s))))
+  (for/fold ([sorts after-sorts])
+            ([ss subsort-decls])
+    (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs ss #f))])
+      (sorts:add-subsort-relation sorts (car ss) (cdr ss)))))
+
 (define (make-sort-graph includes decls)
   (define after-includes
     (for/fold ([ms sorts:empty-sort-graph])
@@ -103,6 +118,30 @@
           [_ (values sorts sort-decls)]))))
   (values sort-graph (reverse sort-decls)))
 
+(define (make-signature- sorts includes op-decls locs)
+  (define (argsort sort-or-var-decl)
+    (match sort-or-var-decl
+      [(list 'sort sort-id) sort-id]
+      [(list 'var var-name sort-id) sort-id]))
+  (define after-includes
+    (for/fold ([msig (operators:empty-signature sorts)])
+              ([c includes])
+      (operators:merge-signatures msig
+                                  (contexts:context-signature c)
+                                  sorts)))
+  (define signature
+    (for/fold ([sig after-includes])
+              ([od op-decls])
+      (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs od #f))])
+        (match-define (list name arity rsort) od)
+        (operators:add-op sig name (map argsort arity) rsort
+                          #:meta (hash-ref locs od #f)))))
+  (define non-regular (operators:non-regular-op-example signature))
+  (when non-regular
+    (match-let ([(list op arity rsorts) non-regular])
+      (displayln (format "Warning: operator ~a~a has ambiguous sorts ~a"
+                         op arity rsorts))))
+  signature)
 
 (define (make-signature sort-graph includes decls)
   (define (argsort sort-or-var-decl)
@@ -130,6 +169,18 @@
       (displayln (format "Warning: operator ~a~a has ambiguous sorts ~a"
                          op argsorts rsorts))))
   (values signature (reverse op-decls)))
+
+(define (make-varset- signature includes var-decls locs)
+  (define sorts (operators:signature-sort-graph signature))
+  (define after-includes
+    (for/fold ([mv (terms:empty-varset sorts)])
+              ([c includes])
+      (terms:merge-varsets mv (contexts:context-vars c) sorts)))
+  (for/fold ([vs after-includes])
+            ([vd var-decls])
+    (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs vd #f))])
+      (match-define (list 'var name sort) vd)
+      (terms:add-var vs name sort))))
 
 (define (make-varset signature includes decls)
   (define sorts (operators:signature-sort-graph signature))
@@ -212,6 +263,16 @@
                             #f #t))]
     [_ #f]))
 
+(define (make-rulelist- signature varset includes rule-decls locs)
+  (define after-includes
+    (for/fold ([mrl equations:empty-rulelist])
+              ([c includes])
+      (equations:merge-rulelists mrl (contexts:context-rules c) signature)))
+  (for/fold ([rl after-includes])
+            ([rd rule-decls])
+    (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs rd #f))])
+      (equations:add-rule rl (make-rule* signature varset rd)))))
+
 (define (make-rulelist signature varset includes decls)
   (define after-includes
     (for/fold ([mrl equations:empty-rulelist])
@@ -241,6 +302,16 @@
                                 (mp right)
                                 #f))]
     [_ #f]))
+
+(define (make-equationset- signature varset includes eq-decls locs)
+    (define after-includes
+    (for/fold ([mes equations:empty-equationset])
+              ([c includes])
+      (equations:merge-equationsets mes (contexts:context-equations c) signature)))
+  (for/fold ([eq after-includes])
+            ([ed eq-decls])
+    (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs ed #f))])
+      (equations:add-equation eq (make-equation* signature varset ed)))))
 
 (define (make-equationset signature varset includes decls)
   (define after-includes
@@ -442,7 +513,7 @@
                                 'rules rule-decls
                                 'equations eq-decls))
                 library)))
-
+  
   (define (new-context-from-source name include-refs context-decls)
     (define included-contexts
       (for/list ([name/loc include-refs])
@@ -472,6 +543,124 @@
                               'vars var-decls
                               'rules rule-decls
                               'equations eq-decls))
+              library))
+  
+  (define (new-context-from-source- name include-refs context-decls)
+
+    (define (add-loc decls decl loc)
+      (hash-update decls 'locs
+                   (λ (ls)
+                     (if (and loc (not (hash-has-key? ls decl)))
+                         (hash-set ls decl loc)
+                         ls))))
+
+    (define (add-sort decls s loc)
+      (~> decls
+          (hash-update 'sorts (λ (ss) (set-add ss s)))
+          (add-loc s loc)))
+
+    (define (add-subsort decls s1 s2 loc)
+      (define new-ss (cons s1 s2))
+      (~> decls
+          (hash-update 'subsorts (λ (ss) (set-add ss new-ss)))
+          (add-loc new-ss loc)))
+
+    (define (add-op decls name arity rsort loc)
+      (define new-op (list name arity rsort))
+      (~> decls
+          (hash-update 'ops (λ (ops) (set-add ops new-op)))
+          (add-loc new-op loc)))
+
+    (define (add-var decls name sort loc)
+      (define new-var (list 'var name sort))
+      (~> decls
+          (hash-update 'vars (λ (vars) (set-add vars new-var)))
+          (add-loc new-var loc)))
+
+    (define (add-rule decls pattern replacement clauses loc)
+      (define new-rule (list 'rule pattern replacement clauses))
+      (~> decls
+          (hash-update 'rules (λ (rules) (if (member new-rule rules)
+                                             rules
+                                             (cons new-rule rules))))
+          (add-loc new-rule loc)))
+
+    (define (add-equation decls left right clauses loc)
+      (define new-eq (list 'equation left right clauses))
+      (~> decls
+          (hash-update 'equations (λ (eqs) (set-add eqs new-eq)))
+          (add-loc new-eq loc)))
+
+    (define decls
+      (~> (for/fold ([decls (hash 'includes (map car include-refs)
+                                  'sorts (set)
+                                  'subsorts (set)
+                                  'ops (set)
+                                  'vars (set)
+                                  'rules (list)
+                                  'equations (set)
+                                  'locs (for/hash ([name/loc include-refs])
+                                          (values (car name/loc) (cdr name/loc))))])
+                    ([decl/loc context-decls])
+            (match-define (cons decl loc) decl/loc)
+            (match decl
+              [(list 'sort s)
+               (add-sort decls s loc)]
+              [(list 'subsort s1 s2)
+               (~> decls
+                   (add-sort s1 loc)
+                   (add-sort s2 loc)
+                   (add-subsort s1 s2 loc))]
+              [(list 'op name arity rsort)
+               (for/fold ([decls (~> decls
+                                     (add-sort rsort loc)
+                                     (add-op name arity rsort loc))])
+                         ([arg arity])
+                 (match arg
+                   [(list 'var name sort)
+                    (add-var decls name sort loc)]
+                   [(list 'sort s)
+                    decls]))]
+              [(list 'var name sort)
+               (add-var decls name sort loc)] 
+              [(list 'rule pattern replacement clauses)
+               (add-rule decls pattern replacement clauses loc)]
+              [(list 'equation left right clauses)
+               (add-equation decls left right clauses loc)])
+            )
+          (hash-update 'rules reverse)))
+
+    (new-context-from-declarations- name decls))
+
+  (define (new-context-from-declarations- name cdecls)
+    (define locs (hash-ref cdecls 'locs))
+    (define included-contexts
+        (for/list ([name (hash-ref cdecls 'includes)])
+          (with-handlers ([exn:fail? (re-raise-exn (hash-ref locs name #f))])
+            (get-context name))))
+    (define sorts (make-sort-graph- included-contexts
+                                    (hash-ref cdecls 'sorts)
+                                    (hash-ref cdecls 'subsorts)
+                                    locs))
+    (define signature (make-signature- sorts included-contexts
+                                       (hash-ref cdecls 'ops)
+                                       locs))
+    (define varset (make-varset- signature included-contexts
+                                 (hash-ref cdecls 'vars)
+                                 locs))
+    (define rules (make-rulelist- signature varset included-contexts
+                                  (hash-ref cdecls 'rules)
+                                  locs))
+    (define equations (make-equationset- signature varset included-contexts
+                                         (hash-ref cdecls 'equations)
+                                         locs))
+    (define context (contexts:make-context sorts
+                                           signature
+                                           varset
+                                           rules
+                                           equations))
+    (document (hash-set contexts name context)
+              (hash-set decls name cdecls)
               library))
 
   (define (get-context name)
@@ -738,6 +927,38 @@
                                              (term a-foo ((term a-foo ())))
                                              ()))))
 
+  (check-equal? (~> empty-document
+                    (new-context-from-source-
+                     "test" empty
+                     (list (cons '(subsort foo bar) #f)
+                           (cons '(op a-foo () foo) #f)
+                           (cons '(op a-foo ((sort bar)) foo) #f)
+                           (cons '(op a-bar ((var X foo)) bar) #f)
+                           (cons '(rule (term a-foo ((term X ())))
+                                        (term a-foo ())
+                                        ((var X foo))) #f)
+                           (cons '(equation (term a-foo ())
+                                            (term a-foo ((term a-foo ())))
+                                            ()) #f)))
+                    (get-context-declarations "test"))
+                (hash 'includes empty
+                      'sorts (set 'foo 'bar)
+                      'subsorts (set (cons 'foo 'bar))
+                      'ops (set 
+                            '(a-foo () foo)
+                            '(a-foo ((sort bar)) foo)
+                            '(a-bar ((var X foo)) bar))
+                      'vars (set '(var X foo))
+                      'rules (list
+                              '(rule (term a-foo ((term X ())))
+                                     (term a-foo ())
+                                     ((var X foo))))
+                      'equations (set
+                                  '(equation (term a-foo ())
+                                             (term a-foo ((term a-foo ())))
+                                             ()))
+                      'locs (hash)))
+
   ;; (check-exn exn:fail?
   ;;            ; non-regular signature
   ;;            (thunk
@@ -749,7 +970,7 @@
   ;;                                    (cons '(op foo ((sort C)) C) #f))))))
 
   (check-true (~> empty-document
-                  (new-context-from-source
+                  (new-context-from-source-
                    "test" empty
                    (list (cons '(sort foo) #f)
                          (cons '(op a-foo () foo) #f)
