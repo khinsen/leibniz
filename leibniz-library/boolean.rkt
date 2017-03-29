@@ -82,3 +82,5 @@ Truth table for Xor:
          @test{true ⊻ true ⇒ false}}
 
 }
+
+@xml["boolean.xml"]
