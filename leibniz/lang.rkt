@@ -15,7 +15,6 @@
          scribble/base
          scribble/core
          scribble/html-properties
-         sxml
          (for-syntax syntax/parse
                      racket/syntax
                      racket/list
@@ -194,7 +193,7 @@
                    [leibniz-id (datum->syntax #'name 'leibniz)])
        #'(begin (require (only-in source [leibniz-id library-id]))
                 (set! leibniz-id
-                      (add-library leibniz-id name library-id))))]))
+                      (add-to-library leibniz-id name library-id))))]))
 
 ; Formatting
 
@@ -706,13 +705,6 @@
       [(_ filename:str)
        #`(begin (write-xml #,leibniz-ref filename)
                 (margin-note (hyperlink filename "XML")))])))
-
-(define (write-xml leibniz-doc filename)
-  (define sxml (get-document-sxml leibniz-doc))
-  (call-with-output-file filename
-    (λ (output-port)
-      (srl:sxml->xml sxml output-port))
-    #:mode 'text #:exists 'replace))
 
 ; Graphviz output
 

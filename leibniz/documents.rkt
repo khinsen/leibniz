@@ -1,12 +1,13 @@
 #lang racket
 
 (provide empty-document
-         add-library add-context
+         add-to-library add-context
          new-context-from-declarations new-context-from-source
          get-context get-context-declarations
-         get-document-sxml get-context-sxml
          make-term make-rule make-equation
          make-test
+         get-document-sxml get-context-sxml
+         write-xml import-xml
          write-signature-graphs)
 
 (require (prefix-in sorts: "./sorts.rkt")
@@ -19,6 +20,7 @@
          (prefix-in tools: "./tools.rkt")
          "./lightweight-class.rkt"
          racket/hash
+         sxml
          threading)
 
 (module+ test
@@ -318,6 +320,109 @@
               (equationset-diff (contexts:context-equations base-context)
                                 (contexts:context-equations full-context))))
 
+; Convert SXML to document
+
+(define (sxml->document sxml-document)
+  (match-define
+    (list '*TOP* (list 'context-collection sxml-contexts ...))
+    sxml-document)
+  (for/fold ([doc empty-document])
+            ([sxml-context sxml-contexts])
+    (define-values (name context-decls) (sxml->declarations sxml-context))
+    (send doc new-context-from-declarations
+          name empty context-decls #f)))
+
+(define (sxml->declarations sxml-context)
+
+  (define (sxml->arg sxml-arg)
+    (match sxml-arg
+      [`(var (@ (id ,var-name) (sort ,sort-name)))
+       (list 'var (string->symbol var-name) (string->symbol sort-name))]
+      [`(sort (@ (id ,sort-name)))
+       (list 'sort (string->symbol sort-name))]))
+
+  (define (sxml->vars var-names var-sort-names)
+    (for/set ([vn var-names]
+              [sn var-sort-names])
+      (list 'var (string->symbol vn) (string->symbol sn))))
+
+  (define (sxml->term sxml-term)
+    (match sxml-term
+      [`(term (@ (op ,op-string)) ,args ...)
+       (list 'term
+             (string->symbol op-string)
+             (map sxml->term args))]
+      [`(,number-tag (@ (value ,v)))
+       (list (string->symbol number-tag)
+             (read (open-input-string v)))]))
+
+  (match-define
+    `(context (@ (id, name))
+              (includes (context-ref ,include-refs) ...)
+              (sorts (sort (@ (id ,sort-names))) ...)
+              (subsorts (subsort (@ (subsort ,sort-names-1)
+                                    (supersort ,sort-names-2))) ...)
+              (vars (var (@ (id ,var-names)
+                            (sort ,var-sort-names))) ...)
+              (ops (op (@ (id ,op-names))
+                       (arity ,@(list op-args ...))
+                       (sort (@ (id ,op-rsort-names)))) ...)
+              (rules (rule (vars (var (@ (id ,rule-var-names)
+                                         (sort ,rule-var-sorts))) ...)
+                           (pattern ,rule-patterns)
+                           ,rule-conditions
+                           (replacement ,rule-replacements)) ...)
+              (equations (equation (vars (var (@ (id ,eq-var-names)
+                                                (sort ,eq-var-sorts))) ...)
+                                  (left ,eq-left)
+                                  ,eq-conditions
+                                  (right ,eq-right)) ...))
+    sxml-context)
+ 
+  (values name
+          (hash 'includes include-refs
+                'sorts (for/set ([s sort-names])
+                         (string->symbol s))
+                'subsorts (for/set ([s1 sort-names-1]
+                                    [s2 sort-names-2])
+                            (cons (string->symbol s1) (string->symbol s2)))
+                'vars (sxml->vars var-names var-sort-names)
+                'ops (for/set ([on op-names]
+                               [oa op-args]
+                               [os op-rsort-names])
+                       (list (string->symbol on)
+                             (map sxml->arg oa)
+                             (string->symbol os)))
+                'rules (for/list ([rvn rule-var-names]
+                                  [rvs rule-var-sorts]
+                                  [rp rule-patterns]
+                                  [rc rule-conditions]
+                                  [rr rule-replacements])
+                         (let ([clauses (set->list (sxml->vars rvn rvs))])
+                           (list 'rule
+                                 (sxml->term rp)
+                                 (sxml->term rr)
+                                 (match rc
+                                   [`(condition)
+                                    clauses]
+                                   [`(condition ,term) 
+                                    (cons (sxml->term term) clauses)]))))
+                'equations (for/set ([evn eq-var-names]
+                                     [evs eq-var-sorts]
+                                     [el eq-left]
+                                     [ec eq-conditions]
+                                     [er eq-right])
+                             (let ([clauses (set->list (sxml->vars evn evs))])
+                               (list 'equation
+                                     (sxml->term el)
+                                     (sxml->term er)
+                                     (match ec
+                                       [`(condition)
+                                        clauses]
+                                       [`(condition ,term) 
+                                        (cons (sxml->term term) clauses)]))))
+                'locs (hash))))
+
 ; Documents track declarations and expressions embedded in a Scribble document
 
 (define-class document
@@ -329,7 +434,7 @@
   ;        values are lists of the declarations in each category
   ; library: a hash mapping document names to documents
 
-  (define (add-library name library-document)
+  (define (add-to-library name library-document)
     (document contexts
               decls
               (hash-set library name library-document)))
@@ -569,6 +674,22 @@
                                             (left ,(term->sxml left))
                                             ,(condition->sxml conditions)
                                             (right ,(term->sxml right)))))))))
+  (define (write-xml filename)
+    (define sxml (get-document-sxml))
+    (call-with-output-file filename
+      (λ (output-port)
+        (srl:sxml->xml sxml output-port))
+      #:mode 'text #:exists 'replace))
+
+  (define (import-sxml document-name sxml-document)
+    (add-to-library document-name (sxml->document sxml-document)))
+
+  (define (import-xml document-name filename)
+    (import-sxml document-name
+      (call-with-input-file filename
+        (λ (input-port)
+          (ssax:xml->sxml input-port))
+        #:mode 'text)))
 
   (define (make-term context-name term-expr loc)
     (define context (get-context context-name))
@@ -776,15 +897,21 @@
   ;;                                    (cons '(op foo ((sort B)) B) #f)
   ;;                                    (cons '(op foo ((sort C)) C) #f))))))
 
-  (check-true (~> empty-document
-                  (new-context-from-source
-                   "test" empty
-                   (list (cons '(sort foo) #f)
-                         (cons '(op a-foo () foo) #f)
-                         (cons '(op a-foo ((var X foo)) foo) #f)
-                         (cons '(rule (term a-foo ((term X ())))
-                                      (term a-foo ())
-                                      ((var X foo))) #f)))
+  (define test-document
+    (~> empty-document
+        (new-context-from-source
+         "test" empty
+         (list (cons '(subsort foo bar) #f)
+               (cons '(op a-foo () foo) #f)
+               (cons '(op a-foo ((var X foo)) foo) #f)
+               (cons '(rule (term a-foo ((term X ())))
+                            (term a-foo ())
+                            ((var X foo))) #f)
+               (cons '(equation (term a-foo ((term X ())))
+                                (term a-foo ())
+                                ((var X foo))) #f)))))
+
+  (check-true (~> test-document
                   (make-test "test" '(rule (term a-foo ((term a-foo ())))
                                            (term a-foo ())
                                            ())
@@ -793,4 +920,10 @@
                   rest
                   list->set
                   set-count
-                  (equal? 1))))
+                  (equal? 1)))
+
+  (check-equal? (~> test-document
+                    get-document-sxml
+                    sxml->document
+                    (get-context "test"))
+                (get-context test-document "test")))
