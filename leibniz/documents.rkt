@@ -18,6 +18,7 @@
          (prefix-in contexts: "./contexts.rkt")
          (prefix-in rewrite: "./rewrite.rkt")
          (prefix-in tools: "./tools.rkt")
+         (prefix-in builtins: "./builtin-contexts.rkt")
          "./lightweight-class.rkt"
          racket/hash
          sxml
@@ -353,8 +354,7 @@
              (string->symbol op-string)
              (map sxml->term args))]
       [`(,number-tag (@ (value ,v)))
-       (list (string->symbol number-tag)
-             (read (open-input-string v)))]))
+       (list number-tag (read (open-input-string v)))]))
 
   (match-define
     `(context (@ (id, name))
@@ -760,8 +760,33 @@
         (thunk (system* dot "-Tpng" dot-file)))
       (delete-file dot-file))))
 
+; A document containing the builtin contexts
 
-(define empty-document (document (hash) (hash)  (hash)))
+(define builtins
+  (~> (document (hash) (hash)  (hash))
+      (add-context "truth"
+                   empty
+                   builtins:truth)
+      (add-context "integers"
+                   (list (cons "truth" #f))
+                   builtins:integers)
+      (add-context "rational-numbers"
+                   (list (cons "truth" #f))
+                   builtins:rational-numbers)
+      (add-context "real-numbers"
+                   (list (cons "truth" #f))
+                   builtins:real-numbers)
+      (add-context "IEEE-floating-point"
+                   (list (cons "integers" #f))
+                   builtins:IEEE-floating-point)
+      (add-context "IEEE-floating-point-with-conversion"
+                   (list (cons "IEEE-floating-point" #f)
+                         (cons "rational-numbers" #f))
+                   builtins:IEEE-floating-point-with-conversion)))
+
+(define empty-document
+  (~> (document (hash) (hash)  (hash))
+      (add-to-library "builtins" builtins)))
 
 (module+ test
   (check-equal? (~> empty-document
@@ -900,7 +925,7 @@
   (define test-document
     (~> empty-document
         (new-context-from-source
-         "test" empty
+         "test" (list (cons "builtins/integers" #f))
          (list (cons '(subsort foo bar) #f)
                (cons '(op a-foo () foo) #f)
                (cons '(op a-foo ((var X foo)) foo) #f)
@@ -909,7 +934,10 @@
                             ((var X foo))) #f)
                (cons '(equation (term a-foo ((term X ())))
                                 (term a-foo ())
-                                ((var X foo))) #f)))))
+                                ((var X foo))) #f)
+               (cons '(equation (integer 2)
+                                (integer 3)
+                                ()) #f)))))
 
   (check-true (~> test-document
                   (make-test "test" '(rule (term a-foo ((term a-foo ())))

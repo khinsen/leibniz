@@ -3,8 +3,6 @@
 @title{Boolean algebra}
 @author{Konrad Hinsen}
 
-@import["builtins" leibniz-library/builtins]
-
 @context["boolean" #:use "builtins/truth"]{
 @section{Logical operations}
 

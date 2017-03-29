@@ -3,7 +3,6 @@
 @title{Masses and mass units}
 @author{Konrad Hinsen}
 
-@import["builtins" leibniz-library/builtins]
 @import["boolean" leibniz-library/boolean]
 
 @context["mass" #:use "builtins/real-numbers"]{

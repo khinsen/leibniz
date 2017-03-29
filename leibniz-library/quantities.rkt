@@ -3,8 +3,6 @@
 @title{Physical quantities}
 @author{Konrad Hinsen}
 
-@import["builtins" leibniz-library/builtins]
-
 @context["quantities" #:use "builtins/real-numbers"]{
 
 @section{Generic quantities}
