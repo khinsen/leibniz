@@ -188,6 +188,9 @@
 
 (define-syntax (import stx)
   (syntax-parse stx
+    [(_ name:str source:str)
+     (with-syntax ([leibniz-id (datum->syntax #'name 'leibniz)])
+       #`(set! leibniz-id (import-xml leibniz-id name source)))]
     [(_ name:str source:expr)
      (with-syntax ([library-id (format-id #'name "library/~a" (syntax-e #'name))]
                    [leibniz-id (datum->syntax #'name 'leibniz)])
