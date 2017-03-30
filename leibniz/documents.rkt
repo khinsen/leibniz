@@ -342,10 +342,15 @@
       [`(sort (@ (id ,sort-name)))
        (list 'sort (string->symbol sort-name))]))
 
-  (define (sxml->vars var-names var-sort-names)
-    (for/set ([vn var-names]
-              [sn var-sort-names])
-      (list 'var (string->symbol vn) (string->symbol sn))))
+  (define (sxml->vars sxml-vars)
+    (for/set ([var sxml-vars])
+      ; The order of attributes is not preserved by the SSAX parser,
+      ; so we need to be able to handle two variants.
+      (match var
+        [`(var (@ (id ,vn) (sort ,sn)))
+         (list 'var (string->symbol vn) (string->symbol sn))]
+        [`(var (@ (sort ,sn) (id ,vn)))
+         (list 'var (string->symbol vn) (string->symbol sn))])))
 
   (define (sxml->term sxml-term)
     (match sxml-term
@@ -358,69 +363,75 @@
 
   (match-define
     `(context (@ (id, name))
-              (includes (context-ref ,include-refs) ...)
-              (sorts (sort (@ (id ,sort-names))) ...)
-              (subsorts (subsort (@ (subsort ,sort-names-1)
-                                    (supersort ,sort-names-2))) ...)
-              (vars (var (@ (id ,var-names)
-                            (sort ,var-sort-names))) ...)
-              (ops (op (@ (id ,op-names))
-                       (arity ,@(list op-args ...))
-                       (sort (@ (id ,op-rsort-names)))) ...)
-              (rules (rule (vars (var (@ (id ,rule-var-names)
-                                         (sort ,rule-var-sorts))) ...)
-                           (pattern ,rule-patterns)
-                           ,rule-conditions
-                           (replacement ,rule-replacements)) ...)
-              (equations (equation (vars (var (@ (id ,eq-var-names)
-                                                (sort ,eq-var-sorts))) ...)
-                                  (left ,eq-left)
-                                  ,eq-conditions
-                                  (right ,eq-right)) ...))
+              (includes ,sxml-includes ...)
+              (sorts ,sxml-sorts ...)
+              (subsorts ,sxml-subsorts ...)
+              (vars ,sxml-vars ...)
+              (ops ,sxml-ops ...)
+              (rules ,sxml-rules ...)
+              (equations ,sxml-equations ...))
     sxml-context)
  
+  (define includes (for/list ([include sxml-includes])
+                     (match include
+                       [`(context-ref ,include-ref)
+                        include-ref])))
+  (define sorts (for/set ([sort sxml-sorts])
+                  (match sort
+                    [`(sort (@ (id ,s)))
+                     (string->symbol s)])))
+  (define subsorts (for/set ([subsort sxml-subsorts])
+                     (match subsort
+                       [`(subsort (@ (subsort ,s1) (supersort ,s2)))
+                        (cons (string->symbol s1) (string->symbol s2))]
+                       [`(subsort (@ (supersort ,s2) (subsort ,s1)))
+                        (cons (string->symbol s1) (string->symbol s2))])))
+  (define vars (sxml->vars sxml-vars))
+  (define ops (for/set ([op sxml-ops])
+                (match op
+                  [`(op (@ (id ,on))
+                        (arity ,oa ...)
+                        (sort (@ (id ,os))))
+                   (list (string->symbol on) (map sxml->arg oa) (string->symbol os))])))
+  (define rules (for/list ([rule sxml-rules])
+                  (match rule
+                    [`(rule (vars ,rv ...)
+                            (pattern ,rp)
+                            ,rc
+                            (replacement ,rr))
+                     (define clauses (set->list (sxml->vars rv)))
+                     (list 'rule
+                           (sxml->term rp)
+                           (sxml->term rr)
+                           (match rc
+                             [`(condition)
+                              clauses]
+                             [`(condition ,term) 
+                              (cons (sxml->term term) clauses)]))])))
+  (define equations (for/set ([eq sxml-equations])
+                      (match eq
+                        [`(equation (vars ,ev ...)
+                                    (left ,el)
+                                    ,ec
+                                    (right ,er))
+                         (define clauses (set->list (sxml->vars ev)))
+                         (list 'equation
+                               (sxml->term el)
+                               (sxml->term er)
+                               (match ec
+                                 [`(condition)
+                                  clauses]
+                                 [`(condition ,term) 
+                                  (cons (sxml->term term) clauses)]))])))
+
   (values name
-          (hash 'includes include-refs
-                'sorts (for/set ([s sort-names])
-                         (string->symbol s))
-                'subsorts (for/set ([s1 sort-names-1]
-                                    [s2 sort-names-2])
-                            (cons (string->symbol s1) (string->symbol s2)))
-                'vars (sxml->vars var-names var-sort-names)
-                'ops (for/set ([on op-names]
-                               [oa op-args]
-                               [os op-rsort-names])
-                       (list (string->symbol on)
-                             (map sxml->arg oa)
-                             (string->symbol os)))
-                'rules (for/list ([rvn rule-var-names]
-                                  [rvs rule-var-sorts]
-                                  [rp rule-patterns]
-                                  [rc rule-conditions]
-                                  [rr rule-replacements])
-                         (let ([clauses (set->list (sxml->vars rvn rvs))])
-                           (list 'rule
-                                 (sxml->term rp)
-                                 (sxml->term rr)
-                                 (match rc
-                                   [`(condition)
-                                    clauses]
-                                   [`(condition ,term) 
-                                    (cons (sxml->term term) clauses)]))))
-                'equations (for/set ([evn eq-var-names]
-                                     [evs eq-var-sorts]
-                                     [el eq-left]
-                                     [ec eq-conditions]
-                                     [er eq-right])
-                             (let ([clauses (set->list (sxml->vars evn evs))])
-                               (list 'equation
-                                     (sxml->term el)
-                                     (sxml->term er)
-                                     (match ec
-                                       [`(condition)
-                                        clauses]
-                                       [`(condition ,term) 
-                                        (cons (sxml->term term) clauses)]))))
+          (hash 'includes includes
+                'sorts sorts
+                'subsorts subsorts
+                'vars vars
+                'ops ops
+                'rules rules
+                'equations equations
                 'locs (hash))))
 
 ; Documents track declarations and expressions embedded in a Scribble document
@@ -688,7 +699,7 @@
     (import-sxml document-name
       (call-with-input-file filename
         (λ (input-port)
-          (ssax:xml->sxml input-port))
+          (ssax:xml->sxml input-port empty))
         #:mode 'text)))
 
   (define (make-term context-name term-expr loc)
