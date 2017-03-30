@@ -74,5 +74,5 @@ Again we see that decreasing @term{Îµ} leads to better approximations of @term{â
 The deviation is always smaller than the prescribed tolerance.
 }
 
-@xml["heron.xml"]
-@signature-graphs["heron.sig"]
+@;signature-graphs["heron.sig"]
+

@@ -224,6 +224,5 @@ can assign numerical values:
 
 }
 
-@xml["quantities.xml"]
-@signature-graphs["quantities.sig"]
+@;signature-graphs["quantities.sig"]
 
