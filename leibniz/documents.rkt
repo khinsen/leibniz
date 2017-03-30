@@ -438,16 +438,16 @@
 
 (define-class document
 
-  (field contexts decls library)
+  (field contexts decls order library)
   ; contexts: a hash mapping context names (strings) to contexts
   ; decls: a hash mapping context names to hashes with keys
   ;        'includes 'sorts 'ops 'vars 'rules 'equations,
   ;        values are lists of the declarations in each category
+  ; order: a list of context names in the inverse order of definition
   ; library: a hash mapping document names to documents
 
   (define (add-to-library name library-document)
-    (document contexts
-              decls
+    (document contexts decls order
               (hash-set library name library-document)))
 
   (define (add-context name include-refs context)
@@ -459,6 +459,7 @@
     (document (hash-set contexts name full-context)
               (hash-set decls name
                         (hash-set added-decls 'includes (map car include-refs)))
+              (cons name order)
               library))
 
   (define (new-context-from-source name include-refs context-decls)
@@ -584,6 +585,7 @@
                                            equations))
     (document (hash-set contexts name context)
               (hash-set decls name cdecls)
+              (cons name order)
               library))
 
   (define (get-context name)
@@ -618,7 +620,7 @@
 
   (define (get-document-sxml)
     `(*TOP* (context-collection
-             ,@(for/list ([name (hash-keys contexts)])
+             ,@(for/list ([name (reverse order)])
                  (get-context-sxml name)))))
 
   (define (get-context-sxml name)
@@ -774,7 +776,7 @@
 ; A document containing the builtin contexts
 
 (define builtins
-  (~> (document (hash) (hash)  (hash))
+  (~> (document (hash) (hash) empty (hash))
       (add-context "truth"
                    empty
                    builtins:truth)
@@ -796,7 +798,7 @@
                    builtins:IEEE-floating-point-with-conversion)))
 
 (define empty-document
-  (~> (document (hash) (hash)  (hash))
+  (~> (document (hash) (hash) empty  (hash))
       (add-to-library "builtins" builtins)))
 
 (module+ test
