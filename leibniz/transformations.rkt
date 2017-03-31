@@ -16,7 +16,10 @@
          (hash-update 'rules (add-context-vars (hash-ref decls 'vars)))
          (hash-set 'vars (set)))]
     [(list 'rename-sort sort1 sort2)
-     (rename-sort sort1 sort2 decls)]))
+     (rename-sort sort1 sort2 decls)]
+    [(list 'add-include cname)
+     (~> decls
+         (hash-update 'includes (λ (cnames) (append cnames (list cname)))))]))
 
 (define ((add-context-vars var-decls) rule-decls)
   (for/list ([d rule-decls])
@@ -70,7 +73,7 @@
                        (list 'rule pattern replacement (map rename* clauses)))))
       (hash-update 'equations
                    (λ (eqs)
-                     (for/list ([eq eqs])
+                     (for/set ([eq eqs])
                        (match-define (list 'equation left right clauses) eq)
                        (list 'equation left right (map rename* clauses)))))
       (hash-set 'locs (hash))))

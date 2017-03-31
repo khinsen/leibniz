@@ -2,7 +2,7 @@
 
 (provide empty-document
          add-to-library add-context
-         new-context-from-declarations new-context-from-source
+         new-context-from-source
          get-context get-context-declarations
          make-term make-rule make-equation
          make-test
@@ -19,6 +19,7 @@
          (prefix-in rewrite: "./rewrite.rkt")
          (prefix-in tools: "./tools.rkt")
          (prefix-in builtins: "./builtin-contexts.rkt")
+         "./transformations.rkt"
          "./lightweight-class.rkt"
          racket/hash
          sxml
@@ -304,7 +305,7 @@
   (define full-equations (for/list ([eq (equations:in-equations full-equationset)])
                            (eq->decl eq)))
   (hash 'equations
-        (filter (λ (eq) (not (set-member? base-equations eq))) full-equations)))
+        (list->set (filter (λ (eq) (not (set-member? base-equations eq))) full-equations))))
 
 (define (context-diff base-context full-context)
   (define base-signature (contexts:context-signature base-context))
@@ -330,8 +331,7 @@
   (for/fold ([doc empty-document])
             ([sxml-context sxml-contexts])
     (define-values (name context-decls) (sxml->declarations sxml-context))
-    (send doc new-context-from-declarations
-          name empty context-decls #f)))
+    (send doc new-context name (hash-set context-decls 'locs (λ (x) #f)))))
 
 (define (sxml->declarations sxml-context)
 
@@ -450,19 +450,19 @@
     (document contexts decls order
               (hash-set library name library-document)))
 
-  (define (add-context name include-refs context)
-    (define temp-doc (new-context-from-source name include-refs empty))
+  (define (add-context name include-decls context)
+    (define temp-doc (new-context-from-source name include-decls))
     (define inclusion-context (send temp-doc get-context name))
     (define full-context
       (contexts:merge-contexts inclusion-context context))
     (define added-decls (context-diff inclusion-context full-context))
     (document (hash-set contexts name full-context)
               (hash-set decls name
-                        (hash-set added-decls 'includes (map car include-refs)))
+                        (hash-set added-decls 'includes (map car include-decls)))
               (cons name order)
               library))
 
-  (define (new-context-from-source name include-refs context-decls)
+  (define (new-context-from-source name context-decls)
 
     (define (add-loc decls decl loc)
       (hash-update decls 'locs
@@ -470,6 +470,11 @@
                      (if (and loc (not (hash-has-key? ls decl)))
                          (hash-set ls decl loc)
                          ls))))
+
+    (define (add-include decls cname loc)
+      (~> decls
+          (hash-update 'includes (λ (cnames) (cons cname cnames)))
+          (add-loc cname loc)))
 
     (define (add-sort decls s loc)
       (~> decls
@@ -508,19 +513,33 @@
           (hash-update 'equations (λ (eqs) (set-add eqs new-eq)))
           (add-loc new-eq loc)))
 
+    (define (merge decls1 decls2 loc)
+      (define (merge* key v1 v2)
+        (case key
+          [(includes rules) (remove-duplicates (append v1 v2))]
+          [(sorts subsorts ops vars equations) (set-union v1 v2)]
+          [(locs) (hash-union v1 v2 #:combine (λ (a b) a))]))
+      (hash-union decls1 decls2
+                  #:combine/key merge*))
+
     (define decls
-      (~> (for/fold ([decls (hash 'includes (map car include-refs)
+      (~> (for/fold ([decls (hash 'includes empty
                                   'sorts (set)
                                   'subsorts (set)
                                   'ops (set)
                                   'vars (set)
                                   'rules (list)
                                   'equations (set)
-                                  'locs (for/hash ([name/loc include-refs])
-                                          (values (car name/loc) (cdr name/loc))))])
+                                  'locs (hash))])
                     ([decl/loc context-decls])
             (match-define (cons decl loc) decl/loc)
             (match decl
+              [(list 'use cname)
+               (add-include decls cname loc)]
+              [(list 'insert cname tr ...)
+               (merge decls
+                      (transform-context-declarations (get-context-declarations cname) tr)
+                      loc)]
               [(list 'sort s)
                (add-sort decls s loc)]
               [(list 'subsort s1 s2)
@@ -543,20 +562,13 @@
               [(list 'rule pattern replacement clauses)
                (add-rule decls pattern replacement clauses loc)]
               [(list 'equation left right clauses)
-               (add-equation decls left right clauses loc)])
-            )
-          (hash-update 'rules reverse)))
+               (add-equation decls left right clauses loc)]))
+          (hash-update 'rules reverse)
+          (hash-update 'includes reverse)))
 
-    (new-context- name decls))
+    (new-context name decls))
 
-  (define (new-context-from-declarations name include-refs context-decls loc)
-    (new-context- name
-                  (~> context-decls
-                      (hash-update 'includes
-                                   (λ (is) (append is (map car include-refs))))
-                      (hash-set 'locs (λ (x) loc)))))
-
-  (define (new-context- name cdecls)
+  (define (new-context name cdecls)
     (define locs (hash-ref cdecls 'locs))
     (define included-contexts
         (for/list ([name (hash-ref cdecls 'includes)])
@@ -781,20 +793,20 @@
                    empty
                    builtins:truth)
       (add-context "integers"
-                   (list (cons "truth" #f))
+                   (list (cons '(use "truth") #f))
                    builtins:integers)
       (add-context "rational-numbers"
-                   (list (cons "truth" #f))
+                   (list (cons '(use "truth") #f))
                    builtins:rational-numbers)
       (add-context "real-numbers"
-                   (list (cons "truth" #f))
+                   (list (cons '(use "truth") #f))
                    builtins:real-numbers)
       (add-context "IEEE-floating-point"
-                   (list (cons "integers" #f))
+                   (list (cons '(use "integers") #f))
                    builtins:IEEE-floating-point)
       (add-context "IEEE-floating-point-with-conversion"
-                   (list (cons "IEEE-floating-point" #f)
-                         (cons "rational-numbers" #f))
+                   (list (cons '(use "IEEE-floating-point") #f)
+                         (cons '(use "rational-numbers") #f))
                    builtins:IEEE-floating-point-with-conversion)))
 
 (define empty-document
@@ -804,7 +816,7 @@
 (module+ test
   (check-equal? (~> empty-document
                     (new-context-from-source
-                     "test" empty
+                     "test"
                      (list (cons '(sort foo) #f)
                            (cons '(sort bar) #f)
                            (cons '(subsort foo bar) #f)))
@@ -812,13 +824,13 @@
                 test-context1)
   (check-equal? (~> empty-document
                     (new-context-from-source
-                     "test" empty
+                     "test"
                      (list (cons '(subsort foo bar) #f)))
                     (get-context "test"))
                 test-context1)
   (check-equal? (~> empty-document
                     (new-context-from-source
-                     "test" empty
+                     "test"
                      (list (cons '(sort foo) #f)
                            (cons '(sort bar) #f)
                            (cons '(subsort foo bar) #f)
@@ -830,7 +842,7 @@
 
   (check-equal? (~> empty-document
                     (new-context-from-source
-                     "test" empty
+                     "test"
                      (list (cons '(subsort foo bar) #f)
                            (cons '(op a-foo () foo) #f)))
                     (make-term "test" '(term a-foo ()) #f)
@@ -839,7 +851,7 @@
 
   (check-equal? (~> empty-document
                     (new-context-from-source
-                     "test" empty
+                     "test"
                      (list (cons '(subsort foo bar) #f)
                            (cons '(sort boolean) #f)
                            (cons '(op a-foo () foo) #f)
@@ -863,7 +875,7 @@
 
   (check-equal? (~> empty-document
                     (new-context-from-source
-                     "test" empty
+                     "test"
                      (list (cons '(subsort foo bar) #f)
                            (cons '(op a-foo () foo) #f)
                            (cons '(op a-foo ((sort bar)) foo) #f)
@@ -895,7 +907,7 @@
 
   (check-equal? (~> empty-document
                     (new-context-from-source
-                     "test" empty
+                     "test"
                      (list (cons '(subsort foo bar) #f)
                            (cons '(op a-foo () foo) #f)
                            (cons '(op a-foo ((sort bar)) foo) #f)
@@ -929,7 +941,7 @@
   ;;            ; non-regular signature
   ;;            (thunk
   ;;             (~> empty-document
-  ;;                 (new-context-from-source "test" empty
+  ;;                 (new-context-from-source "test"
   ;;                              (list (cons '(subsort A B) #f)
   ;;                                    (cons '(subsort A C) #f)
   ;;                                    (cons '(op foo ((sort B)) B) #f)
@@ -938,8 +950,9 @@
   (define test-document
     (~> empty-document
         (new-context-from-source
-         "test" (list (cons "builtins/integers" #f))
-         (list (cons '(subsort foo bar) #f)
+         "test"
+         (list (cons '(use "builtins/integers") #f)
+               (cons '(subsort foo bar) #f)
                (cons '(op a-foo () foo) #f)
                (cons '(op a-foo ((var X foo)) foo) #f)
                (cons '(rule (term a-foo ((term X ())))

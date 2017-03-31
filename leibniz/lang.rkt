@@ -129,12 +129,15 @@
              #:with expansion #'any))
 
   (define-splicing-syntax-class context-ref
+    (pattern (~seq #:insert [name:str tr:expr ...])
+             #:attr ref #`(cons '(insert name tr ...) #,(source-loc #'name)))
     (pattern (~seq #:use name:str)
-             #:attr ref #`(cons name #,(source-loc #'name)))))
+             #:attr ref #`(cons '(use name) #,(source-loc #'name)))))
 
 (define-syntax (context stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
+
       [(_ name:str
           include:context-ref ...
           (~seq #:from-context context:expr)
@@ -150,33 +153,15 @@
                 (let ([leibniz-doc #,leibniz-ref]
                       [current-context name])
                   (list body.expansion ...)))]
-      [(_ name:str
-          include:context-ref ...
-          (~seq #:transform-context base-name:str (tr:expr ...))
-          body:body-item ...)
-       #`(begin (set! #,leibniz-ref
-                      (new-context-from-declarations
-                           #,leibniz-ref name
-                           (list include.ref ...)
-                           (transform-context-declarations
-                            (get-context-declarations #,leibniz-ref base-name)
-                            (list (quote tr) ...))
-                           #,(source-loc stx)))
-                (unless (empty? #,(cons 'list (apply append (attribute body.decl))))
-                  (error "Transformed context may not be extended"))
-                (margin-note "Context " (italic name)
-                             (list (linebreak)
-                                   "uses " (italic include.name)) ...)
-                (let ([leibniz-doc #,leibniz-ref]
-                      [current-context name])
-                  (list body.expansion ...)))]
+
       [(_ name:str
           include:context-ref ...
           body:body-item ...)
        #`(begin (set! #,leibniz-ref
                       (new-context-from-source #,leibniz-ref name
-                                               (list include.ref ...)
-                                               #,(cons #'list (apply append (attribute body.decl)))))
+                                               (append
+                                                (list include.ref ...)
+                                                #,(cons #'list (apply append (attribute body.decl))))))
                 (margin-note "Context " (italic name)
                              (list (linebreak)
                                    "uses " (italic include.name)) ...)

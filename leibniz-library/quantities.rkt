@@ -105,11 +105,10 @@ as @rule{b ÷ a ⇒ 10}, we can test the simplification rules:
 }
 
 @context["mass"
-         #:use "quantities"
-         #:transform-context "template"
-                               [hide-vars
-                               (rename-sort SQ M)
-                               (rename-sort SQnz Mnz)]]{
+         #:insert  ["template"
+                    hide-vars
+                    (rename-sort SQ M)
+                    (rename-sort SQnz Mnz)]]{
 
 @section{Mass}
 
@@ -120,11 +119,10 @@ Replace SQ by M and SQnz by Mnz in the template:
 
 
 @context["length"
-         #:use "quantities"
-         #:transform-context "template"
-                              [hide-vars
-                               (rename-sort SQ L)
-                               (rename-sort SQnz Lnz)]]{
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ L)
+                   (rename-sort SQnz Lnz)]]{
 
 @section{Length}
 
@@ -135,11 +133,10 @@ Replace SQ by L and SQnz by Lnz in the template:
 
 
 @context["time"
-         #:use "quantities"
-         #:transform-context "template"
-                              [hide-vars
-                               (rename-sort SQ T)
-                               (rename-sort SQnz Tnz)]]{
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ T)
+                   (rename-sort SQnz Tnz)]]{
 
 @section{Time}
 
@@ -148,11 +145,10 @@ Replace SQ by T and SQnz by Tnz in the template (result now shown).
 }
 
 @context["velocity"
-         #:use "quantities"
-         #:transform-context "template"
-                              [hide-vars
-                               (rename-sort SQ V)
-                               (rename-sort SQnz Vnz)]]{
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ V)
+                   (rename-sort SQnz Vnz)]]{
 
 @section{Velocity}
 
@@ -161,11 +157,10 @@ Replace SQ by V and SQnz by Vnz in the template (result not shown).
 }
 
 @context["acceleration"
-         #:use "quantities"
-         #:transform-context "template"
-                              [hide-vars
-                               (rename-sort SQ A)
-                               (rename-sort SQnz Anz)]]{
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ A)
+                   (rename-sort SQnz Anz)]]{
 
 @section{Acceleration}
 
