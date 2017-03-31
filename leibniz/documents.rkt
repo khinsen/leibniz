@@ -124,9 +124,8 @@
               ([c includes])
       (terms:merge-varsets mv (contexts:context-vars c) sorts)))
   (for/fold ([vs after-includes])
-            ([vd var-decls])
-    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs vd))])
-      (match-define (list 'var name sort) vd)
+            ([(name sort) var-decls])
+    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash name sort)))])
       (terms:add-var vs name sort))))
 
 (define (make-term* signature varset)
@@ -140,14 +139,10 @@
                  [(list 'floating-point fp) fp])])
     fn))
 
-(define (make-local-varset* signature varset decls)
-  (define sorts (operators:signature-sort-graph signature))
+(define (make-local-varset* signature varset local-vars)
   (for/fold ([vs varset])
-            ([decl decls])
-    (match decl
-      [(list 'var name sort)
-       (terms:add-var vs name sort)]
-      [_ vs])))
+            ([(name sort) local-vars])
+    (terms:add-var vs name sort)))
 
 (define (make-pattern* signature varset)
   (letrec ([fn (match-lambda
@@ -162,24 +157,13 @@
                  [(list 'floating-point fp) fp])])
     fn))
 
-(define (make-condition* clauses)
-  (for/fold ([condition #f])
-              ([c clauses])
-      (match c
-        [(list 'var name sort)
-         condition]
-        [term
-         (if condition
-             (list 'term '_∧ (list condition term))
-             term)])))
-
 (define (make-rule* signature varset rule-expr)
   (match rule-expr
-    [(list 'rule pattern replacement clauses)
-     (let* ([varset (make-local-varset* signature varset clauses)]
+    [(list 'rule vars pattern replacement condition)
+     (let* ([varset (make-local-varset* signature varset vars)]
             [mp (make-pattern* signature varset)])
        (equations:make-rule signature (mp pattern)
-                            (mp (make-condition* clauses))
+                            (mp condition)
                             (mp replacement)
                             #f #t))]
     [_ #f]))
@@ -196,12 +180,12 @@
 
 (define (make-equation* signature varset equation-expr)
   (match equation-expr
-    [(list 'equation left right clauses)
-     (let* ([varset (make-local-varset* signature varset clauses)]
+    [(list 'equation vars left right condition)
+     (let* ([varset (make-local-varset* signature varset vars)]
             [mp (make-pattern* signature varset)])
        (equations:make-equation signature
                                 (mp left)
-                                (mp (make-condition* clauses))
+                                (mp condition)
                                 (mp right)
                                 #f))]
     [_ #f]))
@@ -237,9 +221,9 @@
 (define (varset-diff base-varset full-varset)
   (define base-vars (terms:all-vars base-varset))
   (hash 'vars
-        (for/set ([(name sort) (in-hash (terms:all-vars full-varset))]
+        (for/hash ([(name sort) (in-hash (terms:all-vars full-varset))]
                   #:unless (hash-has-key? base-vars name))
-          (list 'var name sort))))
+          (values name sort))))
 
 (define (term->decl term)
   (define-values (op args) (terms:term.op-and-args term))
@@ -266,14 +250,12 @@
   (define decl-replacement (if (procedure? replacement)
                                replacement
                                (term->decl replacement)))
-  (define var-clauses
-    (for/list ([var (in-set vars)])
-      (list 'var (terms:var-name var) (terms:var-sort var))))
-  (define decl-clauses
-    (if condition
-        (cons (term->decl condition) var-clauses)
-        var-clauses))
-  (list 'rule decl-pattern decl-replacement decl-clauses))
+  (define decl-vars
+    (for/hash ([var (in-set vars)])
+      (values (terms:var-name var) (terms:var-sort var))))
+  (define decl-condition
+    (if condition (term->decl condition) #f))
+  (list 'rule decl-vars decl-pattern decl-replacement decl-condition))
 
 (define (eq->decl rule)
   (define left (equations:equation-left rule))
@@ -282,14 +264,12 @@
   (define vars (set-union (terms:term.vars left) (terms:term.vars right)))
   (define decl-left (term->decl left))
   (define decl-right (term->decl right))
-  (define var-clauses
-    (for/list ([var (in-set vars)])
-      (list 'var (terms:var-name var) (terms:var-sort var))))
-  (define decl-clauses
-    (if condition
-        (cons (term->decl condition) var-clauses)
-        var-clauses))
-  (list 'equation decl-left decl-right decl-clauses))
+  (define decl-vars
+    (for/hash ([var (in-set vars)])
+      (values (terms:var-name var) (terms:var-sort var))))
+  (define decl-condition
+    (if condition (term->decl condition) #f))
+  (list 'equation decl-vars decl-left decl-right decl-condition))
 
 (define (rulelist-diff base-rulelist full-rulelist)
   (define base-rules (for/set ([rule (equations:in-rules base-rulelist)])
@@ -322,6 +302,14 @@
               (equationset-diff (contexts:context-equations base-context)
                                 (contexts:context-equations full-context))))
 
+; Combine varsets checking for name clashes. For use with hash-union.
+
+(define (combine-varsets name sort1 sort2)
+  (unless (equal? sort1 sort2)
+    (error (format "Var ~a of sort ~a redefined with sort ~a"
+                   name sort1 sort2)))
+  sort1)
+
 ; Convert SXML to document
 
 (define (sxml->document sxml-document)
@@ -343,14 +331,14 @@
        (list 'sort (string->symbol sort-name))]))
 
   (define (sxml->vars sxml-vars)
-    (for/set ([var sxml-vars])
-      ; The order of attributes is not preserved by the SSAX parser,
-      ; so we need to be able to handle two variants.
-      (match var
-        [`(var (@ (id ,vn) (sort ,sn)))
-         (list 'var (string->symbol vn) (string->symbol sn))]
-        [`(var (@ (sort ,sn) (id ,vn)))
-         (list 'var (string->symbol vn) (string->symbol sn))])))
+    (for/fold ([vars (hash)])
+              ([v sxml-vars])
+      (define new-var
+        (match v
+          [(or `(var (@ (id ,vn) (sort ,sn)))
+               `(var (@ (sort ,sn) (id ,vn))))
+           (hash (string->symbol vn) (string->symbol sn))]))
+      (hash-union vars new-var #:combine/key combine-varsets)))
 
   (define (sxml->term sxml-term)
     (match sxml-term
@@ -399,30 +387,30 @@
                             (pattern ,rp)
                             ,rc
                             (replacement ,rr))
-                     (define clauses (set->list (sxml->vars rv)))
                      (list 'rule
+                           (sxml->vars rv)
                            (sxml->term rp)
                            (sxml->term rr)
                            (match rc
                              [`(condition)
-                              clauses]
+                              #f]
                              [`(condition ,term) 
-                              (cons (sxml->term term) clauses)]))])))
+                              term]))])))
   (define equations (for/set ([eq sxml-equations])
                       (match eq
                         [`(equation (vars ,ev ...)
                                     (left ,el)
                                     ,ec
                                     (right ,er))
-                         (define clauses (set->list (sxml->vars ev)))
                          (list 'equation
+                               (sxml->vars ev)
                                (sxml->term el)
                                (sxml->term er)
                                (match ec
                                  [`(condition)
-                                  clauses]
+                                  #f]
                                  [`(condition ,term) 
-                                  (cons (sxml->term term) clauses)]))])))
+                                  term]))])))
 
   (values name
           (hash 'includes includes
@@ -462,7 +450,7 @@
               (cons name order)
               library))
 
-  (define (new-context-from-source name context-decls)
+  (define (preprocess-declarations context-decls)
 
     (define (add-loc decls decl loc)
       (hash-update decls 'locs
@@ -494,13 +482,30 @@
           (add-loc new-op loc)))
 
     (define (add-var decls name sort loc)
-      (define new-var (list 'var name sort))
+      (define new-var (hash name sort))
       (~> decls
-          (hash-update 'vars (λ (vars) (set-add vars new-var)))
+          (hash-update 'vars (λ (vars)
+                               (hash-union vars new-var
+                                           #:combine/key combine-varsets)))
           (add-loc new-var loc)))
 
+    (define (group-clauses clauses loc)
+      (for/fold ([vars (hash)]
+                 [condition #f])
+                ([c clauses])
+        (match c
+          [`(var ,name ,sort)
+           (values (hash-union vars (hash name sort)
+                               #:combine/key combine-varsets)
+                   condition)]
+          [term
+           (if condition
+               (values vars (list 'term '_∧ (list condition term)))
+               (values vars term))])))
+
     (define (add-rule decls pattern replacement clauses loc)
-      (define new-rule (list 'rule pattern replacement clauses))
+      (define-values (vars condition) (group-clauses clauses loc))
+      (define new-rule (list 'rule vars pattern replacement condition))
       (~> decls
           (hash-update 'rules (λ (rules) (if (member new-rule rules)
                                              rules
@@ -508,7 +513,8 @@
           (add-loc new-rule loc)))
 
     (define (add-equation decls left right clauses loc)
-      (define new-eq (list 'equation left right clauses))
+      (define-values (vars condition) (group-clauses clauses loc))
+      (define new-eq (list 'equation vars left right condition))
       (~> decls
           (hash-update 'equations (λ (eqs) (set-add eqs new-eq)))
           (add-loc new-eq loc)))
@@ -517,56 +523,58 @@
       (define (merge* key v1 v2)
         (case key
           [(includes rules) (remove-duplicates (append v1 v2))]
-          [(sorts subsorts ops vars equations) (set-union v1 v2)]
+          [(sorts subsorts ops equations) (set-union v1 v2)]
+          [(vars) (hash-union v1 v2 #:combine/key combine-varsets)]
           [(locs) (hash-union v1 v2 #:combine (λ (a b) a))]))
-      (hash-union decls1 decls2
-                  #:combine/key merge*))
+      (with-handlers ([exn:fail? (re-raise-exn loc)])
+        (hash-union decls1 decls2
+                    #:combine/key merge*)))
 
-    (define decls
-      (~> (for/fold ([decls (hash 'includes empty
-                                  'sorts (set)
-                                  'subsorts (set)
-                                  'ops (set)
-                                  'vars (set)
-                                  'rules (list)
-                                  'equations (set)
-                                  'locs (hash))])
-                    ([decl/loc context-decls])
-            (match-define (cons decl loc) decl/loc)
-            (match decl
-              [(list 'use cname)
-               (add-include decls cname loc)]
-              [(list 'insert cname tr ...)
-               (merge decls
-                      (transform-context-declarations (get-context-declarations cname) tr)
-                      loc)]
-              [(list 'sort s)
-               (add-sort decls s loc)]
-              [(list 'subsort s1 s2)
-               (~> decls
-                   (add-sort s1 loc)
-                   (add-sort s2 loc)
-                   (add-subsort s1 s2 loc))]
-              [(list 'op name arity rsort)
-               (for/fold ([decls (~> decls
-                                     (add-sort rsort loc)
-                                     (add-op name arity rsort loc))])
-                         ([arg arity])
-                 (match arg
-                   [(list 'var name sort)
-                    (add-var decls name sort loc)]
-                   [(list 'sort s)
-                    decls]))]
-              [(list 'var name sort)
-               (add-var decls name sort loc)] 
-              [(list 'rule pattern replacement clauses)
-               (add-rule decls pattern replacement clauses loc)]
-              [(list 'equation left right clauses)
-               (add-equation decls left right clauses loc)]))
-          (hash-update 'rules reverse)
-          (hash-update 'includes reverse)))
+    (~> (for/fold ([decls (hash 'includes empty
+                                'sorts (set)
+                                'subsorts (set)
+                                'ops (set)
+                                'vars (hash)
+                                'rules (list)
+                                'equations (set)
+                                'locs (hash))])
+                  ([decl/loc context-decls])
+          (match-define (cons decl loc) decl/loc)
+          (match decl
+            [(list 'use cname)
+             (add-include decls cname loc)]
+            [(list 'insert cname tr ...)
+             (merge decls
+                    (transform-context-declarations (get-context-declarations cname) tr)
+                    loc)]
+            [(list 'sort s)
+             (add-sort decls s loc)]
+            [(list 'subsort s1 s2)
+             (~> decls
+                 (add-sort s1 loc)
+                 (add-sort s2 loc)
+                 (add-subsort s1 s2 loc))]
+            [(list 'op name arity rsort)
+             (for/fold ([decls (~> decls
+                                   (add-sort rsort loc)
+                                   (add-op name arity rsort loc))])
+                       ([arg arity])
+               (match arg
+                 [(list 'var name sort)
+                  (add-var decls name sort loc)]
+                 [(list 'sort s)
+                  decls]))]
+            [(list 'var name sort)
+             (add-var decls name sort loc)] 
+            [(list 'rule pattern replacement clauses)
+             (add-rule decls pattern replacement clauses loc)]
+            [(list 'equation left right clauses)
+             (add-equation decls left right clauses loc)]))
+        (hash-update 'rules reverse)
+        (hash-update 'includes reverse)))
 
-    (new-context name decls))
+  (define (new-context-from-source name context-decls)
+    (new-context name (preprocess-declarations context-decls)))
 
   (define (new-context name cdecls)
     (define locs (hash-ref cdecls 'locs))
@@ -646,21 +654,15 @@
         [(list (and number-tag (or 'integer 'rational 'floating-point)) x)
          `(,number-tag (@ (value ,(format "~a" x))))]))
 
-    (define (group-clauses clauses)
-      (define (is-var? c) (equal? (first c) 'var))
-      (define conditions (filter (λ (c) (not (is-var? c))) clauses))
-      (define vars (filter is-var? clauses))
-      (values conditions vars))
-
     (define (vars->sxml vars)
-      (for/list ([vd vars])
-        `(var (@ (id ,(symbol->string (second vd)))
-                 (sort ,(symbol->string (third vd)))))))
+      (for/list ([(name sort) vars])
+        `(var (@ (id ,(symbol->string name))
+                 (sort ,(symbol->string sort))))))
 
-    (define (condition->sxml conditions)
-      (if (empty? conditions)
+    (define (condition->sxml condition)
+      (if (equal? condition #f)
           `(condition)
-          `(condition ,(term->sxml (first conditions)))))
+          `(condition ,(term->sxml condition))))
 
     (define cdecls (hash-ref decls name))
 
@@ -672,9 +674,7 @@
               (subsorts ,@(for/list ([sd (hash-ref cdecls 'subsorts)])
                             `(subsort (@ (subsort ,(symbol->string (car sd)))
                                          (supersort ,(symbol->string (cdr sd)))))))
-              (vars ,@(for/list ([vd (hash-ref cdecls 'vars)])
-                        `(var (@ (id ,(symbol->string (second vd)))
-                                 (sort ,(symbol->string (third vd)))))))
+              (vars ,@(vars->sxml (hash-ref cdecls 'vars)))
               (ops ,@(for/list ([od (hash-ref cdecls 'ops)])
                        `(op (@ (id ,(symbol->string (first od))))
                             (arity ,@(for/list ([sv (second od)])
@@ -685,20 +685,18 @@
                             (sort (@ (id ,(symbol->string (third od))))))))
               (rules ,@(for/list ([rd (hash-ref cdecls 'rules)])
                          (match-let
-                             ([(list 'rule pattern replacement clauses) rd])
-                           (let-values ([(conditions vars) (group-clauses clauses)])
-                             `(rule (vars ,@(vars->sxml vars))
-                                    (pattern ,(term->sxml pattern))
-                                    ,(condition->sxml conditions)
-                                    (replacement ,(term->sxml replacement)))))))
+                             ([(list 'rule vars pattern replacement condition) rd])
+                           `(rule (vars ,@(vars->sxml vars))
+                                  (pattern ,(term->sxml pattern))
+                                  ,(condition->sxml condition)
+                                  (replacement ,(term->sxml replacement))))))
               (equations ,@(for/list ([ed (hash-ref cdecls 'equations)])
                              (match-let
-                                 ([(list 'equation left right clauses) ed])
-                               (let-values ([(conditions vars) (group-clauses clauses)])
-                                 `(equation (vars ,@(vars->sxml vars))
-                                            (left ,(term->sxml left))
-                                            ,(condition->sxml conditions)
-                                            (right ,(term->sxml right)))))))))
+                                 ([(list 'equation vars left right condition) ed])
+                               `(equation (vars ,@(vars->sxml vars))
+                                          (left ,(term->sxml left))
+                                          ,(condition->sxml condition)
+                                          (right ,(term->sxml right))))))))
   (define (write-xml filename)
     (define sxml (get-document-sxml))
     (call-with-output-file filename
@@ -727,21 +725,30 @@
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (make-rule* signature (contexts:context-vars context) rule-expr)))
+      (make-rule* signature (contexts:context-vars context)
+                  (first (hash-ref (preprocess-declarations
+                                    (list (cons rule-expr loc)))
+                                   'rules)))))
 
   (define (make-equation context-name equation-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (make-equation* signature (contexts:context-vars context) equation-expr)))
+      (make-equation* signature (contexts:context-vars context)
+                      (set-first (hash-ref (preprocess-declarations
+                                            (list (cons equation-expr loc)))
+                                           'equations)))))
 
   (define (make-test context-name rule-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (define varset (contexts:context-vars context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (match rule-expr
-        [(list 'rule pattern replacement '())
+      (define rule (first (hash-ref (preprocess-declarations
+                                     (list (cons rule-expr loc)))
+                                    'rules)))
+      (match rule
+        [(list 'rule (hash-table) pattern replacement #f)
          (let* ([mt (make-pattern* signature varset)]
                 [term (mt pattern)]
                 [expected (mt replacement)]
@@ -895,15 +902,19 @@
                             '(a-foo () foo)
                             '(a-foo ((sort bar)) foo)
                             '(a-bar ((var X foo)) bar))
-                      'vars (set '(var X foo))
+                      'vars (hash 'X 'foo)
                       'rules (list
-                              '(rule (term a-foo ((term X ())))
-                                     (term a-foo ())
-                                     ((var X foo))))
+                              (list 'rule
+                                    (hash 'X 'foo)
+                                    '(term a-foo ((term X ())))
+                                    '(term a-foo ())
+                                    #f))
                       'equations (set
-                                  '(equation (term a-foo ())
-                                             (term a-foo ((term a-foo ())))
-                                             ()))))
+                                  (list 'equation
+                                        (hash)
+                                        '(term a-foo ())
+                                        '(term a-foo ((term a-foo ())))
+                                        #f))))
 
   (check-equal? (~> empty-document
                     (new-context-from-source
@@ -926,15 +937,19 @@
                             '(a-foo () foo)
                             '(a-foo ((sort bar)) foo)
                             '(a-bar ((var X foo)) bar))
-                      'vars (set '(var X foo))
+                      'vars (hash 'X 'foo)
                       'rules (list
-                              '(rule (term a-foo ((term X ())))
-                                     (term a-foo ())
-                                     ((var X foo))))
+                              (list 'rule
+                                    (hash 'X 'foo)
+                                    '(term a-foo ((term X ())))
+                                    '(term a-foo ())
+                                    #f))
                       'equations (set
-                                  '(equation (term a-foo ())
-                                             (term a-foo ((term a-foo ())))
-                                             ()))
+                                  (list 'equation
+                                        (hash)
+                                        '(term a-foo ())
+                                        '(term a-foo ((term a-foo ())))
+                                        #f))
                       'locs (hash)))
 
   ;; (check-exn exn:fail?
@@ -966,9 +981,11 @@
                                 ()) #f)))))
 
   (check-true (~> test-document
-                  (make-test "test" '(rule (term a-foo ((term a-foo ())))
-                                           (term a-foo ())
-                                           ())
+                  (make-test "test"
+                             '(rule
+                               (term a-foo ((term a-foo ())))
+                               (term a-foo ())
+                               ())
                              #f)
                   ; check if the last two (out of three) elements are equal
                   rest

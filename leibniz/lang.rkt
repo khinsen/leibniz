@@ -524,10 +524,10 @@
 
 (define (format-var-declarations var-decls)
   (define vars
-    (for/list ([vd var-decls])
+    (for/list ([(name sort) var-decls])
       (elem #:style leibniz-output-style
-            (format-var (second vd) (third vd)))))
-  (if (empty? var-decls)
+            (format-var name sort))))
+  (if (hash-empty? var-decls)
       ""
       (list "Vars: "
             (add-between vars ", ")
@@ -535,13 +535,10 @@
             (linebreak))))
 
 (define (format-rule-declarations rule-decls var-decls)
-  (define context-vars
-    (for/hash ([vd var-decls])
-      (values (second vd) (third vd))))
   (define rules
     (for/list ([rd rule-decls])
       (elem #:style leibniz-output-style
-            (format-rule-declaration rd context-vars))))
+            (format-rule-declaration rd var-decls))))
   (if (empty? rule-decls)
       ""
       (list "Rules:" (linebreak)
@@ -550,25 +547,27 @@
                    #:style 'inset))))
 
 (define (format-rule-declaration decl context-vars)
-  (define pattern-elem (format-decl-term (second decl)))
-  (define proc-rule? (procedure? (third decl)))
+  (match-define `(rule ,vars ,pattern ,replacement ,condition) decl)
+  (define pattern-elem (format-decl-term pattern))
+  (define proc-rule? (procedure? replacement))
   (define replacement-elem
     (if proc-rule?
         (italic "<procedure>")
-        (format-decl-term (third decl))))
-  (define clause-elems
-    (for/list ([clause (fourth decl)])
-      (if (equal? (first clause) 'var)
-          (let ([name (second clause)]
-                [sort (third clause)])
-            (if (equal? (hash-ref context-vars name #f) sort)
-                ""
-                (list (linebreak) (hspace 2)
-                      "∀ "
-                      (format-var name sort))))
+        (format-decl-term replacement)))
+  (define var-elems
+    (for/list ([(name sort) vars])
+      (if (equal? (hash-ref context-vars name #f) sort)
+          ""
           (list (linebreak) (hspace 2)
-                "if "
-                (format-decl-term clause)))))
+                "∀ "
+                (format-var name sort)))))
+  (define clause-elems
+    (if condition
+        (cons (list (linebreak) (hspace 2)
+                    "if "
+                    (format-decl-term condition))
+              var-elems)
+        var-elems))
   (list* pattern-elem
          (if proc-rule? " → "  " ⇒ ")
          replacement-elem

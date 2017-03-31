@@ -2,7 +2,8 @@
 
 (provide transform-context-declarations)
 
-(require threading)
+(require racket/hash
+         threading)
 
 (define (transform-context-declarations decls transformations)
   (for/fold ([decls decls])
@@ -12,39 +13,46 @@
 (define ((apply-transformation tr) decls)
   (match tr
     ['hide-vars
+     (define transformer (add-context-vars (hash-ref decls 'vars)))
      (~> decls
-         (hash-update 'rules (add-context-vars (hash-ref decls 'vars)))
-         (hash-set 'vars (set)))]
+         (hash-update 'rules (λ (rules) (for/list ([r rules]) (transformer r))))
+         (hash-update 'equations (λ (eqs) (for/set ([eq eqs]) (transformer eq))))
+         (hash-set 'vars (hash)))]
     [(list 'rename-sort sort1 sort2)
      (rename-sort sort1 sort2 decls)]
     [(list 'add-include cname)
      (~> decls
          (hash-update 'includes (λ (cnames) (append cnames (list cname)))))]))
 
-(define ((add-context-vars var-decls) rule-decls)
-  (for/list ([d rule-decls])
-    (match d
-      [(list 'rule pattern replacement clauses)
-       (define local-var-names
-         (for/set ([c clauses] #:when (equal? (first c) 'var))
-           (second c)))
-       (list 'rule pattern replacement
-             (append clauses
-                     (filter (λ (vd) (not (set-member? local-var-names (second vd))))
-                             (set->list var-decls))))])))
+(define (combine-varsets name sort1 sort2)
+  (unless (equal? sort1 sort2)
+    (error (format "Var ~a of sort ~a redefined with sort ~a"
+                   name sort1 sort2)))
+  sort1)
+
+(define ((add-context-vars var-decls) rule-or-eq-decl)
+  (match rule-or-eq-decl
+    [(list (and type (or 'rule 'equation)) vars term1 term2 condition)
+     (define combined-vars 
+(hash-union vars var-decls #:combine/key combine-varsets))
+     (list type combined-vars term1 term2 condition)]))
 
 (define (rename-sort sort1 sort2 decls)
 
   (define (new-sort s)
     (if (equal? s sort1) sort2 s))
 
-  (define (rename* x)
+  (define (rename-arg x)
     (match x
       [(list 'var name sort)
        (list 'var name (new-sort sort))]
       [(list 'sort sort)
        (list 'sort (new-sort sort))]
       [other other]))
+
+  (define (rename-vars vars)
+    (for/hash ([(name sort) vars])
+      (values name (new-sort sort))))
 
   (~> decls
       (hash-update 'sorts
@@ -60,20 +68,17 @@
                      (for/set ([op ops])
                        (match-define (list name arity rsort) op)
                        (list name
-                             (map rename* arity)
+                             (map rename-arg arity)
                              (new-sort rsort)))))
-      (hash-update 'vars
-                   (λ (vars)
-                     (for/set ([v vars])
-                       (rename* v))))
+      (hash-update 'vars rename-vars)
       (hash-update 'rules
                    (λ (rules)
                      (for/list ([r rules])
-                       (match-define (list 'rule pattern replacement clauses) r)
-                       (list 'rule pattern replacement (map rename* clauses)))))
+                       (match-define (list 'rule vars pattern replacement condition) r)
+                       (list 'rule (rename-vars vars) pattern replacement condition))))
       (hash-update 'equations
                    (λ (eqs)
                      (for/set ([eq eqs])
-                       (match-define (list 'equation left right clauses) eq)
-                       (list 'equation left right (map rename* clauses)))))
+                       (match-define (list 'equation vars left right condition) eq)
+                       (list 'equation (rename-vars vars) left right condition))))
       (hash-set 'locs (hash))))
