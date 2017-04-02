@@ -580,6 +580,9 @@
          (equal? (op-type (second decl-term)) 'infix-op)))
 
   (match decl-term
+    [(list 'term/var raw-name)
+     (define-values (name _) (op-symbol-and-type raw-name))
+     name]
     [(list 'term raw-op args)
      (define-values (op type) (op-symbol-and-type raw-op))
      (condd

@@ -130,7 +130,7 @@
 
 (define (make-term* signature varset)
   (letrec ([fn (match-lambda
-                 [(list 'term name '())
+                 [(list 'term/var name)
                   (terms:make-var-or-term signature varset name)]
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
@@ -148,7 +148,7 @@
   (letrec ([fn (match-lambda
                  [#f
                   #f]
-                 [(list 'term name '())
+                 [(list 'term/var name)
                   (terms:make-var-or-term signature varset name)]
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
@@ -229,9 +229,11 @@
   (define-values (op args) (terms:term.op-and-args term))
   (cond
     [op
-     (list 'term op (map term->decl args))]
+     (if (empty? args)
+         (list 'term/var op)
+         (list 'term op (map term->decl args)))]
     [(terms:var? term)
-     (list 'term (terms:var-name term) empty)]
+     (list 'term/var (terms:var-name term))]
     [(integer? term)
      (list 'integer term)]
     [(and (number? term) (exact? term))
@@ -346,6 +348,8 @@
        (list 'term
              (string->symbol op-string)
              (map sxml->term args))]
+      [`(term-or-var (@ (name ,name-string)))
+       (list 'term/var (string->symbol name-string))]
       [`(,number-tag (@ (value ,v)))
        (list number-tag (read (open-input-string v)))]))
 
@@ -647,6 +651,8 @@
 
     (define (term->sxml term)
       (match term
+        [(list 'term/var name)
+         `(term-or-var (@ (name ,(symbol->string name))))]
         [(list 'term op args)
          `(term (@ (op ,(symbol->string op)))
                 ,@(for/list ([arg args])
@@ -852,7 +858,7 @@
                      "test"
                      (list (cons '(subsort foo bar) #f)
                            (cons '(op a-foo () foo) #f)))
-                    (make-term "test" '(term a-foo ()) #f)
+                    (make-term "test" '(term/var a-foo) #f)
                     (terms:term->string))
                 "foo:a-foo")
 
@@ -869,13 +875,13 @@
                            (cons '(op _∧ ((sort boolean) (sort boolean)) boolean) #f)
                            (cons '(op a-test ((sort foo)) boolean) #f)
                            (cons '(op another-test ((sort foo)) boolean) #f)
-                           (cons '(rule (term a-foo ((term X ())))
-                                        (term a-foo ())
+                           (cons '(rule (term a-foo ((term/var X)))
+                                        (term/var a-foo)
                                         ((var X foo)
-                                         (term a-test ((term X ())))
-                                         (term another-test ((term X ()))))) #f)
-                           (cons '(equation (term a-foo ())
-                                            (term a-foo ((term a-foo ())))
+                                         (term a-test ((term/var X)))
+                                         (term another-test ((term/var X))))) #f)
+                           (cons '(equation (term/var a-foo)
+                                            (term a-foo ((term/var a-foo)))
                                             ()) #f)))
                     (get-context "test"))
                 test-context2)
@@ -887,11 +893,11 @@
                            (cons '(op a-foo () foo) #f)
                            (cons '(op a-foo ((sort bar)) foo) #f)
                            (cons '(op a-bar ((var X foo)) bar) #f)
-                           (cons '(rule (term a-foo ((term X ())))
-                                        (term a-foo ())
+                           (cons '(rule (term a-foo ((term/var X)))
+                                        (term/var a-foo)
                                         ((var X foo))) #f)
-                           (cons '(equation (term a-foo ())
-                                            (term a-foo ((term a-foo ())))
+                           (cons '(equation (term/var a-foo)
+                                            (term a-foo ((term/var a-foo)))
                                             ()) #f)))
                     (get-context-declarations "test"))
                 (hash 'includes empty
@@ -906,14 +912,14 @@
                       'rules (list
                               (list 'rule
                                     (hash 'X 'foo)
-                                    '(term a-foo ((term X ())))
-                                    '(term a-foo ())
+                                    '(term a-foo ((term/var X)))
+                                    '(term/var a-foo)
                                     #f))
                       'equations (set
                                   (list 'equation
                                         (hash)
-                                        '(term a-foo ())
-                                        '(term a-foo ((term a-foo ())))
+                                        '(term/var a-foo)
+                                        '(term a-foo ((term/var a-foo)))
                                         #f))))
 
   (check-equal? (~> empty-document
@@ -923,11 +929,11 @@
                            (cons '(op a-foo () foo) #f)
                            (cons '(op a-foo ((sort bar)) foo) #f)
                            (cons '(op a-bar ((var X foo)) bar) #f)
-                           (cons '(rule (term a-foo ((term X ())))
-                                        (term a-foo ())
+                           (cons '(rule (term a-foo ((term/var X)))
+                                        (term/var a-foo)
                                         ((var X foo))) #f)
-                           (cons '(equation (term a-foo ())
-                                            (term a-foo ((term a-foo ())))
+                           (cons '(equation (term/var a-foo)
+                                            (term a-foo ((term/var a-foo)))
                                             ()) #f)))
                     (get-context-declarations "test"))
                 (hash 'includes empty
@@ -941,14 +947,14 @@
                       'rules (list
                               (list 'rule
                                     (hash 'X 'foo)
-                                    '(term a-foo ((term X ())))
-                                    '(term a-foo ())
+                                    '(term a-foo ((term/var X)))
+                                    '(term/var a-foo)
                                     #f))
                       'equations (set
                                   (list 'equation
                                         (hash)
-                                        '(term a-foo ())
-                                        '(term a-foo ((term a-foo ())))
+                                        '(term/var a-foo)
+                                        '(term a-foo ((term/var a-foo)))
                                         #f))
                       'locs (hash)))
 
@@ -970,11 +976,11 @@
                (cons '(subsort foo bar) #f)
                (cons '(op a-foo () foo) #f)
                (cons '(op a-foo ((var X foo)) foo) #f)
-               (cons '(rule (term a-foo ((term X ())))
-                            (term a-foo ())
+               (cons '(rule (term a-foo ((term/var X)))
+                            (term/var a-foo)
                             ((var X foo))) #f)
-               (cons '(equation (term a-foo ((term X ())))
-                                (term a-foo ())
+               (cons '(equation (term a-foo ((term/var X)))
+                                (term/var a-foo)
                                 ((var X foo))) #f)
                (cons '(equation (integer 2)
                                 (integer 3)
@@ -983,8 +989,8 @@
   (check-true (~> test-document
                   (make-test "test"
                              '(rule
-                               (term a-foo ((term a-foo ())))
-                               (term a-foo ())
+                               (term a-foo ((term/var a-foo)))
+                               (term/var a-foo)
                                ())
                              #f)
                   ; check if the last two (out of three) elements are equal
