@@ -11,3 +11,5 @@
 
 (define racket-launcher-names '("leibniz"))
 (define racket-launcher-libraries '("run.rkt"))
+
+(define scribblings '(("leibniz.scrbl" (multi-page))))

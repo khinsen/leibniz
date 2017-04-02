@@ -9,5 +9,6 @@ compiled/
 doc/
 graphs/
 attic/
+leibniz/doc
 test.rkt
 .projectile

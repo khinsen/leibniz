@@ -148,6 +148,16 @@ You can then use Leibniz in two ways:
    is indicated near the end of the installation process, so have a
    careful look at the log output of `raco pkg install ...`.
 
+For more information, see the Leibniz manual:
+
+  - In DrRacket, go to the "Help" menu and select "Racket
+    Documentation".
+    
+  - From a terminal command line, run "raco docs"
+  
+This will open the table of contents of the Racket documentation in a browser.
+Search for "Leibniz" and click the link.
+
 ## License
 
 I expect to properly document and release this code at some time,
