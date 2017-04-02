@@ -4,11 +4,10 @@
                "threading"
                "rackunit-lib"
                "chk"
-               "sweet-exp-lib"
+               "megaparsack"
                "sxml"))
 (define pkg-desc "Leibniz - A Digital Scientific Notation")
-(define version "0.1")
-(define compile-omit-paths 'all)
+(define version "0.2")
 
 (define racket-launcher-names '("leibniz"))
 (define racket-launcher-libraries '("run.rkt"))

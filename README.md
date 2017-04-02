@@ -28,7 +28,7 @@ at [Guaana](https://www.guaana.com/).
 ## Status
 
 In a word: experimental. The major milestone that the implementation has
-reached is to work like a digital scientific notation: Leibniz specifications
+reached is to play its role of a digital scientific notation: Leibniz specifications
 are embedded into the plain text discourse written for human readers, just
 like traditional semi-formal mathematical notation. This matters because
 it eliminates an important source of mistakes: the translation from human-readable
@@ -36,7 +36,9 @@ and peer-reviewed descriptions of models and methods into computer-readable code
 
 However, many features that I have planned for the language are still missing: built-in
 collection types (lists/arrays, sets, ...) interfaces to databases and external datasets,
-support for workflow.
+support for workflow. Although in principle today's Leibniz can be used for everything
+(given that it's Turing-complete), it is still insufficient to express many
+aspects of computational science in a sufficiently concise and convenient form.
 
 For a first contact with Leibniz, I suggest studying the examples under
 `leibniz-library`, and reading `leibniz-library/quick-guide.md`. Readers interested
@@ -105,7 +107,7 @@ software. Leibniz must therefore be easy to implement in a wide range
 of software packages, whereas reimplementing Maude is of little
 interest, given that its source code is open.
 
-## Required software
+## Required software, installation
 
 This first implementation of Leibniz is written in
 [Racket](http://racket-lang.org/), whose support for implementing
@@ -113,31 +115,38 @@ languages and language extensions is particularly useful for this
 project. In addition to Racket itself, Leibniz depends on the
 following libraries:
 
+ - [megaparsack](https://github.com/lexi-lambda/megaparsack)
  - [threading](https://github.com/lexi-lambda/threading)
- - [sxml](http://github.com/jbclements/sxml/tree/master)
+ - [sxml](https://github.com/jbclements/sxml/tree/master)
  - [chk](https://github.com/jeapostrophe/chk)
 
-The examples also use
-
- - [sweet-exp](http://github.com/takikawa/sweet-racket)
-
-for better readability.
-
-To install Leibniz and its dependencies, type:
+To install Leibniz and its dependencies, first install the Racket system
+on your computer, and then type, in a terminal window:
 ```bash
    raco pkg install git://github.com/khinsen/leibniz\?path=leibniz
-   raco pkg install git://github.com/khinsen/leibniz\?path=leibniz-library
 ```
 
 To run the Leibniz test suite, type
 ```bash
    raco test -c leibniz
 ```
-You can run an individual library module's tests by typing
-```bash
-   raco test -l leibniz/sorts
-```
-etc.
+
+You can then use Leibniz in two ways:
+
+ - In Racket's IDE, called DrRacket. Any file starting with
+     ```#lang leibniz
+     ```
+   is treated as a Leibniz document. Clicking on the Leibniz button
+   creates a human-readable HTML version and a machine-readable XML
+   version of the document, and opens the HTML file immediately in
+   a browser for inspection.
+   
+ - Write your Leibniz documents using any text editor, and generate
+   the HTML/XML files using the `leibniz` command line utility. It
+   is part of installation process, but the location where it ends up
+   is very platform-dependent. The good news is that the precise location
+   is indicated near the end of the installation process, so have a
+   careful look at the log output of `raco pkg install ...`.
 
 ## License
 
@@ -147,6 +156,12 @@ by the [CRAPL](http://matt.might.net/articles/crapl/) license.
 
 ## Branch notes
 
-Most branches of this repository contain experiments that test the utility and feasibility of ideas for improvements and new features. Each branch has a short note in this place that explains its reason for being. This branch (master) always contains the version currently considered most useful.
+Most branches of this repository contain experiments that test the
+utility and feasibility of ideas for improvements and new
+features. Each branch has a short note in this place that explains its
+reason for being. This branch (master) always contains the version
+currently considered most useful.
 
-Note that all branches except master may be rebased, or modified in other ways. If you want to fork this repository, please don't rely on any branch other than master.
+Note that all branches except master may be rebased, or modified in
+other ways. If you want to fork this repository, please don't rely on
+any branch other than master.
