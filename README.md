@@ -40,8 +40,7 @@ support for workflow. Although in principle today's Leibniz can be used for ever
 (given that it's Turing-complete), it is still insufficient to express many
 aspects of computational science in a sufficiently concise and convenient form.
 
-For a first contact with Leibniz, I suggest studying the examples under
-`leibniz-library`, and reading `leibniz-library/quick-guide.md`. Readers interested
+For a first contact with Leibniz, I suggest studying the [examples](http://khinsen.net/leibniz-examples/)  and reading [the manual](http://khinsen.net/leibniz/) Readers interested
 in the implementation should start by looking at the file `notes.md` for
 an overview of the code structure.
 
@@ -134,7 +133,8 @@ To run the Leibniz test suite, type
 You can then use Leibniz in two ways:
 
  - In Racket's IDE, called DrRacket. Any file starting with
-     ```#lang leibniz
+     ```
+     #lang leibniz
      ```
    is treated as a Leibniz document. Clicking on the Leibniz button
    creates a human-readable HTML version and a machine-readable XML
@@ -148,15 +148,13 @@ You can then use Leibniz in two ways:
    is indicated near the end of the installation process, so have a
    careful look at the log output of `raco pkg install ...`.
 
-For more information, see the Leibniz manual:
+For more information, see the [Leibniz manual](http://khinsen.net/leibniz/):
 
   - In DrRacket, go to the "Help" menu and select "Racket
-    Documentation".
+    Documentation". This will open the table of contents of the Racket
+    documentation in a browser. Search for "Leibniz" and click the link.
     
-  - From a terminal command line, run "raco docs"
-  
-This will open the table of contents of the Racket documentation in a browser.
-Search for "Leibniz" and click the link.
+  - From a terminal command line, run "raco docs leibniz"
 
 ## License
 
