@@ -6,7 +6,6 @@
 *.xml
 *.sig
 compiled/
-doc/
 graphs/
 attic/
 leibniz/doc
