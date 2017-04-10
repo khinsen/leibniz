@@ -20,7 +20,8 @@
       (pure x)))
 
 (define some-punctuation/p
-  (label/p "punctuation" (or/p (char/p #\-) (char/p #\*) (char/p #\%))))
+  (label/p "punctuation" (or/p (char/p #\-) (char/p #\*)
+                               (char/p #\%) (char/p #\?))))
 
 (define some-symbolic/p
   (label/p "symbolic"
