@@ -47,7 +47,7 @@
     (op (a-test foo) boolean)
     (op (another-test foo) boolean)
     (=> #:var (X foo) (a-foo X) a-foo #:if (_∧ (a-test X) (another-test X)))
-    (eq a-foo (a-foo a-foo))))
+    (eq #:label eq1 a-foo (a-foo a-foo))))
 
 ; Re-raise exceptions with the source location information from the document
 
@@ -180,14 +180,14 @@
 
 (define (make-equation* signature varset equation-expr)
   (match equation-expr
-    [(list 'equation vars left right condition)
+    [(list 'equation label vars left right condition)
      (let* ([varset (make-local-varset* signature varset vars)]
             [mp (make-pattern* signature varset)])
        (equations:make-equation signature
                                 (mp left)
                                 (mp condition)
                                 (mp right)
-                                #f))]
+                                label))]
     [_ #f]))
 
 (define (make-equationset signature varset includes eq-decls locs)
@@ -196,7 +196,7 @@
               ([c includes])
       (equations:merge-equationsets mes (contexts:context-equations c) signature)))
   (for/fold ([eq after-includes])
-            ([ed eq-decls])
+            ([(label ed) eq-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ed))])
       (equations:add-equation eq (make-equation* signature varset ed)))))
 
@@ -259,10 +259,11 @@
     (if condition (term->decl condition) #f))
   (list 'rule decl-vars decl-pattern decl-replacement decl-condition))
 
-(define (eq->decl rule)
-  (define left (equations:equation-left rule))
-  (define right (equations:equation-right rule))
-  (define condition (equations:equation-condition rule))
+(define (eq->decl eq)
+  (define label (equations:equation-label eq))
+  (define left (equations:equation-left eq))
+  (define right (equations:equation-right eq))
+  (define condition (equations:equation-condition eq))
   (define vars (set-union (terms:term.vars left) (terms:term.vars right)))
   (define decl-left (term->decl left))
   (define decl-right (term->decl right))
@@ -271,7 +272,9 @@
       (values (terms:var-name var) (terms:var-sort var))))
   (define decl-condition
     (if condition (term->decl condition) #f))
-  (list 'equation decl-vars decl-left decl-right decl-condition))
+  (values label
+          (list 'equation 
+                decl-vars decl-left decl-right decl-condition)))
 
 (define (rulelist-diff base-rulelist full-rulelist)
   (define base-rules (for/set ([rule (equations:in-rules base-rulelist)])
@@ -282,12 +285,14 @@
         (filter (λ (r) (not (set-member? base-rules r))) full-rules)))
 
 (define (equationset-diff base-equationset full-equationset)
-  (define base-equations (for/set ([eq (equations:in-equations base-equationset)])
+  (define base-equations (for/hash ([eq (equations:in-equations base-equationset)])
                            (eq->decl eq)))
-  (define full-equations (for/list ([eq (equations:in-equations full-equationset)])
+  (define full-equations (for/hash ([eq (equations:in-equations full-equationset)])
                            (eq->decl eq)))
   (hash 'equations
-        (list->set (filter (λ (eq) (not (set-member? base-equations eq))) full-equations))))
+        (for/hash ([(label eq) full-equations]
+                   #:unless (hash-has-key? base-equations label))
+          (values label eq))))
 
 (define (context-diff base-context full-context)
   (define base-signature (contexts:context-signature base-context))
@@ -312,6 +317,13 @@
                    name sort1 sort2)))
   sort1)
 
+; Combine equationsets checking for name clashes. For use with hash-union.
+
+(define (combine-eqsets label eq1 eq2)
+  (unless (equal? eq1 eq2)
+    (error (format "Equation label ~a already used: ~a" label eq1)))
+  eq1)
+
 ; Convert SXML to document
 
 (define (sxml->document sxml-document)
@@ -328,6 +340,8 @@
   (define (sxml->arg sxml-arg)
     (match sxml-arg
       [`(var (@ (id ,var-name) (sort ,sort-name)))
+       (list 'var (string->symbol var-name) (string->symbol sort-name))]
+      [`(var (@ (sort ,sort-name) (id ,var-name)))
        (list 'var (string->symbol var-name) (string->symbol sort-name))]
       [`(sort (@ (id ,sort-name)))
        (list 'sort (string->symbol sort-name))]))
@@ -400,21 +414,24 @@
                               #f]
                              [`(condition ,term) 
                               term]))])))
-  (define equations (for/set ([eq sxml-equations])
+  (define equations (for/hash ([eq sxml-equations])
                       (match eq
-                        [`(equation (vars ,ev ...)
+                        [`(equation (@ (id ,elabel))
+                                    (vars ,ev ...)
                                     (left ,el)
                                     ,ec
                                     (right ,er))
-                         (list 'equation
-                               (sxml->vars ev)
-                               (sxml->term el)
-                               (sxml->term er)
-                               (match ec
-                                 [`(condition)
-                                  #f]
-                                 [`(condition ,term) 
-                                  term]))])))
+                         (values (string->symbol elabel)
+                                 (list 'equation
+                                       (string->symbol elabel)
+                                       (sxml->vars ev)
+                                       (sxml->term el)
+                                       (sxml->term er)
+                                       (match ec
+                                         [`(condition)
+                                          #f]
+                                         [`(condition ,term) 
+                                          term])))])))
 
   (values name
           (hash 'includes includes
@@ -434,7 +451,7 @@
   ; contexts: a hash mapping context names (strings) to contexts
   ; decls: a hash mapping context names to hashes with keys
   ;        'includes 'sorts 'ops 'vars 'rules 'equations,
-  ;        values are lists of the declarations in each category
+  ;        values are lists/sets/hashes of the declarations in each category
   ; order: a list of context names in the inverse order of definition
   ; library: a hash mapping document names to documents
 
@@ -516,19 +533,21 @@
                                              (cons new-rule rules))))
           (add-loc new-rule loc)))
 
-    (define (add-equation decls left right clauses loc)
+    (define (add-equation decls label left right clauses loc)
       (define-values (vars condition) (group-clauses clauses loc))
-      (define new-eq (list 'equation vars left right condition))
+      (define new-eq (hash label (list 'equation label vars left right condition)))
       (~> decls
-          (hash-update 'equations (λ (eqs) (set-add eqs new-eq)))
+          (hash-update 'equations (λ (eqs) (hash-union eqs new-eq
+                                                       #:combine/key combine-eqsets)))
           (add-loc new-eq loc)))
 
     (define (merge decls1 decls2 loc)
       (define (merge* key v1 v2)
         (case key
           [(includes rules) (remove-duplicates (append v1 v2))]
-          [(sorts subsorts ops equations) (set-union v1 v2)]
+          [(sorts subsorts ops) (set-union v1 v2)]
           [(vars) (hash-union v1 v2 #:combine/key combine-varsets)]
+          [(equations) (hash-union v1 v2 #:combine/key combine-eqsets)]
           [(locs) (hash-union v1 v2 #:combine (λ (a b) a))]))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
         (hash-union decls1 decls2
@@ -540,7 +559,7 @@
                                 'ops (set)
                                 'vars (hash)
                                 'rules (list)
-                                'equations (set)
+                                'equations (hash)
                                 'locs (hash))])
                   ([decl/loc context-decls])
           (match-define (cons decl loc) decl/loc)
@@ -572,8 +591,8 @@
              (add-var decls name sort loc)] 
             [(list 'rule pattern replacement clauses)
              (add-rule decls pattern replacement clauses loc)]
-            [(list 'equation left right clauses)
-             (add-equation decls left right clauses loc)]))
+            [(list 'equation label left right clauses)
+             (add-equation decls label left right clauses loc)]))
         (hash-update 'rules reverse)
         (hash-update 'includes reverse)))
 
@@ -696,10 +715,14 @@
                                   (pattern ,(term->sxml pattern))
                                   ,(condition->sxml condition)
                                   (replacement ,(term->sxml replacement))))))
-              (equations ,@(for/list ([ed (hash-ref cdecls 'equations)])
+              (equations ,@(for/list ([(label ed) (hash-ref cdecls 'equations)])
                              (match-let
-                                 ([(list 'equation vars left right condition) ed])
-                               `(equation (vars ,@(vars->sxml vars))
+                                 ([(list 'equation label2 vars left right condition) ed])
+                               (unless (equal? label label2)
+                                 (error (format "inconsistent equation labels ~a / ~a"
+                                                label label2)))
+                               `(equation (@ (id ,(symbol->string label)))
+                                          (vars ,@(vars->sxml vars))
                                           (left ,(term->sxml left))
                                           ,(condition->sxml condition)
                                           (right ,(term->sxml right))))))))
@@ -740,20 +763,25 @@
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
+      (define ed (hash-ref (preprocess-declarations
+                            (list (cons equation-expr loc)))
+                           'equations))
+      (unless (equal? (hash-count ed) 1)
+        (error "can't happen"))
       (make-equation* signature (contexts:context-vars context)
-                      (set-first (hash-ref (preprocess-declarations
-                                            (list (cons equation-expr loc)))
-                                           'equations)))))
+                      (first (hash-values ed)))))
 
   (define (make-test context-name rule-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (define varset (contexts:context-vars context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (define rule (first (hash-ref (preprocess-declarations
-                                     (list (cons rule-expr loc)))
-                                    'rules)))
-      (match rule
+      (define rd (hash-ref (preprocess-declarations
+                            (list (cons rule-expr loc)))
+                           'rules))
+      (unless (equal? (length rd) 1)
+        (error "can't happen"))
+      (match (first rd)
         [(list 'rule (hash-table) pattern replacement #f)
          (let* ([mt (make-pattern* signature varset)]
                 [term (mt pattern)]
@@ -880,7 +908,8 @@
                                         ((var X foo)
                                          (term a-test ((term/var X)))
                                          (term another-test ((term/var X))))) #f)
-                           (cons '(equation (term/var a-foo)
+                           (cons '(equation eq1
+                                            (term/var a-foo)
                                             (term a-foo ((term/var a-foo)))
                                             ()) #f)))
                     (get-context "test"))
@@ -896,7 +925,8 @@
                            (cons '(rule (term a-foo ((term/var X)))
                                         (term/var a-foo)
                                         ((var X foo))) #f)
-                           (cons '(equation (term/var a-foo)
+                           (cons '(equation eq1
+                                            (term/var a-foo)
                                             (term a-foo ((term/var a-foo)))
                                             ()) #f)))
                     (get-context-declarations "test"))
@@ -915,48 +945,52 @@
                                     '(term a-foo ((term/var X)))
                                     '(term/var a-foo)
                                     #f))
-                      'equations (set
-                                  (list 'equation
-                                        (hash)
-                                        '(term/var a-foo)
-                                        '(term a-foo ((term/var a-foo)))
-                                        #f))))
+                      'equations (hash 'eq1
+                                       (list 'equation
+                                             'eq1
+                                             (hash)
+                                             '(term/var a-foo)
+                                             '(term a-foo ((term/var a-foo)))
+                                             #f))))
 
-  (check-equal? (~> empty-document
-                    (new-context-from-source
-                     "test"
-                     (list (cons '(subsort foo bar) #f)
-                           (cons '(op a-foo () foo) #f)
-                           (cons '(op a-foo ((sort bar)) foo) #f)
-                           (cons '(op a-bar ((var X foo)) bar) #f)
-                           (cons '(rule (term a-foo ((term/var X)))
-                                        (term/var a-foo)
-                                        ((var X foo))) #f)
-                           (cons '(equation (term/var a-foo)
-                                            (term a-foo ((term/var a-foo)))
-                                            ()) #f)))
-                    (get-context-declarations "test"))
-                (hash 'includes empty
-                      'sorts (set 'foo 'bar)
-                      'subsorts (set (cons 'foo 'bar))
-                      'ops (set 
-                            '(a-foo () foo)
-                            '(a-foo ((sort bar)) foo)
-                            '(a-bar ((var X foo)) bar))
-                      'vars (hash 'X 'foo)
-                      'rules (list
-                              (list 'rule
-                                    (hash 'X 'foo)
-                                    '(term a-foo ((term/var X)))
-                                    '(term/var a-foo)
-                                    #f))
-                      'equations (set
-                                  (list 'equation
-                                        (hash)
-                                        '(term/var a-foo)
-                                        '(term a-foo ((term/var a-foo)))
-                                        #f))
-                      'locs (hash)))
+  (let ([decls (list (cons '(sort foo) #f)
+                     (cons '(sort bar) #f)
+                     (cons '(var X foo) #f)
+                     (cons '(var X foo) #f)
+                     (cons '(var X bar) #f))])
+    (check-not-exn (thunk
+                    (~> empty-document
+                        (new-context-from-source "test" (take decls 4)))))
+    ; var name redefined
+    (check-exn exn:fail?
+               (thunk
+                (~> empty-document
+                    (new-context-from-source "test" decls)))))
+
+  (let ([decls (list (cons '(subsort foo bar) #f)
+                     (cons '(op a-foo () foo) #f)
+                     (cons '(op a-foo ((sort bar)) foo) #f)
+                     (cons '(op a-bar ((var X foo)) bar) #f)
+                     (cons '(equation eq1
+                                      (term/var a-foo)
+                                      (term a-foo ((term/var a-foo)))
+                                      ()) #f)
+                     (cons '(equation eq1
+                                      (term/var a-foo)
+                                      (term a-foo ((term/var a-foo)))
+                                      ()) #f)
+                     (cons '(equation eq1
+                                      (term a-foo ((term/var a-foo)))
+                                      (term/var a-foo)
+                                      ()) #f))])
+    (check-not-exn (thunk
+                    (~> empty-document
+                        (new-context-from-source "test" (take decls 6)))))
+    ; equation name redefined
+    (check-exn exn:fail?
+               (thunk
+                (~> empty-document
+                    (new-context-from-source "test" decls)))))
 
   ;; (check-exn exn:fail?
   ;;            ; non-regular signature
@@ -979,10 +1013,12 @@
                (cons '(rule (term a-foo ((term/var X)))
                             (term/var a-foo)
                             ((var X foo))) #f)
-               (cons '(equation (term a-foo ((term/var X)))
+               (cons '(equation eq1
+                                (term a-foo ((term/var X)))
                                 (term/var a-foo)
                                 ((var X foo))) #f)
-               (cons '(equation (integer 2)
+               (cons '(equation eq2
+                                (integer 2)
                                 (integer 3)
                                 ()) #f)))))
 

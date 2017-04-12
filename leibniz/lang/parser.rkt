@@ -371,14 +371,17 @@
       (pure `(rule ,pattern ,replacement ,clauses))))
 
 (define equation/p
-  (do [left <- term/p]
+  (do [label <- identifier/p]
+      (char/p #\:)
+      (many+/p space/p)
+      [left <- term/p]
       (many+/p space/p)
       (char/p #\=)
       (many+/p space/p)
       [right <- term/p]
       [clauses <- (many/p clause/p)]
       eof/p
-      (pure `(equation ,left ,right ,clauses))))
+      (pure `(equation ,label ,left ,right ,clauses))))
 
 (module+ test
   (check-parse var-clause/p "∀ foo:bar" '(var foo bar))
@@ -405,12 +408,14 @@
                '(rule (term/var a)
                       (term/var b)
                       ((term _> ((term/var a) (integer 0))))))
-  (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz"
-               '(equation (term/var a)
+  (check-parse equation/p "eq1: a = b ∀ foo:bar ∀ bar:baz"
+               '(equation eq1
+                          (term/var a)
                           (term/var b)
                           ((var foo bar) (var bar baz))))
-  (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz if test(a)"
-               '(equation (term/var a)
+  (check-parse equation/p "eq2: a = b ∀ foo:bar ∀ bar:baz if test(a)"
+               '(equation eq2
+                          (term/var a)
                           (term/var b)
                           ((var foo bar) (var bar baz) (term test ((term/var a)))))))
 

@@ -15,8 +15,10 @@
     ['hide-vars
      (define transformer (add-context-vars (hash-ref decls 'vars)))
      (~> decls
-         (hash-update 'rules (λ (rules) (for/list ([r rules]) (transformer r))))
-         (hash-update 'equations (λ (eqs) (for/set ([eq eqs]) (transformer eq))))
+         (hash-update 'rules (λ (rules) (for/list ([r rules])
+                                          (transformer r))))
+         (hash-update 'equations (λ (eqs) (for/hash ([(label eq) eqs])
+                                            (values label (transformer eq)))))
          (hash-set 'vars (hash)))]
     [(list 'rename-sort sort1 sort2)
      (rename-sort sort1 sort2 decls)]
@@ -32,10 +34,14 @@
 
 (define ((add-context-vars var-decls) rule-or-eq-decl)
   (match rule-or-eq-decl
-    [(list (and type (or 'rule 'equation)) vars term1 term2 condition)
+    [(list 'rule vars term1 term2 condition)
      (define combined-vars 
-(hash-union vars var-decls #:combine/key combine-varsets))
-     (list type combined-vars term1 term2 condition)]))
+       (hash-union vars var-decls #:combine/key combine-varsets))
+     (list 'rule combined-vars term1 term2 condition)]
+    [(list 'equation label vars term1 term2 condition)
+     (define combined-vars 
+       (hash-union vars var-decls #:combine/key combine-varsets))
+     (list 'equation label combined-vars term1 term2 condition)]))
 
 (define (rename-sort sort1 sort2 decls)
 
@@ -78,7 +84,11 @@
                        (list 'rule (rename-vars vars) pattern replacement condition))))
       (hash-update 'equations
                    (λ (eqs)
-                     (for/set ([eq eqs])
-                       (match-define (list 'equation vars left right condition) eq)
-                       (list 'equation (rename-vars vars) left right condition))))
+                     (for/hash ([(label  eq) eqs])
+                       (match-define (list 'equation label2 vars left right condition) eq)
+                       (unless (equal? label label2)
+                         (error "can't happen"))
+                       (values label
+                               (list 'equation label2 (rename-vars vars)
+                                     left right condition)))))
       (hash-set 'locs (hash))))

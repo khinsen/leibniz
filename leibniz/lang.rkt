@@ -379,7 +379,9 @@
               "if "
               (format-term signature cond))
         ""))
-  (list left-elem
+  (list (bold (symbol->string (equations:equation-label equation)))
+        ": "
+        left-elem
         " = "
         right-elem
         var-elems
@@ -490,7 +492,8 @@
         (format-subsort-declarations (hash-ref decls 'subsorts))
         (format-op-declarations (hash-ref decls 'ops))
         (format-var-declarations (hash-ref decls 'vars))
-        (format-rule-declarations (hash-ref decls 'rules) (hash-ref decls 'vars))))
+        (format-rule-declarations (hash-ref decls 'rules) (hash-ref decls 'vars))
+        (format-eq-declarations (hash-ref decls 'equations) (hash-ref decls 'vars))))
 
 (define (format-sort-declarations sort-decls)
   (define sorts
@@ -546,6 +549,18 @@
                    (add-between rules (linebreak))
                    #:style 'inset))))
 
+(define (format-eq-declarations eq-decls var-decls)
+  (define eqs
+    (for/list ([(label ed) eq-decls])
+      (elem #:style leibniz-output-style
+            (format-eq-declaration ed var-decls))))
+  (if (empty? eq-decls)
+      ""
+      (list "Equations:" (linebreak)
+            (apply nested
+                   (add-between eqs (linebreak))
+                   #:style 'inset))))
+
 (define (format-rule-declaration decl context-vars)
   (match-define `(rule ,vars ,pattern ,replacement ,condition) decl)
   (define pattern-elem (format-decl-term pattern))
@@ -572,6 +587,32 @@
          (if proc-rule? " → "  " ⇒ ")
          replacement-elem
          clause-elems))
+
+(define (format-eq-declaration decl context-vars)
+  (match-define `(equation ,label ,vars ,left ,right ,condition) decl)
+  (define left-elem (format-decl-term left))
+  (define right-elem (format-decl-term right))
+  (list* (bold (symbol->string label))
+         ": "
+         left-elem
+         " = "
+         right-elem
+         (format-clauses condition vars context-vars)))
+
+(define (format-clauses condition vars context-vars)
+  (define var-elems
+    (for/list ([(name sort) vars])
+      (if (equal? (hash-ref context-vars name #f) sort)
+          ""
+          (list (linebreak) (hspace 2)
+                "∀ "
+                (format-var name sort)))))
+  (if condition
+        (cons (list (linebreak) (hspace 2)
+                    "if "
+                    (format-decl-term condition))
+              var-elems)
+        var-elems))
 
 (define (format-decl-term decl-term)
 

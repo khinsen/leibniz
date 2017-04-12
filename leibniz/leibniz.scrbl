@@ -266,6 +266,16 @@ All terms in @racket[rule-expr] can contain the variables defined in the context
 Note that rules are the only items in a context whose order matters, because during rewriting rules are tried in the order they were written.
 }
 
+@defform[(equation eq-expr)
+         #:contracts ([eq-expr string?])]{
+Add an equation to the context, and typeset it on a blue background.
+
+The syntax for @racket[eq-expr] is "label: term1 = term2" followed by any number of
+@itemlist[@item{conditions of the form "if term", where "term" is a term of sort "boolean".}
+          @item{local variable declarations of the form "∀ var-name:sort"}]
+All terms in @racket[eq-expr] can contain the variables defined in the context and the variables declared locally for the rule.
+}
+
 @defform[(eval-term term-expr)
          #:contracts ([term-expr string?])]{
 Verify the validity of @racket[term-expr] in the context and typeset it on a blue background. Evaluate the term by applying the rules defined in the context and typeset the resulting term on a green background after a "⇒" inserted as a separator.
