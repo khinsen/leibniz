@@ -25,6 +25,16 @@ with Leibniz, please consider joining my
 [Open Science project](https://www.guaana.com/projects/scientific-notations-for-the-digital-era)
 at [Guaana](https://www.guaana.com/).
 
+## A first example
+
+A simple application of Leibniz is [this description](http://khinsen.net/leibniz-examples/examples/predator-prey.html) of the predator-prey or Lotka-Volterra equations. One day, this could be the beginning of a Wikipedia entry on this topic. [Today's Wikipedia entry](https://en.wikipedia.org/wiki/Lotka%E2%80%93Volterra_equations) uses traditional mathematical notation. The use of Leibniz yields two benefits:
+
+ 1. A more precise notation. For example, in the Wikipedia text, it is not immediately clear that *x* and *y* are functions of time, whereas *α*, *β*, *γ*, *δ* are constants. In Leibniz, you have to indicate a type for each object, and you get an error message if you try to take the derivative of something that is not a function..
+ 
+ 2. A machine-readable version of your equations, generated from the [same input](https://github.com/khinsen/leibniz-examples/blob/master/examples/predator-prey.scrbl) as the HTML page you just read and therefore identical in content. You can look at it: [here it is](http://khinsen.net/leibniz-examples/examples/predator-prey.xml). It's an XML file, which your browser may not display nicely, but you can always download it and open it in a text editor. A Leibniz-aware solver for differential equations could read this file, prompt you for initial values, and compute and plot a solution.
+
+Note that this example uses [another example](http://khinsen.net/leibniz-examples/examples/functions.html) that defines functions of one variable. The dependence between the two examples is not yet indicated in the text, but this will change.
+
 ## Status
 
 In a word: experimental. The major milestone that the implementation has
