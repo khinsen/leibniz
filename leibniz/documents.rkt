@@ -8,7 +8,8 @@
          make-test
          get-document-sxml get-context-sxml
          write-xml import-xml
-         write-signature-graphs)
+         write-signature-graphs
+         builtins)
 
 (require (prefix-in sorts: "./sorts.rkt")
          (only-in "./sorts.rkt" sort-graph? empty-sort-graph)

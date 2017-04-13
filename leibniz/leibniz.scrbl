@@ -170,6 +170,8 @@ A Leibniz document can also @code[#:lang "leibniz"]|{#:use}| contexts from other
 
 @section{Leibniz reference}
 
+@subsection{Commands for use in writing documents}
+
 @defmodule[leibniz/lang]
 
 @defform[(import document-name xml-filename)
@@ -288,3 +290,146 @@ Evaluate the first term in @racket[test-expr] and compare it to the second term.
 The syntax for @racket[test-expr] is "term1 ⇒ term2". Neither term is allowed to contain variables.
 }
 
+@subsection{Builtin contexts}
+
+Leibniz provides a few built-in contexts for functionality that cannot be implemented
+in Leibniz itself.
+
+@subsubsection{Context "builtins/truth"}
+
+Sorts: @tt{boolean}
+
+Operators:
+  @itemlist[@item{@tt{true:boolean}}
+            @item{@tt{false:boolean}}
+            @item{@tt{* == * : boolean}}]
+
+Note that @tt{*} is not a valid sort name. It is used here to indicate that any sort is allowed in the arguments of @tt{==}. This is what makes @tt{==} special and impossible
+to implement in Leibniz itself. The infix operator @tt{==} tests for syntactical equality of two terms. Two terms are syntactically equal iff they are rendered identically on a page.
+
+@subsubsection{Context "builtins/integers"}
+
+Includes "builtins/truth".
+
+Sort graph:
+
+@image["images/integers/sorts.png"]
+
+@itemlist[@item{@tt{ℤ}: integers}
+          @item{@tt{ℤnz}: non-zero integers}
+          @item{@tt{ℕ}: natural numbers}
+          @item{@tt{ℕnz}: non-zero natural numbers}
+          @item{@tt{zero}: the number 0}]
+
+Operators:
+  @itemlist[@item{@tt{ℤ + ℤ : ℤ}}
+            @item{@tt{ℤ - ℤ : ℤ}}
+            @item{@tt{ℤ × ℤ : ℤ}}
+            @item{@tt{ℤ div ℤnz : ℤ} (integer division)}
+            @item{@tt{ℤ rem ℤnz : ℤ} (division remainder)}
+            @item{@tt{ℤ}@superscript{ @tt{ℕnz}}@tt{ : ℤ}}
+            @item{@tt{ℤ}@superscript{ @tt{zero}}@tt{ : ℕnz}}
+            @item{@tt{abs(ℤ) : ℕ}}
+            @item{@tt{ℤ < ℤ : boolean}}
+            @item{@tt{ℤ ≤ ℤ : boolean}}
+            @item{@tt{ℤ > ℤ : boolean}}
+            @item{@tt{ℤ ≥ ℤ : boolean}}]
+
+@subsubsection{Context "builtins/rational-numbers"}
+
+Includes "builtins/integers".
+
+Sort graph:
+
+@image["images/rational-numbers/sorts.png"]
+
+@itemlist[@item{@tt{ℚ}: rational numbers}
+          @item{@tt{ℚnz}: non-zero rational numbers}
+          @item{@tt{ℚp}: positive rational numbers}
+          @item{@tt{ℚnn}: non-negative rational numbers}]
+
+Operators:
+  @itemlist[@item{@tt{ℚ + ℚ : ℚ}}
+            @item{@tt{ℚ - ℚ : ℚ}}
+            @item{@tt{ℚ × ℚ : ℚ}}
+            @item{@tt{ℚ ÷ ℚnz : ℚ}}
+            @item{@tt{ℚnz}@superscript{ @tt{ℤnz}}@tt{ : ℚnz}}
+            @item{@tt{ℚnz}@superscript{ @tt{zero}}@tt{ : ℕnz}}
+            @item{@tt{abs(ℚ) : ℚnn}}
+            @item{@tt{ℚ < ℚ : boolean}}
+            @item{@tt{ℚ ≤ ℚ : boolean}}
+            @item{@tt{ℚ > ℚ : boolean}}
+            @item{@tt{ℚ ≥ ℚ : boolean}}]
+
+@subsubsection{Context "builtins/real-numbers"}
+
+Includes "builtins/rational-numbers".
+
+Sort graph:
+
+@image["images/real-numbers/sorts.png"]
+
+@itemlist[@item{@tt{ℝ}: real numbers}
+          @item{@tt{ℝnz}: non-zero real numbers}
+          @item{@tt{ℝp}: positive real numbers}
+          @item{@tt{ℝnn}: non-negative real numbers}]
+
+Operators:
+  @itemlist[@item{@tt{ℝ + ℝ : ℝ}}
+            @item{@tt{ℝ - ℝ : ℝ}}
+            @item{@tt{ℝ × ℝ : ℝ}}
+            @item{@tt{ℝ ÷ ℝnz : ℝ}}
+            @item{@tt{ℝnz}@superscript{@tt{ℤnz}}@tt{ : ℝnz}}
+            @item{@tt{ℝ}@superscript{@tt{ℕnz}}@tt{ : ℝ}}
+            @item{@tt{ℝp}@superscript{@tt{ℝnz}}@tt{ : ℝp}}
+            @item{@tt{abs(ℝ) : ℝnn}}
+            @item{@tt{√(ℝnn) : ℝnn}}
+            @item{@tt{ℝ < ℝ : boolean}}
+            @item{@tt{ℝ ≤ ℝ : boolean}}
+            @item{@tt{ℝ > ℝ : boolean}}
+            @item{@tt{ℝ ≥ ℝ : boolean}}]
+
+@subsubsection{Context "builtins/IEEE-floating-point"}
+
+Includes "builtins/integers".
+
+Sort graph:
+
+@image["images/IEEE-floating-point/sorts.png"]
+
+@itemlist[@item{@tt{FP}: any floating-point value}
+          @item{@tt{FP-number}: floating-point number}
+          @item{@tt{FP-NaN}: floating-point not-a-number}
+          @item{@tt{FP-inf}: floating-point infinity}
+          @item{@tt{FP32}: single-precision floating-point value}
+          @item{@tt{FP32-number}: single-precision floating-point number}
+          @item{@tt{FP32-NaN}: single-precision floating-point not-a-number}
+          @item{@tt{FP32-inf}: single-precision floating-point infinity}
+          @item{@tt{FP64}: double-precision floating-point value}
+          @item{@tt{FP64-number}: double-precision floating-point number}
+          @item{@tt{FP64-NaN}: double-precision floating-point not-a-number}
+          @item{@tt{FP64-inf}: double-precision floating-point infinity}]
+
+Operators:
+  @itemlist[@item{@tt{FP32 + FP32 : FP32}}
+            @item{@tt{FP64 + FP64 : FP64}}
+            @item{@tt{FP32 - FP32 : FP32}}
+            @item{@tt{FP64 - FP64 : FP64}}
+            @item{@tt{FP32 × FP32 : FP32}}
+            @item{@tt{FP64 × FP64 : FP64}}
+            @item{@tt{FP32 ÷ FP32 : FP32}}
+            @item{@tt{FP64 ÷ FP64 : FP64}}
+            @item{@tt{FP32}@superscript{@tt{FP32}}@tt{ : FP32}}
+            @item{@tt{FP64}@superscript{@tt{FP64}}@tt{ : FP64}}
+            @item{@tt{abs(FP32) : FP32}}
+            @item{@tt{abs(FP64) : FP64}}
+            @item{@tt{√(FP32) : FP32}}
+            @item{@tt{√(FP64) : FP64}}
+            @item{@tt{FP32 < FP32 : boolean}}
+            @item{@tt{FP64 < FP64 : boolean}}
+            @item{@tt{FP32 ≤ FP32 : boolean}}
+            @item{@tt{FP64 ≤ FP64 : boolean}}
+            @item{@tt{FP32 > FP32 : boolean}}
+            @item{@tt{FP64 > FP64 : boolean}}
+            @item{@tt{FP32 ≥ FP32 : boolean}}
+            @item{@tt{FP64 ≥ FP64 : boolean}}]
