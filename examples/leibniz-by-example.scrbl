@@ -7,6 +7,9 @@
 
 @context["predator-prey" #:use "functions/ℝ→ℝ"]{
 
+Let's start right away with an example, the explanations will follow in the
+next section.
+
 @section{Example: the predator-prey equations}
 
 The predator-prey equations, also known as the Lotka-Volterra equations, describe the dynamics of two interacting species in an ecosystem in terms of non-linear differential equations.
@@ -14,8 +17,8 @@ The predator-prey equations, also known as the Lotka-Volterra equations, describ
 The two interacting time-dependent observables are the number of prey, @op{prey : ℝ→ℝ}, and the number of predators, @op{predators : ℝ→ℝ}. Although the number of individuals of a species is really an integer, it is taken to be a real number for the benefit of using differential equations. The two coupled equations for @term{prey} and @term{predators}
 are
 @inset{
-  @equation{pp1: 𝒟(prey) = (prey-growth-rate × prey) - predation-rate × predators × prey}
-  @equation{pp2: 𝒟(predators) = (predator-growth-rate × predators × prey) - predator-loss-rate × predators}}
+  @equation{pp1: 𝒟(prey) = (prey-growth-rate × prey) - (predation-rate × predators × prey)}
+  @equation{pp2: 𝒟(predators) = (predator-growth-rate × predators × prey) - (predator-loss-rate × predators)}}
 
 These equations are based on a few assumptions:
 @itemlist[
@@ -28,13 +31,11 @@ These equations are based on a few assumptions:
 
 @context["predator-prey-explanation" #:use "predator-prey"]{
                                                 
-@section{A quick guide to reading this example}
+@section{A guide to reading this example}
 
 @itemlist[
   @item{Everything typeset on a light blue background is Leibniz code. Everything else is plain text.}
   @item{The boldface parts (@bold{pp1}, @bold{pp2}) are equation labels that can be used to refer to a specific equation.}
-  @item{Leibniz has no operator precedence rules. The right-hand argument of an infix operator is everything to its right.
-        That explains why the first term in each equation is written in parentheses whereas the second isn't.}
   @item{@sort{ℝ} stands for the real numbers, @sort{ℝp} for the positive real numbers, and @sort{ℝ→ℝ} for real functions
         of one real variable. If @op{f : ℝ→ℝ} is such a function, then @term{𝒟(f)} is the derivative of @term{f}. All these
         definitions come from the imported context "functions/ℝ→ℝ" whose definition you can see

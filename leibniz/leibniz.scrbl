@@ -64,9 +64,14 @@ with valid terms looking like 'T AND !(F)'. The choice of names is entirely up t
 
 @subsubsection{Chains of infix operators}
 
-This enormous freedom in defining operators also means that it is not practical to define precedence rules such as "multiplication before addition" in traditional mathematics. Leibniz has no precedence rules whatsoever. There is only one rule for interpreting complex terms with multiple infix operators:
-@nested[#:style 'inset]{The right-hand argument of every infix operator is everything to its right.}
-This means that '2 × 3 + 4' is read as '2 × (3 + 4)', and that 'not(true ∨ false ∧ true)' is the same as 'not(true ∨ (false ∧ true))'.
+This enormous freedom in defining operators also means that it is not practical to define precedence rules such as "multiplication before addition" in traditional mathematics. Leibniz has no precedence rules whatsoever. The arguments of infix operators must be
+written in parentheses if they are infix-operator expressions themselves. The expression
+'2 × 3 + 4' is therefore erroneous, you have to write either '(2 × 3) + 4' or '2 × (3 + 4)'.
+
+There is, however, one exception to this rule. If you chain together applications of
+@italic{the same} infix operator, you can omit the parentheses. The expression
+'2 + 3 + 4' is therefore valid, and equivalent to '(2 + 3) + 4'. This rule, taken
+from the @hyperlink["http://papl.cs.brown.edu/2016/p4rs.html#%28part._.Infix_.Expressions%29"]{Pyret} language, reduces the number of parentheses in many common mathematical expressions.
 
 @subsubsection{Variables vs. symbolic values}
 

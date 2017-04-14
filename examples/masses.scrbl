@@ -28,15 +28,15 @@ In the following, we use the variables @var{M:mass}, @var{M1:mass}, @var{M2:mass
 and @var{F:ℝp}, @var{F1:ℝp}, @var{F2:ℝp}.
 
 Combine multiples of the same mass:
-  @inset{@rule{(F1 × M) + F2 × M ⇒ (F1 + F2) × M}}
+  @inset{@rule{(F1 × M) + (F2 × M) ⇒ (F1 + F2) × M}}
 
 Replace multiple prefactors and divisions by simple prefactors:
-  @inset{@rule{F1 × F2 × M ⇒ (F1 × F2) × M}
+  @inset{@rule{F1 × (F2 × M) ⇒ (F1 × F2) × M}
          @rule{M ÷ F ⇒ (1 ÷ F) × M}}
 
 Reduce quotients of two @sort{mass}es to a number if possible:
-  @inset{@rule{M1 ÷ F × M2 ⇒ (M1 ÷ F) ÷ M2}
-         @rule{(F × M1) ÷ M2 ⇒ F × M1 ÷ M2}
+  @inset{@rule{M1 ÷ (F × M2) ⇒ (M1 ÷ F) ÷ M2}
+         @rule{(F × M1) ÷ M2 ⇒ F × (M1 ÷ M2)}
          @rule{M ÷ M ⇒ 1}}
 }
 
@@ -73,15 +73,16 @@ of the conversion factors:
 
 Moreover, the quotient of two mass units is reduced to the quotient of their
 conversion factors with respect to the pivot unit:
-  @inset{@rule{MU1 ÷ MU2 ⇒ (MU1 ÷ kg) ÷ MU2 ÷ kg
+  @inset{@rule{MU1 ÷ MU2 ⇒ (MU1 ÷ kg) ÷ (MU2 ÷ kg)
          if ¬(MU2 == kg)}}
 
 @subsection{Tests}
-  @inset{@test{2 × 3 × kg ⇒ 6 × kg}
-         @test{2 × kg ÷ 3 ⇒ 2/3 × kg}
-         @test{(2 × kg) ÷ 3 × kg ⇒ 2/3}
-         @test{(2 × g) ÷ 3 × kg ⇒ 2/3000}
-         @test{(2 × g) ÷ 3 × mg ⇒ 2000/3}
+  @inset{@test{2 × (3 × kg) ⇒ 6 × kg}
+         @test{2 × (kg ÷ 3) ⇒ 2/3 × kg}
+         @test{(2 × kg) ÷ 3 ⇒ 2/3 × kg}
+         @test{(2 × kg) ÷ (3 × kg) ⇒ 2/3}
+         @test{(2 × g) ÷ (3 × kg) ⇒ 2/3000}
+         @test{(2 × g) ÷ (3 × mg) ⇒ 2000/3}
          @test{(2 × g) in mg ⇒ 2000 × mg}}
 
 }

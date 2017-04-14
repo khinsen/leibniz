@@ -24,7 +24,7 @@ Note that the tolerance applies to @term{x} and not to @term{√(x)}.
 
 Otherwise, a new estimate is computed by taking the average
 of @italic{e} and @italic{x} ÷ @italic{e}:
-  @inset{@rule{heron(x, ε, e) ⇒ heron(x, ε, 1/2 × e + x ÷ e)}}
+  @inset{@rule{heron(x, ε, e) ⇒ heron(x, ε, 1/2 × (e + (x ÷ e)))}}
 
 For convenience, we also allow no initial estimate to be supplied, using
 a default value of 1:

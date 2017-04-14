@@ -281,11 +281,12 @@
     (terms:display-term term o)
     (get-output-string o)))
 
-(define (infix-term? term)
+(define (infix-term? term [neighbor-op #f])
   (define-values (raw-op args) (terms:term.op-and-args term))
   (and raw-op
        (let-values ([(op type) (op-symbol-and-type raw-op)])
-         (equal? type 'infix-op))))
+         (and (equal? type 'infix-op)
+              (not (equal? op neighbor-op))))))
 
 (define (parenthesize term-elem condition)
   (if condition
@@ -317,8 +318,9 @@
    #:do (define arg2 (second args))
    #:do (define f-arg2 (format-term signature arg2))
    [(equal? type 'infix-op)
-    (list (parenthesize f-arg1 (infix-term? arg1))
-          " " op  " " f-arg2)]
+    (list (parenthesize f-arg1 (infix-term? arg1 op))
+          " " op  " "
+          (parenthesize f-arg2 (infix-term? arg2)))]
    [(equal? op "^")
     (list f-arg1 (superscript f-arg2))]
    [(equal? op "_")
@@ -616,9 +618,16 @@
 
 (define (format-decl-term decl-term)
 
-  (define (infix-decl-term? decl-term)
-    (and (equal? (first decl-term) 'term)
-         (equal? (op-type (second decl-term)) 'infix-op)))
+  (define (infix-decl-term? decl-term [neighbor-op #f])
+    (condd
+      [(not (equal? (first decl-term) 'term))
+       #f]
+      #:do (define raw-op (second decl-term))
+      #:do (define-values (op type) (op-symbol-and-type raw-op))
+      [(equal? op neighbor-op)
+       #f]
+      [else
+       (equal? type 'infix-op)]))
 
   (match decl-term
     [(list 'term/var raw-name)
@@ -644,8 +653,9 @@
       #:do (define arg2 (second args))
       #:do (define f-arg2 (format-decl-term arg2))
       [(equal? type 'infix-op)
-       (list (parenthesize f-arg1 (infix-decl-term? arg1))
-             " " op  " " f-arg2)]
+       (list (parenthesize f-arg1 (infix-decl-term? arg1 op))
+             " " op  " "
+             (parenthesize f-arg2 (infix-decl-term? arg2)))]
       [(equal? op "^")
        (list f-arg1 (superscript f-arg2))]
       [(equal? op "_")

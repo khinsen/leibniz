@@ -322,14 +322,29 @@
                              (pure `(term ^ (,t ,superscript))))))
             (pure t))))
 
+(define (given-op/p op-id)
+  (try/p (do (many+/p space/p)
+             (guard/p op-identifier/p
+                      (λ (x) (equal? x op-id))
+                      (format "infix operator ~a" op-id))
+             (many+/p space/p))))
+
+(define (left-associative infix-op args)
+  (case (length args)
+    [(0 1) (error "can't happen")]
+    [(2) (list 'term infix-op args)]
+    [else (let-values ([(left right) (split-at-right args 1)])
+            (list 'term infix-op
+                  (list  (left-associative infix-op left) (first right))))]))
+
 (define term/p
-  (do [t1 <- non-infix-term/p]
+  (do [first-term <- non-infix-term/p]
       (or/p (try/p (do (many+/p space/p)
                        [op-id <- op-identifier/p]
                        (many+/p space/p)
-                       [t2 <- term/p]
-                       (pure `(term ,(mark-as-infix op-id) (,t1 ,t2)))))
-            (pure t1))))
+                       [more-terms <- (many+/p non-infix-term/p #:sep (given-op/p op-id))]
+                       (pure (left-associative (mark-as-infix op-id) (cons first-term more-terms)))))
+            (pure first-term))))
 
 (module+ test
   (check-parse term/p "foo" '(term/var foo))
@@ -341,10 +356,12 @@
   (check-parse term/p "foo_{bar}" '(term _ ((term/var foo) (term/var bar))))
   (check-parse term/p "foo^{bar}" '(term ^ ((term/var foo) (term/var bar))))
   (check-parse term/p "bar + baz" '(term _+ ((term/var bar) (term/var baz))))
-  (check-parse term/p "foo + bar + baz" '(term _+ ((term/var foo) (term _+ ((term/var bar) (term/var baz))))))
+  (check-parse term/p "foo + bar + baz" '(term _+ ( (term _+ ((term/var foo) (term/var bar))) (term/var baz))))
+  (check-parse term/p "a + b + c + d" '(term _+ ((term _+ ((term _+ ((term/var a) (term/var b))) (term/var c))) (term/var d))))
   (check-parse term/p "foo + (bar + baz)" '(term _+ ((term/var foo) (term _+ ((term/var bar) (term/var baz))))))
   (check-parse term/p "(foo + bar) + baz" '(term _+ ((term _+ ((term/var foo) (term/var bar))) (term/var baz) )))
-  (check-parse term/p "(foo + 2) - 3⁄4" '(term _- ((term _+ ((term/var foo) (integer 2))) (rational 3/4)))))
+  (check-parse term/p "(foo + 2) - 3⁄4" '(term _- ((term _+ ((term/var foo) (integer 2))) (rational 3/4))))
+  (check-parse-failure term/p "foo + bar × baz"))
 
 (define var-clause/p
   (do (char/p #\∀)
@@ -407,6 +424,10 @@
   (check-parse rule/p "a ⇒ b if a > 0"
                '(rule (term/var a)
                       (term/var b)
+                      ((term _> ((term/var a) (integer 0))))))
+  (check-parse rule/p "a ⇒ b + c if a > 0"
+               '(rule (term/var a)
+                      (term _+ ((term/var b) (term/var c))) 
                       ((term _> ((term/var a) (integer 0))))))
   (check-parse equation/p "eq1: a = b ∀ foo:bar ∀ bar:baz"
                '(equation eq1

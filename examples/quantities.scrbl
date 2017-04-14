@@ -34,15 +34,15 @@ The simplification strategy is to reduce quantities to the form
 f × q, with q a non-reducible quantity, wherever possible.
 
 Combine multiple numerical prefactors into one:
-  @inset{@rule{f1 × f2 × q ⇒ (f1 × f2) × q
+  @inset{@rule{f1 × (f2 × q) ⇒ (f1 × f2) × q
                ∀ q:Q  ∀ f1:ℝ  ∀ f2:ℝ}
-         @rule{f1 × (f2 × q1) ÷ q2 ⇒ (f1 × f2) × q1 ÷ q2
+         @rule{f1 × ((f2 × q1) ÷ q2) ⇒ (f1 × f2) × (q1 ÷ q2)
                ∀ q1:Q  ∀ q2:Q  ∀ f1:ℝ  ∀ f2:ℝ}}
 
 Replace division by multiplication:
   @inset{@rule{q ÷ f ⇒ (1 ÷ f) × q
                ∀ q:Q  ∀ f:ℝnz}
-         @rule{q1 ÷ f × q2 ⇒ (1 ÷ f) × q1 ÷ q2
+         @rule{q1 ÷ (f × q2) ⇒ (1 ÷ f) × (q1 ÷ q2)
                ∀ q1:Q  ∀ q2:Qnz  ∀ f:ℝnz}}
 
 }
@@ -79,12 +79,12 @@ In the simplification rules, we use the variables @var{sq:SQ}, @var{sq1:SQ},
 @var{sq2:SQ} and @var{f:ℝ}, @var{f1:ℝ}, @var{f2:ℝ}.
 
 Combine sums and differences of the same @sort{SQ} with different numerical prefactors:
-  @inset{@rule{(f1 × sq) + f2 × sq ⇒ (f1 + f2) × sq}
-         @rule{(f1 × sq) - f2 × sq ⇒ (f1 - f2) × sq}}
+  @inset{@rule{(f1 × sq) + (f2 × sq) ⇒ (f1 + f2) × sq}
+         @rule{(f1 × sq) - (f2 × sq) ⇒ (f1 - f2) × sq}}
 
 Reduce quotients of two @sort{SQ}s to a number:
-  @inset{@rule{sq1 ÷ f × sq2 ⇒ (sq1 ÷ f) ÷ sq2}
-         @rule{(f × sq1) ÷ sq2 ⇒ f × sq1 ÷ sq2}
+  @inset{@rule{sq1 ÷ (f × sq2) ⇒ (sq1 ÷ f) ÷ sq2}
+         @rule{(f × sq1) ÷ sq2 ⇒ f × (sq1 ÷ sq2)}
          @rule{sq ÷ sq ⇒ 1}}
 }
 
@@ -95,12 +95,12 @@ Reduce quotients of two @sort{SQ}s to a number:
 Given two quantities @op{a : SQ} and @op{b : SQ} whose quotient we define
 as @rule{b ÷ a ⇒ 10}, we can test the simplification rules:
 
-  @inset{@test{2 × 3 × a ⇒ 6 × a}
-         @test{2 × a ÷ 3 ⇒ 2/3 × a}
-         @test{(2 × a) ÷ 3 × a ⇒ 2/3}
-         @test{(2 × b) ÷ 3 × a ⇒ 20/3}
-         @test{(2 × a) + 3 × a ⇒ 5 × a}
-         @test{(2 × a) - 3 × a ⇒ -1 × a}}
+  @inset{@test{2 × (3 × a) ⇒ 6 × a}
+         @test{2 × (a ÷ 3) ⇒ 2/3 × a}
+         @test{(2 × a) ÷ (3 × a) ⇒ 2/3}
+         @test{(2 × b) ÷ (3 × a) ⇒ 20/3}
+         @test{(2 × a) + (3 × a) ⇒ 5 × a}
+         @test{(2 × a) - (3 × a) ⇒ -1 × a}}
 
 }
 
@@ -178,11 +178,11 @@ of the fundamental quantities @sort{L} and @sort{T}.
 
 Velocities are obtained by dividing a length by a time:
   @inset{@op{L ÷ Tnz : V}
-        @op{Lnz ÷ Tnz : Vnz}}
+         @op{Lnz ÷ Tnz : Vnz}}
 
 Accelerations are the result of dividing a velocity by a time:
   @inset{@op{V ÷ Tnz : A}
-        @op{Vnz ÷ Tnz : Anz}}
+         @op{Vnz ÷ Tnz : Anz}}
 
 }
 
@@ -202,7 +202,7 @@ and the average velocity between 0 and @term{t2} is
          @rule{v2 ⇒ d2 ÷ t2}.}
 The average acceleration is given by
   @inset{@op{a : A}
-         @rule{a ⇒ 2 × (v2 - v1) ÷ t2 - t1}
+         @rule{a ⇒ 2 × ((v2 - v1) ÷ (t2 - t1))}
          @eval-term{a}.}
 
 }
