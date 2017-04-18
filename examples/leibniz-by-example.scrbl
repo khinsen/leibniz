@@ -5,7 +5,7 @@
 
 @import["functions" "functions.xml"]
 
-@context["predator-prey" #:use "functions/ℝ→ℝ"]{
+@context["predator-prey" #:use "functions/derivatives-ℝ→ℝ"]{
 
 Let's start right away with an example, the explanations will follow in the
 next section.
@@ -29,7 +29,7 @@ These equations are based on a few assumptions:
 
 }
 
-@context["predator-prey-explanation" #:use "predator-prey"]{
+@context["predator-prey-explanation" #:extend "predator-prey"]{
                                                 
 @section{A guide to reading this example}
 
