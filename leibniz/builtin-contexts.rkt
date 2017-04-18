@@ -26,7 +26,6 @@
 (define truth
   (make-context
    truth-sorts truth-signature
-   (empty-varset truth-sorts)
    (~> empty-rulelist
        (add-rule
         (make-rule truth-signature
@@ -125,11 +124,11 @@
 ;
 (define symbol*
   (make-context symbol-sorts symbol-signature
-                (empty-varset symbol-sorts) empty-rulelist empty-equationset))
+                empty-rulelist empty-equationset))
 
 (define string*
   (make-context string-sorts string-signature
-                (empty-varset string-sorts) empty-rulelist empty-equationset))
+                empty-rulelist empty-equationset))
 
 ;
 ; Integers and rational numbers
@@ -177,7 +176,6 @@
 
 (define integer*
   (make-context integer-sorts integer-signature
-                (empty-varset integer-sorts)
                 empty-rulelist empty-equationset))
 
 (define-context integers
@@ -292,7 +290,6 @@
 
 (define rationals*
   (make-context rational-sorts rational-signature
-                (empty-varset rational-sorts)
                 empty-rulelist empty-equationset))
 
 (define-context rationals**
@@ -511,7 +508,6 @@
 ;
 (define IEEE-float*
   (make-context IEEE-float-sorts IEEE-float-signature
-                (empty-varset IEEE-float-sorts)
                 empty-rulelist empty-equationset))
 
 (define-context IEEE-floating-point

@@ -155,7 +155,7 @@
            (symbol? (rule-label rule)))))
 
 (module+ test
-  (with-sig-and-vars a-signature a-varset
+  (with-signature a-signature
     (check-equal? (make-rule a-signature (T IntVar) #f (T 2) #f #t)
                   (rule (T IntVar) #f (T 2) #f))
     (check-equal? (make-rule a-signature (T IntVar) (T true) (T 2) #f #t)
@@ -208,7 +208,7 @@
            (symbol? (equation-label equation)))))
 
 (module+ test
-  (with-sig-and-vars a-signature a-varset
+  (with-signature a-signature
     (check-equal? (make-equation a-signature (T IntVar) #f (T 2))
                   (equation (T IntVar) #f (T 2) #f))
     (check-equal? (make-equation a-signature (T IntVar) (T true) (T 2))
@@ -250,7 +250,7 @@
   (define larger-signature
     (~> a-signature
         (add-op 'foo (list 'A) 'A)))
-  (with-sig-and-vars a-signature a-varset
+  (with-signature a-signature
     (check-true
      (valid-rule? larger-signature
                   (in-signature (make-rule a-signature (T foo) #f (T foo) #f #t)
@@ -293,7 +293,7 @@
     (add-rule rules (in-signature rule merged-signature))))
 
 (module+ test
-  (with-sig-and-vars a-signature a-varset
+  (with-signature a-signature
     (define rule1 (make-rule a-signature (T IntVar) #f (T 2) #f #t))
     (define rule2 (make-rule a-signature (T (foo Bvar)) #f (T Bvar) #f #t))
     (define rule3 (make-rule a-signature (T (foo Avar Bvar)) #f (T (foo Bvar)) #f #t))
@@ -343,7 +343,7 @@
                    (equation-label equation))))
 
 (module+ test
-  (with-sig-and-vars a-signature a-varset
+  (with-signature a-signature
     (define equation1 (make-equation a-signature (T IntVar) #f (T 2)))
     (define equation2 (make-equation a-signature (T (foo Bvar)) #f (T Bvar)))
     (define equation3 (make-equation a-signature (T (foo Avar Bvar)) #f (T (foo Bvar))))

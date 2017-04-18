@@ -6,14 +6,13 @@
  define-context
  with-context eq tr
  (contract-out
-  [make-context       (sort-graph? signature? varset? rulelist? equationset?
+  [make-context       (sort-graph? signature? rulelist? equationset?
                        . -> . context?)]
   [check-regularity   (context? . -> . void?)]
   [context-sort-graph (context? . -> . sort-graph?)]
   [context-signature  (context? . -> . signature?)]
   [context-rules      (context? . -> . rulelist?)]
   [context-equations  (context? . -> . equationset?)]
-  [context-vars       (context? . -> . varset?)]
   [merge-contexts     (context? context? . -> . context?)]
   [rules-by-label     (context? symbol? . -> . list?)]
   [rule-by-label      (context? symbol? . -> . rule?)]
@@ -40,18 +39,15 @@
            racket/function))
 
 ;
-; A context combines a sort-graph, a signature, a varset, a rulelist,
+; A context combines a sort-graph, a signature, a rulelist,
 ; and an equationset.
 ;
-(struct context (sort-graph signature vars rules equations)
+(struct context (sort-graph signature rules equations)
         #:transparent
         #:methods gen:custom-write
         [(define (write-proc context port mode)
            (display "(context" port)
            (display-signature (context-signature context) 2 port)
-           (display "\n  ; variables" port)
-           (for ([(symbol sort) (all-vars (context-vars context))])
-             (display (format "\n  (var ~s ~s)" symbol sort) port))
            (display "\n  ; rules" port)
            (for ([rule (in-rules (context-rules context))])
              (display "\n  " port)
@@ -62,8 +58,9 @@
              (write eq port))
            (display ")\n" port))])
 
-(define (make-context sort-graph signature vars rules equations)
-  (context sort-graph signature vars rules equations))
+(define (make-context sort-graph signature rules equations)
+  (context sort-graph signature
+           rules equations))
 
 (define (is-context? c)
   (context? c))
@@ -74,7 +71,6 @@
    #:do (define sorts (context-sort-graph context))
    #:do (define signature (context-signature context))
    [(not (equal? (signature-sort-graph signature) sorts)) #f]
-   [(not (equal? (varset-sort-graph (context-vars context)) sorts)) #f]
    [else (and (for/and ([r (in-rules (context-rules context))])
                 (valid-rule? signature r))
               (for/and ([e (in-equations (context-equations context))])
@@ -90,7 +86,6 @@
   (let ([sorts empty-sort-graph])
     (context sorts
              (empty-signature sorts)
-             (empty-varset sorts)
              empty-rulelist
              empty-equationset)))
 
@@ -103,34 +98,31 @@
          [signature (merge-signatures (context-signature context1)
                                       (context-signature context2)
                                       sorts)]
-         [vars (merge-varsets (context-vars context1)
-                              (context-vars context2)
-                              sorts)]
          [rules (merge-rulelists (context-rules context1)
                                  (context-rules context2)
                                  signature)]
          [equations (merge-equationsets (context-equations context1)
                                         (context-equations context2)
                                         signature)])
-    (context sorts signature vars rules equations)))
+    (context sorts signature rules equations)))
 
 (module+ test
 
   (define basic-truth-context
     (context truth-sorts truth-signature
-             (empty-varset truth-sorts) empty-rulelist empty-equationset))
+             empty-rulelist empty-equationset))
 
   (define basic-string-context
     (context string-sorts string-signature
-             (empty-varset string-sorts) empty-rulelist empty-equationset))
+             empty-rulelist empty-equationset))
 
   (define basic-integer-context
     (context integer-sorts integer-signature
-             (empty-varset integer-sorts) empty-rulelist empty-equationset))
+             empty-rulelist empty-equationset))
 
   (define basic-rational-context
     (context rational-sorts rational-signature
-             (empty-varset rational-sorts) empty-rulelist empty-equationset))
+             empty-rulelist empty-equationset))
 
   (check-equal? (merge-contexts basic-truth-context basic-string-context)
                 (merge-contexts basic-string-context basic-truth-context))
@@ -190,7 +182,7 @@
              #:with value
              #'(add-var (quote var-name) (quote sort))))
 
-                                        ; Rules and equations
+  ; Rules and equations
 
   (define-splicing-syntax-class opt-label
     #:description "optional label in a rule or equation"
@@ -224,73 +216,73 @@
     (pattern (~seq)
              #:with expr #'empty))
 
-  (define-splicing-syntax-class (embedded-pattern sig varset)
+  (define-splicing-syntax-class (embedded-pattern sig var)
     #:description "embedded pattern in a rule or equation"
     (pattern p:expr
-             #:with expr #`(ts:pattern #,sig #,varset p)))
+             #:with expr #`(ts:pattern #,sig #,var p)))
 
-  (define-splicing-syntax-class (opt-condition sig varset)
+  (define-splicing-syntax-class (opt-condition sig vars)
     #:description "optional condition in a rule or equation"
-    (pattern (~seq #:if (~var condition (embedded-pattern sig varset)))
+    (pattern (~seq #:if (~var condition (embedded-pattern sig vars)))
              #:with expr #'condition.expr)
     (pattern (~seq)
              #:with expr #'#f))
 
-  (define-splicing-syntax-class (rule-hp sig varset)
+  (define-splicing-syntax-class (rule-hp sig vars)
     (pattern  (~seq a-label:opt-label
                     local-vars:opt-vars
-                    (~var pattern (embedded-pattern sig varset))
-                    (~var replacement (embedded-pattern sig varset))
-                    (~var condition (opt-condition sig varset)))
+                    (~var pattern (embedded-pattern sig vars))
+                    (~var replacement (embedded-pattern sig vars))
+                    (~var condition (opt-condition sig vars)))
               #:with args #`(list #,sig pattern.expr condition.expr
                                   replacement.expr a-label.expr)
               #:with vars #'local-vars.expr))
 
-  (define-syntax-class (pattern-rule sig varset)
+  (define-syntax-class (pattern-rule sig vars)
     #:description "pattern rule declaration"
     (pattern ((~datum =>)
-              (~var prhp (rule-hp sig varset)))
+              (~var prhp (rule-hp sig vars)))
              #:with expr #`(apply make-rule (append prhp.args '(#t)))
              #:with vars #'prhp.vars))
 
-  (define-syntax-class (fn-rule sig varset)
+  (define-syntax-class (fn-rule sig vars)
     #:description "function rule declaration"
     (pattern ((~datum ->)
               a-label:opt-label
               local-vars:opt-vars
-              (~var pattern (embedded-pattern sig varset))
+              (~var pattern (embedded-pattern sig vars))
               replacement:expr
-              (~var condition (opt-condition sig varset)))
+              (~var condition (opt-condition sig vars)))
              #:with expr #`(make-rule #,sig pattern.expr condition.expr
                                       replacement a-label.expr #f)
              #:with vars #'local-vars.expr))
 
-  (define-syntax-class (equation sig varset)
+  (define-syntax-class (equation sig vars)
     #:description "equation declaration"
     (pattern ((~datum eq)
               a-label:opt-label
               local-vars:opt-vars
-              (~var left (embedded-pattern sig varset))
-              (~var right (embedded-pattern sig varset))
-              (~var condition (opt-condition sig varset)))
+              (~var left (embedded-pattern sig vars))
+              (~var right (embedded-pattern sig vars))
+              (~var condition (opt-condition sig vars)))
              #:with expr #`(make-equation #,sig left.expr condition.expr
                                           right.expr a-label.expr)
              #:with vars #'local-vars.expr))
 
-  (define-syntax-class (rule-or-eq sig varset)
+  (define-syntax-class (rule-or-eq sig vars)
     #:description "rule or equation declaration"
-    (pattern (~var pr (pattern-rule sig varset))
+    (pattern (~var pr (pattern-rule sig vars))
              #:with expr #'pr.expr
              #:with vars #'pr.vars)
-    (pattern (~var fr (fn-rule sig varset))
+    (pattern (~var fr (fn-rule sig vars))
              #:with expr #'fr.expr
              #:with vars #'fr.vars)
-    (pattern (~var e (equation sig varset))
+    (pattern (~var e (equation sig vars))
              #:with expr #'e.expr
              #:with vars #'e.vars)))
 
-(define (add-vars varset var-defs)
-  (foldl (λ (vd vs) (add-var vs (car vd) (cdr vd))) varset var-defs))
+(define (local-vars vars var-defs)
+  (foldl (λ (vd vs) (hash-set vs (car vd) (cdr vd))) vars var-defs))
 
 (define (add-rule-or-eq ruleqs rule-or-eq)
   (if (rule? rule-or-eq)
@@ -305,7 +297,7 @@
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
         var-defs:variable ...
-        (~var ruleq-defs (rule-or-eq #'signature #'varset*)) ...)
+        (~var ruleq-defs (rule-or-eq #'signature #'vars*)) ...)
      #`(let* ([sorts (~> (for/fold ([ms empty-sort-graph])
                                    ([s (list (context-sort-graph
                                               included-contexts.context) ...)])
@@ -316,12 +308,8 @@
                                                     included-contexts.context)
                                                    ...)])
                                (merge-signatures msig sig sorts))
-                             op-defs.value ...)]
-              [varset (~> (for/fold ([mv (empty-varset sorts)])
-                                    ([v (list (context-vars
-                                               included-contexts.context) ...)])
-                            (merge-varsets mv v sorts))
-                          var-defs.value ...)]
+                             op-defs.value ...
+                             var-defs.value ...)]
               [rules (for/fold ([mrl empty-rulelist])
                                ([rl (list (context-rules
                                            included-contexts.context) ...)])
@@ -332,10 +320,10 @@
                            (merge-equationsets mes es signature))]
               [ruleqs (~> (cons rules equations)
                           (add-rule-or-eq
-                           (let ([varset* (add-vars varset ruleq-defs.vars)])
+                           (let ([vars* (local-vars (hash) ruleq-defs.vars)])
                              ruleq-defs.expr))
                           ...)])
-         (context sorts signature varset (car ruleqs) (cdr ruleqs)))]))
+         (context sorts signature (car ruleqs) (cdr ruleqs)))]))
 
 (define-syntax (define-context stx)
   (syntax-parse stx
@@ -344,7 +332,7 @@
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
         var-defs:variable ...
-        (~var ruleq-defs (rule-or-eq #'signature #'varset)) ...)
+        (~var ruleq-defs (rule-or-eq #'signature #'vars)) ...)
      #'(begin
          (define name
            (context- included-contexts ...
@@ -377,7 +365,6 @@
 
   (check-equal? (context-sort-graph a-context) sorts)
   (check-equal? (context-signature a-context) a-signature)
-  (check-equal? (context-vars a-context) a-varset)
  
  (define-context test1
     (include basic-truth-context)
@@ -396,26 +383,7 @@
   (check-equal? (length (hash-ref (context-rules test1) 'foo)) 2 )
 
   (with-context test1
-    (check-equal? (term.sort (T an-A)) 'A))
-
-  (define-context test2
-    (include basic-truth-context)
-    (sort A) (sort B)
-    (op an-A A)
-    (op a-B B)
-    (op (foo B) A)
-    (op (foo A) B)
-    (=> #:label a-rule (foo an-A) a-B)
-    (=> ∀ X : B
-        (foo X) an-A
-        #:if true)
-    (eq #:label an-equation an-A (foo a-B)))
-
-  (check-equal? (context-sort-graph test1) (context-sort-graph test2))
-  (check-equal? (context-signature test1) (context-signature test2))
-  ; context-vars must be different
-  (check-equal? (context-rules test1) (context-rules test2))
-  (check-equal? (context-equations test1) (context-equations test2)))
+    (check-equal? (term.sort (T an-A)) 'A)))
 
 ;
 ; Lookup rules and equations by label
@@ -468,21 +436,21 @@
            ([eq (λ (stx)
                   (syntax-parse stx
                     [(~var eqn (equation #'(context-signature c)
-                                         #'varset*))
-                     #'(let ([varset* (add-vars (context-vars c) eqn.vars)])
+                                         #'vars*))
+                     #'(let ([vars* (local-vars (hash) eqn.vars)])
                          eqn.expr)]
                     [(_ label:id)
                      #'(equation-by-label c (quote label))]))]
             [tr (λ (stx)
                   (syntax-parse stx
                     [(_  (~var pr (rule-hp #'(context-signature c)
-                                           #'varset*)))
-                     #'(let ([varset* (add-vars (context-vars c) pr.vars)])
+                                           #'vars*)))
+                     #'(let ([vars* (local-vars (hash) pr.vars)])
                          (make-transformation
                           (context-signature c)
                           (apply make-rule (append pr.args '(#f)))))]))])
-         (ts:with-sig-and-vars (context-signature c) (context-vars c)
-                               body ...))]))
+         (ts:with-signature (context-signature c)
+                            body ...))]))
 
 (module+ test
   (with-context test1

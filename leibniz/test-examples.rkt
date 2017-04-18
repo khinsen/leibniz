@@ -1,6 +1,6 @@
 #lang racket
 
-(provide sorts a-signature a-varset)
+(provide sorts a-signature)
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -25,11 +25,9 @@
       (add-op 'a-Y empty 'Y)
       (add-op 'foo empty 'B)
       (add-op 'foo (list 'B) 'A)
-      (add-op 'foo (list 'A 'B) 'A)))
-
-(define a-varset
-  (~> (empty-varset sorts)
+      (add-op 'foo (list 'A 'B) 'A)
       (add-var 'Avar 'A)
       (add-var 'Bvar 'B)
       (add-var 'IntVar 'ℤ)
       (add-var 'BoolVar 'boolean)))
+

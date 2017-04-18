@@ -329,7 +329,7 @@
 
 (define (format-rule rule context)
   (define signature (contexts:context-signature context))
-  (define c-vars (terms:all-vars (contexts:context-vars context)))
+  (define c-vars (operators:all-vars signature))
   (define proc-rule? (procedure? (equations:rule-replacement rule)))
   (define pattern-elem (format-term signature (equations:rule-pattern rule)))
   (define replacement-elem
@@ -392,7 +392,6 @@
 (define (parsed-term leibniz-doc current-context parsed-term-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (contexts:context-signature context))
-  (define vars (contexts:context-vars context))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
   (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
                                             (terms:term.sort term)))
@@ -432,7 +431,6 @@
 (define (parsed-eval-term leibniz-doc current-context parsed-term-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (contexts:context-signature context))
-  (define vars (contexts:context-vars context))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
   (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
                                             (terms:term.sort term)))

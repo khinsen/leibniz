@@ -24,20 +24,10 @@
   [valid-term?            (signature? any/c . -> . boolean?)]
   [make-term              (signature? symbol? list? . -> . term?)]
   [make-term*             (signature? symbol? list? . -> . (or/c #f term?))]
-  [varset?                (any/c . -> . boolean?)]
-  [empty-varset           (sort-graph? . -> . varset?)]
-  [varset-sort-graph      (varset? . -> . sort-graph?)]
-  [add-var                (varset? symbol? sort? . -> . varset?)]
-  [all-vars               (varset? . -> . hash?)]
-  [merge-varsets          (varset? varset? (or/c #f sort-graph?) . -> . varset?)]
-  ;; [var?                   (any/c . -> . boolean?)]
-  ;; [var                    (sort-graph? symbol? symbol? . -> . var?)]
-  [make-var               (varset? symbol? . -> . (or/c #f var?))]
-  [make-var-or-term       (signature? varset? symbol? . -> . term?)]
+  [make-var               ((signature? symbol?) (hash?) . ->* . (or/c #f var?))]
+  [make-var-or-term       ((signature? symbol?) (hash?) . ->* . term?)]
   [make-uvar              (sort-graph? symbol? . -> . var?)]
   [make-unique-var        (sort-graph? symbol? sort? . -> . var?)]
-  ;; [var-name               (var? . -> . symbol?)]
-  ;; [var-sort               (var? . -> . (or/c #f symbol?))]
   [display-vars           (set? output-port? . -> . void?)]
   [display-term-with-vars ((term? output-port?) (any/c) . ->* . void?)]
   [display-term           ((term? output-port?) (any/c) . ->* . void?)]
@@ -385,57 +375,6 @@
                   (make-term a-signature 'foo empty)))
 
 ;
-; Varsets
-;
-(define-class varset 
-
-  (field sort-graph vars)
-  ; sort-graph: the sort graph everything is based on
-  ; vars: a hash mapping from var names (symbols) to sort constraints
-  ;       (sorts, i.e. symbols as well)
-
-  (define (add-var symbol sort)
-    (when (and (hash-has-key? vars symbol)
-               (not (equal? (hash-ref vars symbol) sort)))
-      (error (format "var ~s already defined with sort ~s"
-                     symbol (hash-ref vars symbol))))
-    (validate-sort sort-graph sort)
-    (varset sort-graph
-            (hash-set vars symbol sort)))
-
-  (define (lookup-var symbol)
-    (hash-ref vars symbol #f))
-
-  (define (all-vars)
-    vars)
-
-  (define (merge-varsets other new-sort-graph)
-    (define merged-sort-graph
-      (or new-sort-graph
-          (merge-sort-graphs sort-graph (varset-sort-graph other))))
-    (for/fold ([vars (empty-varset merged-sort-graph)])
-              ([(symbol sort)
-                (stream-append (sequence->stream vars)
-                               (sequence->stream (varset-vars other)))])
-      (send vars add-var symbol sort))))
-
-(define (empty-varset sort-graph)
-  (varset sort-graph (hash)))
-
-(module+ test
-  (define some-varset
-    (~> (empty-varset sorts)
-        (add-var 'X 'A)))
-  (check-equal? (add-var some-varset 'X 'A) some-varset)
-  (check-equal? (lookup-var some-varset 'X) 'A)
-  (check-false (lookup-var some-varset 'foo))
-  (check-equal? (merge-varsets some-varset some-varset #f) some-varset)
-  (check-equal? (merge-varsets (empty-varset sorts) some-varset #f) some-varset)
-  (check-equal? (merge-varsets some-varset (empty-varset sorts) #f) some-varset)
-  (check-exn exn:fail? (thunk (add-var some-varset 'X 'X)))
-  (check-exn exn:fail? (thunk (add-var some-varset 'Z 'Z))))
-
-;
 ; Variables
 ;
 (struct var (sort-graph name sort)
@@ -466,10 +405,13 @@
   #:methods gen:custom-write
   [(define write-proc display-term-with-vars)])
 
-(define (make-var varset symbol)
-  (define sort (lookup-var varset symbol))
+
+(define (make-var signature symbol [extra-vars #f])
+  (define sort (or (lookup-var signature symbol)
+                   (and extra-vars
+                        (hash-ref extra-vars symbol #f))))
   (and sort
-       (var (varset-sort-graph varset) symbol sort)))
+       (var (signature-sort-graph signature) symbol sort)))
 
 (define (make-uvar sort-graph symbol)
   (var sort-graph symbol #f))
@@ -478,19 +420,19 @@
   (var sort-graph (gensym symbol) sort))
 
 (module+ test
-  (define a-varset
-    (~> (empty-varset sorts)
+  (define a-var-signature
+    (~> (empty-signature sorts)
         (add-var 'A-var 'A)
         (add-var 'B-var 'B)
         (add-var 'Zero-var 'zero)
         (add-var 'Integer-var 'ℤ)
         (add-var 'NonZeroInteger-var 'ℤnz)
         (add-var 'StrangelyNamedVar 'zero)))
-  (define A-var (make-var a-varset 'A-var))
-  (define B-var (make-var a-varset 'B-var))
-  (define Zero-var (make-var a-varset 'Zero-var))
-  (define Integer-var (make-var a-varset 'Integer-var))
-  (define NonZeroInteger-var (make-var a-varset 'NonZeroInteger-var))
+  (define A-var (make-var a-var-signature 'A-var))
+  (define B-var (make-var a-var-signature 'B-var))
+  (define Zero-var (make-var a-var-signature 'Zero-var))
+  (define Integer-var (make-var a-var-signature 'Integer-var))
+  (define NonZeroInteger-var (make-var a-var-signature 'NonZeroInteger-var))
   (define U-var (make-uvar sorts 'U-var))
   (check-true (term.has-vars? A-var))
   (check-equal? (term.vars A-var) (set A-var))
@@ -673,9 +615,8 @@
       (error (format "no operator definition for (~s ~s)"
                      name (map term.sort args)))))
 
-; Make a var or a zero-arg term, searching varset first
-(define (make-var-or-term signature varset name)
-  (or (make-var varset name)
+(define (make-var-or-term signature name [extra-vars #f])
+  (or (make-var signature name extra-vars)
       (make-term signature name empty)))
 
 ; Adapt a term to a larger signature. Used for merging contexts.
@@ -696,8 +637,6 @@
         (add-op 'foo (list 'A 'B) 'B)))
   ; Error: Argument term was made for a-signature
   (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list a-B))))
-  ; Error: variable from an incompatible varset
-  (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list B-var))))
   ; Error: integers are not allowed in simple-signature
   (check-exn exn:fail? (thunk (make-term simple-signature 'foo (list 1))))
   ; All arguments correct

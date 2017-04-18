@@ -1,8 +1,9 @@
 #lang racket
 
-(provide term pattern with-signature with-sig-and-vars T)
+(provide term pattern with-signature T)
 
 (require "./terms.rkt"
+         "./operators.rkt"
          racket/stxparam
          (for-syntax syntax/parse
                      racket/stxparam))
@@ -78,7 +79,7 @@
     (pattern (~var a (atom sig-var)) #:with value #'a.value)
     (pattern symbol:id
              #:with value
-             #`(make-var-or-term #,sig-var #,vars-var (quote symbol)))
+             #`(make-var-or-term #,sig-var (quote symbol) #,vars-var))
     (pattern (symbol:id (~var arg-terms (term-pattern sig-var vars-var)) ...)
              #:with value
              #`(make-term #,sig-var (quote symbol)
@@ -90,15 +91,15 @@
      #'(let ([sig signature])
          t.value)]))
 
-(define (add-vars varset var-defs)
-  (foldl (λ (vd vs) (add-var vs (car vd) (cdr vd))) varset var-defs))
+(define (local-vars vars var-defs)
+  (foldl (λ (vd vs) (hash-set vs (car vd) (cdr vd))) vars var-defs))
 
 (define-syntax (pattern stx)
   (syntax-parse stx
-    [(_ signature:expr varset:expr ov:opt-vars
+    [(_ signature:expr lvars ov:opt-vars
         (~var p (term-pattern #'sig #'vars)))
      #'(let ([sig signature]
-             [vars (add-vars varset ov.expr)])
+             [vars (local-vars lvars  ov.expr)])
          p.value)]))
 
 (module+ test
@@ -114,20 +115,13 @@
                   (make-term a-signature 'foo (list foo-a-B a-B))))
   (check-exn exn:fail? (thunk (term a-signature 'foo)))
   (check-exn exn:fail? (thunk (term a-signature "foo")))
-  (check-equal? (pattern a-signature a-varset Avar)
-                (make-var a-varset 'Avar))
-  (check-equal? (pattern a-signature a-varset #:var (Xvar ℤ) Xvar)
-                (make-var (add-vars a-varset (list (cons 'Xvar 'ℤ)))
-                          'Xvar))
-  (check-equal? (pattern a-signature a-varset
-                         #:vars ([Xvar A] [Yvar B])
-                         (foo Xvar Yvar))
-                (pattern a-signature
-                         (add-vars a-varset '((Xvar . A) (Yvar . B)))
-                         (foo Xvar Yvar)))
-  (check-equal? (pattern a-signature a-varset (foo Bvar))
+  (check-equal? (pattern a-signature (hash) Avar)
+                (make-var a-signature 'Avar))
+  (check-equal? (pattern a-signature (hash)  #:var (Xvar ℤ) Xvar)
+                (make-var a-signature 'Xvar (hash 'Xvar 'ℤ)))
+  (check-equal? (pattern a-signature (hash)  (foo Bvar))
                 (make-term a-signature 'foo
-                           (list (make-var a-varset 'Bvar)))))
+                           (list (make-var a-signature 'Bvar)))))
 
 ;
 ; with-signature
@@ -141,23 +135,11 @@
     [(_ signature:expr body:expr ...)
      #'(let ([sig signature])
          (syntax-parameterize
-           ([T (λ (stx)
-                 (syntax-parse stx
-                   [(_ (~var t (term #'sig)))
-                    #'t.value]))])
-           body ...))]))
-
-(define-syntax (with-sig-and-vars stx)
-  (syntax-parse stx
-    [(_ signature:expr varset:expr body:expr ...)
-     #'(let ([sig signature]
-             [vars varset])
-         (syntax-parameterize
-           ([T (λ (stx)
-                 (syntax-parse stx
-                   [(_ ov:opt-vars (~var p (term-pattern #'sig #'vars)))
-                    #'(let ([vars (add-vars vars ov.expr)])
-                        p.value)]))])
+             ([T (λ (stx)
+                   (syntax-parse stx
+                     [(_ ov:opt-vars (~var p (term-pattern #'sig #'vars)))
+                      #'(let ([vars (local-vars (hash) ov.expr)])
+                          p.value)]))])
            body ...))]))
 
 (module+ test
@@ -168,10 +150,6 @@
   (with-signature a-signature
     (check-equal? (T 2) 2)
     (check-equal? (T (foo (foo a-B) a-B))
-                  (term a-signature (foo (foo a-B) a-B))))
-  (with-sig-and-vars a-signature a-varset
-    (check-equal? (T 2) 2)
+                  (term a-signature (foo (foo a-B) a-B)))
     (check-equal? (T (foo Bvar))
-                  (pattern a-signature a-varset (foo Bvar)))
-    (check-equal? (T #:var (Xvar B) (foo Xvar))
-                  (pattern a-signature a-varset #:var (Xvar B) (foo Xvar)))))
+                  (pattern a-signature (hash) (foo Bvar)))))

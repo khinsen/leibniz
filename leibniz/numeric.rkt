@@ -54,7 +54,7 @@
   (define sorts (merge-sort-graphs (context-sort-graph context)
                                    (context-sort-graph IEEE-floating-point-with-conversion)))
 
-  (define signature
+  (define signature-no-vars
     (for/fold ([sig (merge-signatures (context-signature integers)
                                       (context-signature IEEE-floating-point-with-conversion)
                                       sorts)])
@@ -66,6 +66,11 @@
               symbol
               (map translate-sort (car rank))
               (translate-sort (cdr rank)))))
+
+  (define signature
+    (for/fold ([sig signature-no-vars])
+              ([(name sort) (all-vars (context-signature context))])
+      (add-var sig name (translate-sort sort))))
 
   (define (translate-op-term op args result-sort)
     (define rank (lookup-op (context-signature context) op
@@ -97,11 +102,6 @@
 
   (define (translate-term term)
     (translate-term* term (translate-sort (term.sort term))))
-
-  (define vars
-    (for/fold ([vars (empty-varset sorts)])
-              ([(symbol sort) (all-vars (context-vars context))])
-      (add-var vars symbol (translate-sort sort))))
 
   (define real-number-rules
     (for/set ([r (in-rules (context-rules real-numbers))])
@@ -149,7 +149,7 @@
               ([eq (in-equations (context-equations context))])
       (add-equation eqs (translate-equation eq))))
 
-  (make-context sorts signature vars rules equations))
+  (make-context sorts signature rules equations))
 
 
 (module+ test

@@ -13,6 +13,7 @@
   [empty-signature  ((sort-graph?) (#:builtins set?) . ->* . signature?)]
   [add-op           ((signature? symbol? (listof sort-constraint?) sort?) (#:meta any/c)
                      . ->* . signature?)]
+  [add-var          (signature? symbol? sort? . -> . signature?)]
   [merge-signatures (signature? signature? (or/c #f sort-graph?)
                      . -> . signature?)]
   [lookup-op        (signature? symbol? (listof (or/c #f sort-or-kind?))
@@ -24,14 +25,17 @@
   [lookup-op-rank-list (signature? symbol? (listof (or/c #f sort-or-kind?))
                         . -> .
                         (listof (list/c (listof sort-constraint?) sort-or-kind? any/c)))]
+  [lookup-var        (signature? symbol? . -> . (or/c #f sort?))]
   [ops-by-kind-arity (signature? . -> . (sequence/c symbol? list?))]
   [all-ops           (signature? . -> . (sequence/c symbol? pair? any/c))]
+  [all-vars          (signature? . -> . hash?)]
   [builtin-term-types (signature? . -> . (set/c symbol?))]
   [display-signature (signature? natural-number/c output-port? . -> . void?)]))
 
 (require "./lightweight-class.rkt"
          "./sorts.rkt"
          threading
+         racket/hash
          racket/generator)
 
 (module+ test
@@ -418,7 +422,7 @@
 ;
 (define-class signature
 
-  (field sort-graph optimized-sort-graph operators builtins)
+  (field sort-graph optimized-sort-graph operators vars builtins)
   ; sort-graph: the sort graph everything is based on
   ; optimized-sort-graph: sort-graph optimized for subsort lookup
   ; operators: a hash mapping operator names (symbols) to operators
@@ -428,6 +432,9 @@
   #:write-proc *display*
 
   (define (add-op* symbol arity sort meta)
+    (when (and (empty? arity)
+               (lookup-var symbol))
+      (error (format "~a already defined as a var" symbol)))
     (for ([arg arity])
       (validate-sort-constraint sort-graph arg))
     (validate-sort sort-graph sort)
@@ -439,7 +446,18 @@
                               (λ (op) (add-rank op arity sort meta))
                               (thunk (add-rank (empty-operator optimized-sort-graph)
                                                arity sort meta)))])
-        (signature sort-graph optimized-sort-graph ops builtins))))
+        (signature sort-graph optimized-sort-graph ops vars builtins))))
+
+  (define (add-var symbol sort)
+    (when (lookup-op symbol empty)
+      (error (format "~a already defined as an operator" symbol)))
+    (define existing-sort (lookup-var symbol))
+    (when (and existing-sort
+               (not (equal? sort existing-sort)))
+      (error (format "var ~a already defined with sort ~a" symbol (lookup-var symbol))))
+    (signature sort-graph optimized-sort-graph operators
+               (hash-set vars symbol sort)
+               builtins))
 
   (define (lookup-op-meta symbol arity)
     (define op (hash-ref operators symbol #f))
@@ -462,6 +480,9 @@
     (define op (hash-ref operators symbol #f))
     (lookup-rank-list op arity))
 
+  (define (lookup-var symbol)
+    (hash-ref vars symbol #f))
+
   (define (regular?)
     (for/and ([op (hash-values operators)])
       (regular-op? op)))
@@ -483,6 +504,9 @@
             [rank (all-ranks op)])
        (yield symbol (cons (first rank) (second rank)) (third rank)))))
 
+  (define (all-vars)
+    vars)
+
   (define (builtin-term-types)
     builtins)
 
@@ -491,18 +515,25 @@
       (or new-sort-graph
           (merge-sort-graphs sort-graph (signature-sort-graph other))))
     (define merged-builtins (set-union builtins (signature-builtins other)))
-    (for/fold ([sig (empty-signature merged-sort-graph
-                                     #:builtins merged-builtins)])
-              ([(symbol rank meta) (stream-append (sequence->stream (all-ops))
-                                                  (sequence->stream (send other all-ops)))])
-      (unless (andmap sort? (car rank))
-        ; Kinds as sort constraints need special attention when merging
-        ; signatures, because the merging the sort graph can also merge
-        ; formerly distinct kinds, or enlarge existing kinds. Since kinds
-        ; are represented as sets of sorts, the original kind representation
-        ; is no longer a valid sort.
-        (error "kind arguments not yet implemented"))
-      (send sig add-op* symbol (car rank) (cdr rank) meta)))
+    (define merged-ops
+      (for/fold ([sig (empty-signature merged-sort-graph
+                                       #:builtins merged-builtins)])
+                ([(symbol rank meta) (stream-append (sequence->stream (all-ops))
+                                                    (sequence->stream (send other all-ops)))])
+        (unless (andmap sort? (car rank))
+          ; Kinds as sort constraints need special attention when merging
+          ; signatures, because the merging the sort graph can also merge
+          ; formerly distinct kinds, or enlarge existing kinds. Since kinds
+          ; are represented as sets of sorts, the original kind representation
+          ; is no longer a valid sort.
+          (error "kind arguments not yet implemented"))
+        (send sig add-op* symbol (car rank) (cdr rank) meta)))
+    (define merged-vars
+      (for/fold ([sig merged-ops])
+                ([(name sort) (stream-append (sequence->stream (all-vars))
+                                             (sequence->stream (send other all-vars)))])
+        (send sig add-var name sort)))
+    merged-vars)
 
   (define (display-signature indentation port)
     (define prefix (make-string indentation #\space))
@@ -522,6 +553,17 @@
           (display (cons symbol (car rank)) port))
       (display " " port)
       (display (cdr rank) port)
+      (display ")" port))
+    (newline port)
+    (display prefix port)
+    (display "; vars" port)
+    (for ([(name sort) (all-vars)])
+      (newline port)
+      (display prefix port)
+      (display "(var " port)
+      (display name port)
+      (display " " port)
+      (display sort port)
       (display ")" port)))
 
   (define (*display* port mode)
@@ -533,21 +575,27 @@
   (add-op* signature symbol arity sort meta))
 
 (define (empty-signature sort-graph #:builtins [builtins (set)])
-  (signature sort-graph (optimize-subsort-lookup sort-graph) (hash) builtins))
+  (signature sort-graph (optimize-subsort-lookup sort-graph) (hash) (hash) builtins))
 
 (module+ test
   (define a-signature
     (~> (empty-signature sorts)
         (add-op 'foo empty 'B)
-        (add-op 'foo (list 'A 'B) 'A)))
+        (add-op 'foo (list 'A 'B) 'A)
+        (add-var 'a-var 'A)))
   (check-true (regular? a-signature))
   (check-equal? (lookup-op-meta a-signature 'foo empty) (list empty 'B #f))
   (check-equal? (lookup-op a-signature 'foo empty) (cons empty 'B))
   (check-false (lookup-op-meta a-signature 'X empty))
   (check-false (lookup-op a-signature 'X empty))
+  (check-equal? (lookup-var a-signature 'a-var) 'A)
+  (check-false (lookup-var a-signature 'baz))
   (check-equal? (for/set ([(s r m) (all-ops a-signature)]) r)
                 (set (cons empty 'B) (cons (list 'A 'B) 'A)))
-  (check-exn exn:fail? (thunk (add-op signature 'foo (list 'A 'A) 'X)))
+  (check-equal? (all-vars a-signature) (hash 'a-var 'A))
+  (check-exn exn:fail? (thunk (add-op a-signature 'foo (list 'A 'A) 'X)))
+  (check-exn exn:fail? (thunk (add-op a-signature 'a-var 'X)))
+  (check-exn exn:fail? (thunk (add-var a-signature 'foo 'X)))
   (check-equal? (merge-signatures (empty-signature sorts)
                                   (empty-signature sorts)
                                   #f)
@@ -573,7 +621,8 @@
                          (add-subsort-relation 'X 'B)))
                     (add-op 'bar empty 'X)
                     (add-op 'foo empty 'B)
-                    (add-op 'foo (list 'A 'B) 'A)))
+                    (add-op 'foo (list 'A 'B) 'A)
+                    (add-var 'a-var 'A)))
   (let* ([sorts (~> empty-sort-graph
                     (add-sort 'A) (add-sort 'B) (add-sort 'C)
                     (add-subsort-relation 'A 'B)
