@@ -234,9 +234,9 @@ An operator declaration can take several forms:
 @itemlist[@item{"op-name : sort" declares "op-name" to be a symbolic value (nullary operator) of sort "sort"}
           @item{"op-name(arg1, arg2, ...argN) : sort" declares "op-name" to be an n-ary operator of sort "sort". }
           @item{"arg1 op-name arg2 : sort" declares an infix operator "op-name" of sort "sort"}
-          @item{"arg1[arg2] : sort" declares a special operator of sort "sort"}
-          @item{"arg1^{arg2} : sort" declares a special operator of sort "sort" that is typeset as arg1@superscript{arg2}}
-          @item{"arg1_{arg2} : sort" declares a special operator of sort "sort" that is typeset as arg1@subscript{arg2}}]
+          @item{"arg1[arg2, ...argN] : sort" declares a special operator of sort "sort"}
+          @item{"arg1^{arg2, ...argN} : sort" declares a special operator of sort "sort" that is typeset as arg1@superscript{arg2, ...argN}}
+          @item{"arg1_{arg2, ...argN} : sort" declares a special operator of sort "sort" that is typeset as arg1@subscript{arg2, ...argN}}]
 
 In the above operator declarations, the argument declarations "arg1" to "argN" are one of
 @itemlist[@item{the name of a sort defined in the context}

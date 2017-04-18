@@ -304,23 +304,29 @@
                       (pure `(term ,op-id ,args)))
                   (pure `(term/var ,op-id))))))
 
+(define simple-term-suffix/p
+  (try/p
+   (or/p (do (char/p #\_)
+             (char/p #\{)
+             [subscripts <- (many+/p term/p #:sep comma-with-whitespace/p)]
+             (char/p #\})
+             (pure (cons '_ subscripts)))
+         (do (char/p #\^)
+             (char/p #\{)
+             [superscripts <- (many+/p term/p #:sep comma-with-whitespace/p)]
+             (char/p #\})
+             (pure (cons '^ superscripts)))
+         (do (char/p #\[)
+             [args <- (many+/p term/p #:sep comma-with-whitespace/p)]
+             (char/p #\])
+             (pure (cons '|[]| args))))))
+
 (define non-infix-term/p
   (do [t <- simple-term/p]
-      (or/p (try/p (or/p (do (char/p #\[)
-                             [args <- (many+/p term/p #:sep comma-with-whitespace/p)]
-                             (char/p #\])
-                             (pure `(term |[]| ,(cons t args))))
-                         (do (char/p #\_)
-                             (char/p #\{)
-                             [subscript <- term/p]
-                             (char/p #\})
-                             (pure `(term _ (,t ,subscript))))
-                         (do (char/p #\^)
-                             (char/p #\{)
-                             [superscript <- term/p]
-                             (char/p #\})
-                             (pure `(term ^ (,t ,superscript))))))
-            (pure t))))
+      [suffix <- (many/p simple-term-suffix/p)]
+      (pure (for/fold ([term t])
+                      ([s suffix])
+              (list 'term (first s) (cons term (rest s)))))))
 
 (define (given-op/p op-id)
   (try/p (do (many+/p space/p)
@@ -354,7 +360,11 @@
   (check-parse term/p "foo[bar]" '(term |[]| ((term/var foo) (term/var bar))))
   (check-parse term/p "foo[bar, baz]" '(term |[]| ((term/var foo) (term/var bar) (term/var baz))))
   (check-parse term/p "foo_{bar}" '(term _ ((term/var foo) (term/var bar))))
+  (check-parse term/p "foo_{bar, baz}" '(term _ ((term/var foo) (term/var bar) (term/var baz))))
   (check-parse term/p "foo^{bar}" '(term ^ ((term/var foo) (term/var bar))))
+  (check-parse term/p "foo^{bar, baz}" '(term ^ ((term/var foo) (term/var bar) (term/var baz))))
+  (check-parse term/p "foo_{bar}[baz]" '(term |[]| ((term _ ((term/var foo) (term/var bar))) (term/var baz))))
+  (check-parse term/p "foo[bar]_{baz}" '(term _ ((term |[]| ((term/var foo) (term/var bar))) (term/var baz))))
   (check-parse term/p "bar + baz" '(term _+ ((term/var bar) (term/var baz))))
   (check-parse term/p "foo + bar + baz" '(term _+ ( (term _+ ((term/var foo) (term/var bar))) (term/var baz))))
   (check-parse term/p "a + b + c + d" '(term _+ ((term _+ ((term _+ ((term/var a) (term/var b))) (term/var c))) (term/var d))))
