@@ -82,8 +82,8 @@
 (define (make-sort-graph includes sort-decls subsort-decls locs)
   (define after-includes
     (for/fold ([ms sorts:empty-sort-graph])
-              ([c includes])
-      (sorts:merge-sort-graphs ms (contexts:context-sort-graph c))))
+              ([m/c includes])
+      (sorts:merge-sort-graphs ms (contexts:context-sort-graph (cdr m/c)))))
   (define after-sorts
     (for/fold ([sorts after-includes])
               ([s sort-decls])
@@ -101,10 +101,12 @@
       [(list 'var var-name sort-id) sort-id]))
   (define after-includes
     (for/fold ([msig (operators:empty-signature sorts)])
-              ([c includes])
-      (operators:merge-signatures msig
-                                  (contexts:context-signature c)
-                                  sorts)))
+              ([m/c includes])
+      (define csig (contexts:context-signature (cdr m/c)))
+      (define isig (case (car m/c)
+                     [(use) (operators:remove-vars csig)]
+                     [(extend) csig]))
+      (operators:merge-signatures msig isig sorts)))
   (define after-ops
     (for/fold ([sig after-includes])
               ([od op-decls])
@@ -161,8 +163,8 @@
 (define (make-rulelist signature includes rule-decls locs)
   (define after-includes
     (for/fold ([mrl equations:empty-rulelist])
-              ([c includes])
-      (equations:merge-rulelists mrl (contexts:context-rules c) signature)))
+              ([m/c includes])
+      (equations:merge-rulelists mrl (contexts:context-rules (cdr m/c)) signature)))
   (for/fold ([rl after-includes])
             ([rd rule-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs rd))])
@@ -182,8 +184,8 @@
 (define (make-equationset signature includes eq-decls locs)
     (define after-includes
     (for/fold ([mes equations:empty-equationset])
-              ([c includes])
-      (equations:merge-equationsets mes (contexts:context-equations c) signature)))
+              ([m/c includes])
+      (equations:merge-equationsets mes (contexts:context-equations (cdr m/c)) signature)))
   (for/fold ([eq after-includes])
             ([(label ed) eq-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ed))])
@@ -312,7 +314,7 @@
 
 (define (sxml->document sxml-document)
   (match-define
-    (list '*TOP* (list 'context-collection sxml-contexts ...))
+    (list '*TOP* (list 'leibniz-document sxml-contexts ...))
     sxml-document)
   (for/fold ([doc empty-document])
             ([sxml-context sxml-contexts])
@@ -364,8 +366,8 @@
  
   (define includes (for/list ([include sxml-includes])
                      (match include
-                       [`(context-ref ,include-ref)
-                        include-ref])))
+                       [(list mode include-ref)
+                        (cons mode include-ref)])))
   (define sorts (for/set ([sort sxml-sorts])
                   (match sort
                     [`(sort (@ (id ,s)))
@@ -446,12 +448,14 @@
   (define (add-context name include-decls context)
     (define temp-doc (new-context-from-source name include-decls))
     (define inclusion-context (send temp-doc get-context name))
+    (define inclusion-decls (send temp-doc get-context-declarations name))
     (define full-context
       (contexts:merge-contexts inclusion-context context))
     (define added-decls (context-diff inclusion-context full-context))
     (document (hash-set contexts name full-context)
               (hash-set decls name
-                        (hash-set added-decls 'includes (map car include-decls)))
+                        (hash-set added-decls 'includes
+                                  (hash-ref inclusion-decls 'includes)))
               (cons name order)
               library))
 
@@ -464,9 +468,9 @@
                          (hash-set ls decl loc)
                          ls))))
 
-    (define (add-include decls cname loc)
+    (define (add-include decls mode cname loc)
       (~> decls
-          (hash-update 'includes (λ (cnames) (cons cname cnames)))
+          (hash-update 'includes (λ (cnames) (cons (cons mode cname) cnames)))
           (add-loc cname loc)))
 
     (define (add-sort decls s loc)
@@ -549,7 +553,9 @@
           (match-define (cons decl loc) decl/loc)
           (match decl
             [(list 'use cname)
-             (add-include decls cname loc)]
+             (add-include decls 'use cname loc)]
+            [(list 'extend cname)
+             (add-include decls 'extend cname loc)]
             [(list 'insert cname tr ...)
              (merge decls
                     (transform-context-declarations (get-context-declarations cname) tr)
@@ -586,9 +592,9 @@
   (define (new-context name cdecls)
     (define locs (hash-ref cdecls 'locs))
     (define included-contexts
-        (for/list ([name (hash-ref cdecls 'includes)])
+        (for/list ([mode/name (hash-ref cdecls 'includes)])
           (with-handlers ([exn:fail? (re-raise-exn (get-loc locs name))])
-            (get-context name))))
+            (cons (car mode/name) (get-context (cdr mode/name))))))
     (define sorts (make-sort-graph included-contexts
                                    (hash-ref cdecls 'sorts)
                                    (hash-ref cdecls 'subsorts)
@@ -643,7 +649,7 @@
        (error (format "illegal context specification ~a" name))]))
 
   (define (get-document-sxml)
-    `(*TOP* (context-collection
+    `(*TOP* (leibniz-document
              ,@(for/list ([name (reverse order)])
                  (get-context-sxml name)))))
 
@@ -673,8 +679,8 @@
     (define cdecls (hash-ref decls name))
 
     `(context (@ (id ,name))
-              (includes ,@(for/list ([name (hash-ref cdecls 'includes)])
-                            `(context-ref ,name)))
+              (includes ,@(for/list ([mode/name (hash-ref cdecls 'includes)])
+                            (list (car mode/name) (cdr mode/name))))
               (sorts ,@(for/list ([s (hash-ref cdecls 'sorts)])
                          `(sort (@ (id ,(symbol->string s))))))
               (subsorts ,@(for/list ([sd (hash-ref cdecls 'subsorts)])

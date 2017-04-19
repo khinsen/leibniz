@@ -169,9 +169,9 @@ In the curly braces, you can use arbitrary Scribble text and also most Leibniz c
 
 @subsection{More complex documents}
 
-A Leibniz document can define any number of contexts, and each context can @code[#:lang "leibniz"]|{#:use}| contexts defined earlier in the document. A context can also be transformed before being used, which is demonstrated in some of the examples. However, the transformation mechanism is not stable yet, and will be documented in a later version of this manual.
+A Leibniz document can define any number of contexts, and each context can @code[#:lang "leibniz"]|{#:use}| or @code[#:lang "leibniz"]|{#:extend}| contexts defined earlier in the document. A context can also be transformed before being inserted, which is demonstrated in some of the examples. However, the transformation mechanism is not stable yet, and will be documented in a later version of this manual.
 
-A Leibniz document can also @code[#:lang "leibniz"]|{#:use}| contexts from other Leibniz documents. With the exception of the "builtins" document that contains the contexts "truth", "integers", "rational-numbers", "real-numbers", and "IEEE-floating-point", other documents must be @racket[import]ed before their contexts can be used.
+A Leibniz document can also @code[#:lang "leibniz"]|{#:use}| or @code[#:lang "leibniz"]|{#:extend}| contexts from other Leibniz documents. With the exception of the "builtins" document that contains the contexts "truth", "integers", "rational-numbers", "real-numbers", and "IEEE-floating-point", other documents must be @racket[import]ed before their contexts can be used.
 
 @section{Leibniz reference}
 
@@ -196,12 +196,20 @@ when writing Leibniz code.
 
 @defform[(context name
                   [#:use other-context] ...
+                  [#:extend other-context] ...
                   item ...)
          #:contracts ([name string?]
                       [other-context string?])]{
-Defines a new Leibniz context @racket[name] that uses
+Defines a new Leibniz context @racket[name] that uses or extends
 @racket[other-context]s, which are either defined earlier in the
 document or in an @racket[import]ed document.
+
+The difference between @racket[#:use] and @racket[#:extend] lies in which
+parts of the context are included in the newly defined one. With @racket[#:extend],
+all declarations are included, whereas with @racket[#:use], only sorts, operators,
+and rules are included, i.e. the declarations that are relevant for computations.
+In particular, @racket[#:use] does not include the variable declarations of
+@racket[other-context].
 
 The @racket[item]s can be anything allowed in a Scribble document,
 plus the Leibniz-specific items defined below.

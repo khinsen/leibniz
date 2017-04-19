@@ -14,6 +14,7 @@
   [add-op           ((signature? symbol? (listof sort-constraint?) sort?) (#:meta any/c)
                      . ->* . signature?)]
   [add-var          (signature? symbol? sort? . -> . signature?)]
+  [remove-vars      (signature? . -> . signature?)]
   [merge-signatures (signature? signature? (or/c #f sort-graph?)
                      . -> . signature?)]
   [lookup-op        (signature? symbol? (listof (or/c #f sort-or-kind?))
@@ -457,6 +458,11 @@
       (error (format "var ~a already defined with sort ~a" symbol (lookup-var symbol))))
     (signature sort-graph optimized-sort-graph operators
                (hash-set vars symbol sort)
+               builtins))
+
+  (define (remove-vars)
+    (signature sort-graph optimized-sort-graph operators
+               (hash)
                builtins))
 
   (define (lookup-op-meta symbol arity)

@@ -612,8 +612,10 @@
     (unless (allowed-term? signature arg)
       (error (format "argument ~a not compatible with signature" arg))))
   (or (make-term* signature name args)
-      (error (format "no operator definition for (~s ~s)"
-                     name (map term.sort args)))))
+      (error (if (empty? args)
+                 (format "no operator or var definition for ~s" name )
+                 (format "no operator definition for ~s~s"
+                         name (map term.sort args))))))
 
 (define (make-var-or-term signature name [extra-vars #f])
   (or (make-var signature name extra-vars)

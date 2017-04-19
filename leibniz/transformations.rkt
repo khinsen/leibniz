@@ -22,9 +22,9 @@
          (hash-set 'vars (hash)))]
     [(list 'rename-sort sort1 sort2)
      (rename-sort sort1 sort2 decls)]
-    [(list 'add-include cname)
+    [(list 'add-include mode cname)
      (~> decls
-         (hash-update 'includes (λ (cnames) (append cnames (list cname)))))]))
+         (hash-update 'includes (λ (cnames) (append cnames (list (cons mode cname))))))]))
 
 (define (combine-varsets name sort1 sort2)
   (unless (equal? sort1 sort2)

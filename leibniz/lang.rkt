@@ -130,9 +130,14 @@
 
   (define-splicing-syntax-class context-ref
     (pattern (~seq #:insert [name:str tr:expr ...])
-             #:attr ref #`(cons '(insert name tr ...) #,(source-loc #'name)))
+             #:attr ref #`(cons '(insert name tr ...) #,(source-loc #'name))
+             #:attr verb #'"includes")
     (pattern (~seq #:use name:str)
-             #:attr ref #`(cons '(use name) #,(source-loc #'name)))))
+             #:attr ref #`(cons '(use name) #,(source-loc #'name))
+             #:attr verb #'"uses")
+    (pattern (~seq #:extend name:str)
+             #:attr ref #`(cons '(extend name) #,(source-loc #'name))
+             #:attr verb #'"extends")))
 
 (define-syntax (context stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
@@ -149,7 +154,7 @@
                   (error "Inserted context may not be extended"))
                 (margin-note "Context " (italic name)
                              (list (linebreak)
-                                   "uses " (italic include.name)) ...)
+                                   include.verb " " (italic include.name)) ...)
                 (let ([leibniz-doc #,leibniz-ref]
                       [current-context name])
                   (list body.expansion ...)))]
@@ -164,7 +169,7 @@
                                                 #,(cons #'list (apply append (attribute body.decl))))))
                 (margin-note "Context " (italic name)
                              (list (linebreak)
-                                   "uses " (italic include.name)) ...)
+                                   include.verb " " (italic include.name)) ...)
                 (let ([leibniz-doc #,leibniz-ref]
                       [current-context name])
                   (list body.expansion ...)))])))
