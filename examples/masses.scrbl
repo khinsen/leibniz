@@ -40,7 +40,7 @@ Reduce quotients of two @sort{mass}es to a number if possible:
          @rule{M ÷ M ⇒ 1}}
 }
 
-@context["mass-units" #:use "mass" #:use "boolean/boolean"]{
+@context["mass-units" #:extend "mass" #:use "boolean/boolean"]{
 
 @section{Mass units}
 

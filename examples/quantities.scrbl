@@ -47,7 +47,7 @@ Replace division by multiplication:
 
 }
 
-@context["template" #:use "quantities"]{
+@context["template" #:extend "quantities"]{
 
 @section{A template for specific quantities}
 
@@ -88,7 +88,7 @@ Reduce quotients of two @sort{SQ}s to a number:
          @rule{sq ÷ sq ⇒ 1}}
 }
 
-@context["template-test" #:use "template"]{
+@context["template-test" #:extend "template"]{
 
 @subsection{Tests}
 
@@ -105,10 +105,10 @@ as @rule{b ÷ a ⇒ 10}, we can test the simplification rules:
 }
 
 @context["mass"
-         #:insert  ["template"
-                    hide-vars
-                    (rename-sort SQ M)
-                    (rename-sort SQnz Mnz)]]{
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ M)
+                   (rename-sort SQnz Mnz)]]{
 
 @section{Mass}
 
@@ -186,7 +186,7 @@ Accelerations are the result of dividing a velocity by a time:
 
 }
 
-@context["kinematics-example" #:use "kinematics"]{
+@context["kinematics-example" #:extend "kinematics"]{
 
 @subsection{Example}
 
@@ -207,7 +207,7 @@ The average acceleration is given by
 
 }
 
-@context["kinematics-nummerical-example" #:use "kinematics-example"]{
+@context["kinematics-nummerical-example" #:extend "kinematics-example"]{
 
 Introducing a time unit @op{s : Tnz} and a length unit @op{m : Lnz}, we
 can assign numerical values:
