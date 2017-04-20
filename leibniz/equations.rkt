@@ -24,6 +24,7 @@
   [in-signature (rule? signature? . -> . rule?)]
   [in-equations (equationset? . -> . stream?)]
   [add-equation (equationset? equation? . -> . equationset?)]
+  [lookup-equation (equationset? symbol? . -> . (or/c #f equation?))]
   [merge-equationsets (equationset? equationset? signature? . -> . equationset?)]
   [display-equation (equation? output-port? . -> . void?)]
   [make-transformation (signature? rule? . -> . transformation?)]))
@@ -316,35 +317,50 @@
 
 ;
 ; Equation sets
-; For now, plain sets. Once it is clear how equations will be used,
-; this choice may be revised.
+; Hash maps from labels to equations. Unlabelled equations are stored in
+; a set kept under the key #f.
 ;
 (define (equationset? x)
-  (set? x))
+  (hash? x))
 
 (define empty-equationset
-  (set))
+  (hash #f (set)))
 
 (define (add-equation equationset equation)
-  (set-add equationset equation))
+  (define label (equation-label equation))
+  (if label
+      (begin
+        (when (and (hash-has-key? equationset label)
+                   (not (equal? equation (hash-ref equationset label))))
+          (error (format "attempted redefinition of equation label ~a" label)))
+        (hash-set equationset label equation))
+      (begin
+        (hash-update equationset label (λ (es) (set-add es equation))))))
+
+(define (lookup-equation equationset label)
+  (hash-ref equationset label #f))
 
 (define (in-equations equationset)
-  (set->stream equationset))
+  (stream-append 
+   (sequence->stream (in-hash-values (hash-remove equationset #f)))
+   (set->stream (hash-ref equationset #f))))
 
-(define (merge-equationsets el1 el2 merged-signature)
-  (for/set ([equation (stream-append (in-equations el1) (in-equations el2))])
-    (make-equation merged-signature
-                   (term.in-signature (equation-left equation) merged-signature)
-                   (let ([c (equation-condition equation)])
-                     (if c
-                         (term.in-signature c merged-signature)
-                         c))
-                   (term.in-signature (equation-right equation) merged-signature)
-                   (equation-label equation))))
+(define (merge-equationsets es1 es2 merged-signature)
+  (for/fold ([es empty-equationset])
+            ([equation (stream-append (in-equations es1) (in-equations es2))])
+    (add-equation es
+     (make-equation merged-signature
+                    (term.in-signature (equation-left equation) merged-signature)
+                    (let ([c (equation-condition equation)])
+                      (if c
+                          (term.in-signature c merged-signature)
+                          c))
+                    (term.in-signature (equation-right equation) merged-signature)
+                    (equation-label equation)))))
 
 (module+ test
   (with-signature a-signature
-    (define equation1 (make-equation a-signature (T IntVar) #f (T 2)))
+    (define equation1 (make-equation a-signature (T IntVar) #f (T 2) 'eq1))
     (define equation2 (make-equation a-signature (T (foo Bvar)) #f (T Bvar)))
     (define equation3 (make-equation a-signature (T (foo Avar Bvar)) #f (T (foo Bvar))))
     (define some-equations
@@ -352,10 +368,13 @@
           (add-equation equation1)
           (add-equation equation2)
           (add-equation equation1)
+          (add-equation equation2)
           (add-equation equation3)))
-    (check-equal? (set-count some-equations) 3)
+    (check-equal? (set-count (hash-ref some-equations #f)) 2)
     (check-equal? (stream-length (in-equations some-equations)) 3)
-    (check-equal? (list->set (stream->list (in-equations some-equations)))
+    (check-equal? (for/fold ([es empty-equationset])
+                            ([eq (in-equations some-equations)])
+                    (add-equation es eq))
                   some-equations)
     (check-equal? (merge-equationsets empty-equationset some-equations a-signature)
                   some-equations)
