@@ -9,6 +9,7 @@
          get-document-sxml get-context-sxml
          write-xml import-xml
          write-signature-graphs
+         clean-declarations
          builtins)
 
 (require (prefix-in sorts: "./sorts.rkt")
@@ -558,7 +559,8 @@
              (add-include decls 'extend cname loc)]
             [(list 'insert cname tr ...)
              (merge decls
-                    (transform-context-declarations (get-context-declarations cname) tr)
+                    (clean-declarations
+                     (transform-context-declarations (get-context-declarations cname) tr))
                     loc)]
             [(list 'sort s)
              (add-sort decls s loc)]
@@ -613,8 +615,11 @@
                                            signature
                                            rules
                                            equations))
+    (define compiled (hash 'compiled-signature signature
+                           'compiled-rules rules
+                           'compiled-equations equations))
     (document (hash-set contexts name context)
-              (hash-set decls name (hash-set cdecls 'signature signature))
+              (hash-set decls name (hash-union cdecls compiled))
               (cons name order)
               library))
 
@@ -811,6 +816,14 @@
         (thunk (system* dot "-Tpng" dot-file)))
       (delete-file dot-file))))
 
+; Utility functions for processing context declarations
+
+(define (clean-declarations cdecls)
+  (for/fold ([c cdecls])
+            ([key (hash-keys cdecls)]
+             #:when (string-prefix? (symbol->string key) "compiled"))
+    (hash-remove c key)))
+
 ; A document containing the builtin contexts
 
 (define builtins
@@ -916,7 +929,7 @@
                                             (term a-foo ((term/var a-foo)))
                                             ()) #f)))
                     (get-context-declarations "test")
-                    (hash-remove 'signature))
+                    (clean-declarations))
                 (hash 'includes empty
                       'locs (hash)
                       'sorts (set 'foo 'bar)
