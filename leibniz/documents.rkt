@@ -1,7 +1,7 @@
 #lang racket
 
 (provide empty-document
-         add-to-library add-context
+         add-to-library
          new-context-from-source
          get-context get-context-declarations
          make-term make-rule make-equation
@@ -9,8 +9,7 @@
          get-document-sxml get-context-sxml
          write-xml import-xml
          write-signature-graphs
-         clean-declarations
-         builtins)
+         clean-declarations)
 
 (require (prefix-in sorts: "./sorts.rkt")
          (only-in "./sorts.rkt" sort-graph? empty-sort-graph)
@@ -192,110 +191,6 @@
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ed))])
       (equations:add-equation eq (make-equation* signature ed)))))
 
-
-; Generate a list of declarations that extends base-context to full-context
-
-(define (sort-graph-diff base-sort-graph full-sort-graph)
-  (hash 'sorts (set-subtract (sorts:all-sorts full-sort-graph)
-                             (sorts:all-sorts base-sort-graph))
-        'subsorts (set-subtract (sorts:all-subsort-relations full-sort-graph)
-                                (sorts:all-subsort-relations base-sort-graph))))
-
-(define (op-var-diff base-signature full-signature)
-  (define base-ops
-    (for/set ([(symbol rank meta) (operators:all-ops base-signature)])
-      (cons symbol rank)))
-  (define base-vars (operators:all-vars base-signature))
-  (hash 'ops
-        (for/set ([(symbol rank meta) (operators:all-ops full-signature)]
-                  #:unless (set-member? base-ops (cons symbol rank)))
-          (list symbol (map (λ (s) `(sort ,s)) (car rank)) (cdr rank)))
-        'vars
-        (for/hash ([(name sort) (operators:all-vars full-signature)]
-                   #:unless (hash-has-key? base-vars name))
-          (values name sort))))
-
-(define (term->decl term)
-  (define-values (op args) (terms:term.op-and-args term))
-  (cond
-    [op
-     (if (empty? args)
-         (list 'term/var op)
-         (list 'term op (map term->decl args)))]
-    [(terms:var? term)
-     (list 'term/var (terms:var-name term))]
-    [(integer? term)
-     (list 'integer term)]
-    [(and (number? term) (exact? term))
-     (list 'rational term)]
-    [(flonum? term)
-     (list 'floating-point term)]
-    [else
-     (error (format "illegal term ~a" term))]))
-
-(define (rule->decl rule)
-  (define pattern (equations:rule-pattern rule))
-  (define replacement (equations:rule-replacement rule))
-  (define condition (equations:rule-condition rule))
-  (define vars (terms:term.vars pattern))
-  (define decl-pattern(term->decl pattern))
-  (define decl-replacement (if (procedure? replacement)
-                               replacement
-                               (term->decl replacement)))
-  (define decl-vars
-    (for/hash ([var (in-set vars)])
-      (values (terms:var-name var) (terms:var-sort var))))
-  (define decl-condition
-    (if condition (term->decl condition) #f))
-  (list 'rule decl-vars decl-pattern decl-replacement decl-condition))
-
-(define (eq->decl eq)
-  (define label (equations:equation-label eq))
-  (define left (equations:equation-left eq))
-  (define right (equations:equation-right eq))
-  (define condition (equations:equation-condition eq))
-  (define vars (set-union (terms:term.vars left) (terms:term.vars right)))
-  (define decl-left (term->decl left))
-  (define decl-right (term->decl right))
-  (define decl-vars
-    (for/hash ([var (in-set vars)])
-      (values (terms:var-name var) (terms:var-sort var))))
-  (define decl-condition
-    (if condition (term->decl condition) #f))
-  (values label
-          (list 'equation 
-                decl-vars decl-left decl-right decl-condition)))
-
-(define (rulelist-diff base-rulelist full-rulelist)
-  (define base-rules (for/set ([rule (equations:in-rules base-rulelist)])
-                       (rule->decl rule)))
-  (define full-rules (for/list ([rule (equations:in-rules full-rulelist)])
-                       (rule->decl rule)))
-  (hash 'rules
-        (filter (λ (r) (not (set-member? base-rules r))) full-rules)))
-
-(define (equationset-diff base-equationset full-equationset)
-  (define base-equations (for/hash ([eq (equations:in-equations base-equationset)])
-                           (eq->decl eq)))
-  (define full-equations (for/hash ([eq (equations:in-equations full-equationset)])
-                           (eq->decl eq)))
-  (hash 'equations
-        (for/hash ([(label eq) full-equations]
-                   #:unless (hash-has-key? base-equations label))
-          (values label eq))))
-
-(define (context-diff base-context full-context)
-  (define base-signature (contexts:context-signature base-context))
-  (define full-signature (contexts:context-signature full-context))
-  (define base-sort-graph (operators:signature-sort-graph base-signature))
-  (define full-sort-graph (operators:signature-sort-graph full-signature))
-  (hash-union (sort-graph-diff base-sort-graph full-sort-graph)
-              (op-var-diff base-signature full-signature)
-              (rulelist-diff (contexts:context-rules base-context)
-                             (contexts:context-rules full-context))
-              (equationset-diff (contexts:context-equations base-context)
-                                (contexts:context-equations full-context))))
-
 ; Combine varsets checking for name clashes. For use with hash-union.
 
 (define (combine-varsets name sort1 sort2)
@@ -452,11 +347,10 @@
     (define inclusion-decls (send temp-doc get-context-declarations name))
     (define full-context
       (contexts:merge-contexts inclusion-context context))
-    (define added-decls (context-diff inclusion-context full-context))
     (document (hash-set contexts name full-context)
               (hash-set decls name
-                        (hash-set added-decls 'includes
-                                  (hash-ref inclusion-decls 'includes)))
+                        (hash 'includes
+                              (hash-ref inclusion-decls 'includes)))
               (cons name order)
               library))
 
@@ -840,11 +734,7 @@
                    builtins:real-numbers)
       (add-context "IEEE-floating-point"
                    (list (cons '(use "integers") #f))
-                   builtins:IEEE-floating-point)
-      (add-context "IEEE-floating-point-with-conversion"
-                   (list (cons '(use "IEEE-floating-point") #f)
-                         (cons '(use "rational-numbers") #f))
-                   builtins:IEEE-floating-point-with-conversion)))
+                   builtins:IEEE-floating-point)))
 
 (define empty-document
   (~> (document (hash) (hash) empty  (hash))

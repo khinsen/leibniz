@@ -3,12 +3,10 @@
 (provide
  (contract-out
   [truth context?]
-  [boolean context?]
   [integers context?]
   [rational-numbers context?]
   [real-numbers context?]
-  [IEEE-floating-point context?]
-  [IEEE-floating-point-with-conversion context?]))
+  [IEEE-floating-point context?]))
 
 (require "./builtins.rkt"
          "./terms.rkt"
@@ -49,86 +47,6 @@
      #:= (RT (_== true true)) (T true)
      #:= (RT (_== false true)) (T false)
      #:= (RT (_== false false)) (T true))))
-
-;
-; Boolean algebra
-;
-; Adapted from
-; http://maude.cs.uiuc.edu/maude1/manual/maude-manual-html/maude-manual_16.html
-;
-(define-context boolean
-  (include truth)
-  (op (not boolean) boolean)
-  (op (and boolean boolean) boolean)
-  (op (or boolean boolean) boolean)
-  (op (xor boolean boolean) boolean)
-  (op (=> boolean boolean) boolean)
-
-  (=> #:vars ([X boolean])
-      (not X) (xor true X))
-
-  (=> #:vars ([X boolean])
-      (and false X) false)
-  (=> #:vars ([X boolean])
-      (and X false) false)
-  (=> #:vars ([X boolean])
-      (and true X) X)
-  (=> #:vars ([X boolean])
-      (and X true) X)
-  (=> #:vars ([X boolean])
-      (and X X) X)
-  (=> #:vars ([X boolean] [Y boolean] [Z boolean])
-      (and X (xor Y Z)) (xor (and X Y) (and X Z)))
-
-  (=> #:vars ([X boolean] [Y boolean])
-      (or X Y) (xor X (xor Y (and X Y))))
-
-  (=> #:vars ([X boolean])
-      (xor false X) X)
-  (=> #:vars ([X boolean])
-      (xor X false) X)
-  (=> #:vars ([X boolean])
-      (xor X X) false)
-
-  (=> #:vars ([X boolean] [Y boolean])
-      (=> X Y) (not (xor X (and X Y)))))
-
-(module+ test
-  (with-context boolean
-    (chk
-     #:= (RT (not true))        (T false)
-     #:= (RT (not false))       (T true)
-     #:= (RT (and true true))   (T true)
-     #:= (RT (and true false))  (T false)
-     #:= (RT (and false true))  (T false)
-     #:= (RT (and false false)) (T false)
-     #:= (RT (or true true))    (T true)
-     #:= (RT (or true false))   (T true)
-     #:= (RT (or false true))   (T true)
-     #:= (RT (or false false))  (T false)
-     #:= (RT (xor true true))   (T false)
-     #:= (RT (xor true false))  (T true)
-     #:= (RT (xor false true))  (T true)
-     #:= (RT (xor false false)) (T false)
-     #:= (RT (=> true true))    (T true)
-     #:= (RT (=> true false))   (T false)
-     #:= (RT (=> false true))   (T true)
-     #:= (RT (=> false false))  (T true)
-     #:= (RT (_== true true))    (T true)
-     #:= (RT (_== true false))   (T false)
-     #:= (RT (_== false true))   (T false)
-     #:= (RT (_== false false))  (T true))))
-
-;
-; Symbols and strings (to be completed)
-;
-(define symbol*
-  (make-context symbol-sorts symbol-signature
-                empty-rulelist empty-equationset))
-
-(define string*
-  (make-context string-sorts string-signature
-                empty-rulelist empty-equationset))
 
 ;
 ; Integers and rational numbers
@@ -604,36 +522,3 @@
      #:= (RT (_== #x1l0 #x1l0)) (T true)
      #:= (RT (_== #x1l0 #x2l0)) (T false))))
 
-(define-context IEEE-floating-point-with-conversion
-  (include IEEE-floating-point)
-  (include rational-numbers)
-  (op (ℤ->FP32 ℤ) FP32)
-  (op (ℤ->FP64 ℤ) FP64)
-  (op (ℚ->FP32 ℤ) FP32)
-  (op (ℚ->FP64 ℤ) FP64)
-  (op (FP32->ℚ FP32-number) ℚ)
-  (op (FP64->ℚ FP64-number) ℚ)
-  (-> #:vars ([X ℤ])
-      (ℤ->FP32 X) (unary-op integer? real->single-flonum))
-  (-> #:vars ([X ℤ])
-      (ℤ->FP64 X) (unary-op integer? real->double-flonum))
-  (-> #:vars ([X ℚ])
-      (ℚ->FP32 X) (unary-op exact? real->single-flonum))
-  (-> #:vars ([X ℚ])
-      (ℚ->FP64 X) (unary-op exact? real->double-flonum))
-  (-> #:vars ([X FP32-number])
-      (FP32->ℚ X) (unary-op single-flonum? inexact->exact))
-  (-> #:vars ([X FP64-number])
-      (FP64->ℚ X) (unary-op double-flonum? inexact->exact)))
-
-(module+ test
-  (with-context IEEE-floating-point-with-conversion
-    (chk
-     #:= (RT (ℤ->FP32 1)) (T #x1s0)
-     #:= (RT (ℤ->FP64 1)) (T #x1l0)
-     #:= (RT (ℚ->FP32 1/2)) (T #x0.8s0)
-     #:= (RT (ℚ->FP64 1/2)) (T #x0.8l0)
-     #:= (RT (FP32->ℚ #x0.8s0)) (T 1/2)
-     #:= (RT (FP64->ℚ #x0.8l0)) (T 1/2)
-     #:= (RT (FP32->ℚ +nan.f)) (T (FP32->ℚ +nan.f))
-     #:= (RT (FP64->ℚ +inf.0)) (T (FP64->ℚ +inf.0)))))
