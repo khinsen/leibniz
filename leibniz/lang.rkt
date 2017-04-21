@@ -142,23 +142,6 @@
 (define-syntax (context stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
-
-      [(_ name:str
-          include:context-ref ...
-          (~seq #:from-context context:expr)
-          body:body-item ...)
-       #`(begin (set! #,leibniz-ref (add-context #,leibniz-ref name
-                                                 (list include.ref ...)
-                                                 context))
-                (unless (empty? #,(cons 'list (apply append (attribute body.decl))))
-                  (error "Inserted context may not be extended"))
-                (margin-note "Context " (italic name)
-                             (list (linebreak)
-                                   include.verb " " (italic include.name)) ...)
-                (let ([leibniz-doc #,leibniz-ref]
-                      [current-context name])
-                  (list body.expansion ...)))]
-
       [(_ name:str
           include:context-ref ...
           body:body-item ...)

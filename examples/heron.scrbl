@@ -43,9 +43,6 @@ We see that decreasing @term{ε} leads to better approximations of √2, which a
 always within the prescribed tolerance.
 }
 
-@(require leibniz/numeric
-          leibniz/documents)
-
 @context["fp-heron"
          #:insert ["heron" (real->float FP64)]]{
 
