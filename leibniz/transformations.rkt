@@ -2,7 +2,10 @@
 
 (provide transform-context-declarations)
 
-(require racket/hash
+(require (prefix-in sorts:  "./sorts.rkt")
+         (prefix-in operators:  "./operators.rkt")
+         (prefix-in terms:  "./terms.rkt")
+         racket/hash
          threading)
 
 (define (transform-context-declarations decls transformations)
@@ -21,10 +24,11 @@
                                             (values label (transformer eq)))))
          (hash-set 'vars (hash)))]
     [(list 'rename-sort sort1 sort2)
-     (rename-sort sort1 sort2 decls)]
+     (replace-sorts decls (λ (s) (if (equal? s sort1) sort2 s)))]
     [(list 'add-include mode cname)
-     (~> decls
-         (hash-update 'includes (λ (cnames) (append cnames (list (cons mode cname))))))]))
+     (add-include decls mode cname)]
+    [(list 'real->float fp-sort)
+     (real->float decls fp-sort)]))
 
 (define (combine-varsets name sort1 sort2)
   (unless (equal? sort1 sort2)
@@ -43,52 +47,165 @@
        (hash-union vars var-decls #:combine/key combine-varsets))
      (list 'equation label combined-vars term1 term2 condition)]))
 
-(define (rename-sort sort1 sort2 decls)
+; Replace sorts by applying sort-transformer to every sort in a context
 
-  (define (new-sort s)
-    (if (equal? s sort1) sort2 s))
+(define (replace-sorts context sort-transformer)
 
-  (define (rename-arg x)
+  (define (transform-sorts sorts)
+    (for/set ([s sorts])
+      (sort-transformer s)))
+
+  (define (transform-subsorts subsorts)
+    (for/set ([ss subsorts])
+      (cons (sort-transformer (car ss)) (sort-transformer (cdr ss)))))
+
+  (define (transform-vars vars)
+    (for/hash ([(name sort) vars])
+      (values name (sort-transformer sort))))
+
+  (define (transform-arg x)
     (match x
       [(list 'var name sort)
-       (list 'var name (new-sort sort))]
+       (list 'var name (sort-transformer sort))]
       [(list 'sort sort)
-       (list 'sort (new-sort sort))]
-      [other other]))
+       (list 'sort (sort-transformer sort))]))
 
-  (define (rename-vars vars)
-    (for/hash ([(name sort) vars])
-      (values name (new-sort sort))))
+  (define (transform-ops ops)
+    (for/set ([op ops])
+      (match-define (list name arity rsort) op)
+      (list name
+            (map transform-arg arity)
+            (sort-transformer rsort))))
 
-  (~> decls
-      (hash-update 'sorts
-                   (λ (sorts)
-                     (for/set ([s sorts])
-                       (new-sort s))))
-      (hash-update 'subsorts
-                   (λ (subsorts)
-                     (for/set ([ss subsorts])
-                       (cons (new-sort (car ss)) (new-sort (cdr ss))))))
-      (hash-update 'ops
-                   (λ (ops)
-                     (for/set ([op ops])
-                       (match-define (list name arity rsort) op)
-                       (list name
-                             (map rename-arg arity)
-                             (new-sort rsort)))))
-      (hash-update 'vars rename-vars)
-      (hash-update 'rules
-                   (λ (rules)
-                     (for/list ([r rules])
-                       (match-define (list 'rule vars pattern replacement condition) r)
-                       (list 'rule (rename-vars vars) pattern replacement condition))))
-      (hash-update 'equations
-                   (λ (eqs)
-                     (for/hash ([(label  eq) eqs])
-                       (match-define (list 'equation label2 vars left right condition) eq)
-                       (unless (equal? label label2)
-                         (error "can't happen"))
-                       (values label
-                               (list 'equation label2 (rename-vars vars)
-                                     left right condition)))))
-      (hash-set 'locs (hash))))
+  (define (transform-rules rules)
+    (for/list ([r rules])
+      (match-define (list 'rule vars pattern replacement condition) r)
+      (list 'rule (transform-vars vars) pattern replacement condition)))
+
+  (define (transform-equations eqs)
+    (for/hash ([(label eq) eqs])
+      (match-define (list 'equation label-again vars left right condition) eq)
+      (unless (equal? label label-again)
+        (error "can't happen"))
+      (values label
+              (list 'equation label (transform-vars vars)
+                    left right condition))))
+
+  (~> context
+      (hash-remove 'locs)
+      (hash-update 'sorts transform-sorts)
+      (hash-update 'subsorts transform-subsorts)
+      (hash-update 'vars transform-vars)
+      (hash-update 'ops transform-ops)
+      (hash-update 'rules transform-rules)
+      (hash-update 'equations transform-equations)))
+
+; Add include (use/extend)
+
+(define (add-include context mode cname)
+  (hash-update context 'includes
+               (λ (crefs) (append crefs (list (cons mode cname))))))
+
+; Convert exact arithmetic on reals to inexact arithmetic on floats
+;
+; The principle is to replace all subsorts of ℝ that are not subsorts of ℤ
+; by FP32 or FP64. Two additional modifications are required:
+;
+;  1. Rational constants are converted to float. Integer constants are converted
+;     to float if they take the place of a rational value that just happens to be an integer.
+;  2. Rewrite rules that replace a float expression by an integer expression
+;     are converted by adding an int->float conversion on the replacement term.
+
+(define (real->float context float-sort)
+
+  (define signature (hash-ref context 'compiled-signature))
+  (define sort-graph (operators:signature-sort-graph signature))
+  (define int-sorts (set-add (sorts:all-subsorts sort-graph 'ℤ) 'ℤ))
+  (define non-int-sorts
+    (set-subtract (set-add (sorts:all-subsorts sort-graph 'ℝ) 'ℝ) int-sorts))
+
+  (define (transform-sort sort)
+    (if (set-member? non-int-sorts sort)
+        float-sort
+        sort))
+
+  (define (num->float x)
+    (case float-sort
+      [(FP32) (real->single-flonum x)]
+      [(FP64) (real->double-flonum x)]))
+
+  (define (real-sort? sort)
+    (sorts:conforms-to? sort-graph sort 'ℝ))
+
+  (define (int-sort? sort)
+    (sorts:conforms-to? sort-graph sort 'ℤ))
+
+  (define (transform-literal term expected-sort)
+    (if (int-sort? expected-sort)
+        term
+        (match term
+          [(list (or 'integer 'rational 'floating-point) x)
+           (list 'floating-point (num->float x))]
+          [_ term])))
+
+  (define (transform-term term lvars)
+    (match term
+      [(list 'term op args)
+       (define-values (arg-sorts mod-terms)
+         (for/fold ([arg-sorts empty]
+                    [mod-terms empty])
+                   ([arg (reverse args)])
+           (define-values (as mt) (transform-term arg lvars))
+           (values (cons as arg-sorts) (cons mt mod-terms))))
+       (define rank (operators:lookup-op signature op arg-sorts))
+       (unless rank
+         (error (format "Illegal term ~a" term)))
+       (define mod-args
+         (for/list ([rs (car rank)]
+                    [mt mod-terms])
+           (transform-literal mt rs)))
+       (values (cdr rank) (list 'term op mod-args))]
+      [(list 'term/var name)
+       (values (terms:term.sort (terms:make-var-or-term signature name lvars))
+               term)]
+      [(list 'integer x)
+       (values (terms:term.sort x) term)]
+      [(list (and type (or 'rational 'floating-point)) x)
+       (values (terms:term.sort x) (list type (num->float x)))]
+      [#f
+       (values #f #f)]))
+
+  (define (transform-rules rules)
+    (for/list ([r rules])
+      (match-define (list 'rule vars pattern replacement condition) r)
+      (define-values (psort mod-pattern) (transform-term pattern vars))
+      (define-values (rsort mod-replacement) (transform-term replacement vars))
+      (define-values (csort mod-condition) (transform-term condition vars))
+      (if (or (real-sort? rsort) (real-sort? psort))
+          (list 'rule vars
+                (transform-literal mod-pattern rsort)
+                (transform-literal mod-replacement psort)
+                mod-condition)
+          (list 'rule vars mod-pattern mod-replacement mod-condition))))
+
+  (define (transform-equations eqs)
+    (for/hash ([(label eq) eqs])
+      (match-define (list 'equation label-again vars left right condition) eq)
+      (unless (equal? label label-again)
+        (error "can't happen"))
+      (define-values (lsort mod-left) (transform-term left vars))
+      (define-values (rsort mod-right) (transform-term right vars))
+      (define-values (csort mod-condition) (transform-term condition vars))
+      (values label
+              (if (or (real-sort? lsort) (real-sort? rsort))
+                  (list 'equation label vars
+                        (transform-literal mod-left rsort)
+                        (transform-literal mod-right lsort)
+                        mod-condition)
+                  (list 'equation label vars mod-left mod-right mod-condition)))))
+
+  (~> context
+      (hash-update 'rules transform-rules)
+      (hash-update 'equations transform-equations)
+      (replace-sorts transform-sort)
+      (add-include 'use "builtins/IEEE-floating-point")))

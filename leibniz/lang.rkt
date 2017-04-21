@@ -131,7 +131,7 @@
   (define-splicing-syntax-class context-ref
     (pattern (~seq #:insert [name:str tr:expr ...])
              #:attr ref #`(cons '(insert name tr ...) #,(source-loc #'name))
-             #:attr verb #'"includes")
+             #:attr verb #'"includes transformed")
     (pattern (~seq #:use name:str)
              #:attr ref #`(cons '(use name) #,(source-loc #'name))
              #:attr verb #'"uses")

@@ -471,7 +471,7 @@
 
     (define (add-include decls mode cname loc)
       (~> decls
-          (hash-update 'includes (λ (cnames) (cons (cons mode cname) cnames)))
+          (hash-update 'includes (λ (cnames) (append cnames (list (cons mode cname)))))
           (add-loc cname loc)))
 
     (define (add-sort decls s loc)
@@ -519,7 +519,7 @@
       (~> decls
           (hash-update 'rules (λ (rules) (if (member new-rule rules)
                                              rules
-                                             (cons new-rule rules))))
+                                             (append rules (list new-rule)))))
           (add-loc new-rule loc)))
 
     (define (add-equation decls label left right clauses loc)
@@ -584,9 +584,7 @@
             [(list 'rule pattern replacement clauses)
              (add-rule decls pattern replacement clauses loc)]
             [(list 'equation label left right clauses)
-             (add-equation decls label left right clauses loc)]))
-        (hash-update 'rules reverse)
-        (hash-update 'includes reverse)))
+             (add-equation decls label left right clauses loc)]))))
 
   (define (new-context-from-source name context-decls)
     (new-context name (preprocess-declarations context-decls)))

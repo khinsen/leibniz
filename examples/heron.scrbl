@@ -47,9 +47,7 @@ always within the prescribed tolerance.
           leibniz/documents)
 
 @context["fp-heron"
-         #:use "builtins/IEEE-floating-point-with-conversion"
-         #:use "builtins/real-numbers"
-         #:from-context @(real->FP64 (get-context leibniz "heron"))]{
+         #:insert ["heron" (real->float FP64)]]{
 
 @section{Heron's algorithm using floating-point arithmetic}
 
@@ -75,4 +73,3 @@ The deviation is always smaller than the prescribed tolerance.
 }
 
 @;signature-graphs["heron.sig"]
-
