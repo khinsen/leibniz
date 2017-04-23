@@ -4,7 +4,7 @@
                        scribble/base)
          empty-document
          import
-         context insert-context show-context
+         context show-context
          sort var op term rule equation
          comment-sort comment-op
          test eval-term
@@ -650,70 +650,6 @@
     [(list (or 'integer 'rational 'floating-point) n)
      (term->string n)]
     [_ (error (format "illegal term ~a" decl-term))]))
-
-; Insert and format a context given as a data structure
-
-(define-syntax (insert-context stx)
-  (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
-    (syntax-parse stx
-      [(_ name:str context:expr)
-       #`(begin (set! #,leibniz-ref (add-context #,leibniz-ref name empty context))
-                (margin-note "Context " (italic name))
-                (format-context context))])))
-
-(define (format-context context)
-  (list
-   (format-signature (contexts:context-signature context))
-   "Rules:" (linebreak)
-   (for/list ([rule (equations:in-rules (contexts:context-rules context))])
-     (list (elem #:style leibniz-output-style
-                 (format-rule rule context))
-           (linebreak)))
-   "Equations:" (linebreak)
-   (for ([eq (equations:in-equations (contexts:context-equations context))])
-     (list (elem #:style leibniz-output-style
-                 (format-equation eq context))
-           (linebreak)))))
-
-(define (format-signature signature)
-  (list
-   (format-sort-graph (operators:signature-sort-graph signature))
-   "Operators:" (linebreak)
-   (for/list ([(symbol rank meta) (operators:all-ops signature)])
-     (list (elem #:style leibniz-output-style
-                 (format-op-declaration symbol (car rank) (cdr rank)))
-           (linebreak)))))
-
-(define (format-sort-graph sort-graph)
-  (define ccs (sorts:connected-components sort-graph))
-  (for/list ([cc ccs])
-
-    (define sorts (sorts:all-sorts cc))
-    (define subsorts (sorts:all-subsort-relations cc))
-
-    (list
-
-     (if (equal? (length ccs) 1)
-         ""
-         (list "Kind " (sorts:constraint->string cc sorts) (linebreak)))
-
-     (if (equal? (set-count sorts) 1) "Sort: " "Sorts: ")
-     (add-between
-      (for/list ([sort (in-set sorts)])
-        (elem #:style leibniz-output-style (format-sort sort)))
-      ", ")
-     (linebreak)
-
-     (if (zero? (set-count subsorts))
-         ""
-         (list
-          "Subsort relations: "
-          (add-between
-           (for/list ([ss (in-set subsorts)])
-             (elem #:style leibniz-output-style
-                   (format-subsort-declaration (car ss) (cdr ss))))
-           ", ")
-          (linebreak))))))
 
 ; Support code for nicer formatting
 
