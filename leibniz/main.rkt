@@ -2,7 +2,7 @@
 
 (require "./rewrite-syntax.rkt"
          "./builtin-contexts.rkt"
-         (only-in "./rewrite.rkt" reduce))
+         (only-in "./rewrite-compatibility.rkt" reduce))
 
 (provide define-context context with-context T RT R A S eq tr
          reduce

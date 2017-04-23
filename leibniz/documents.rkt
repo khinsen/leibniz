@@ -657,6 +657,7 @@
   (define (make-test context-name rule-expr loc)
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
+    (define rules (contexts:context-rules context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (define rd (hash-ref (preprocess-declarations
                             (list (cons rule-expr loc)))
@@ -668,7 +669,7 @@
          (let* ([mt (make-pattern* signature (hash))]
                 [term (mt pattern)]
                 [expected (mt replacement)]
-                [rterm (rewrite:reduce context term)])
+                [rterm (rewrite:reduce signature rules term)])
            (list term expected rterm))]
         [_ (error "test may not contain rule clauses")])))
 

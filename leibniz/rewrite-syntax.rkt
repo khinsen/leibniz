@@ -10,7 +10,7 @@
          "./terms.rkt"
          "./term-syntax.rkt"
          "./equations.rkt"
-         "./rewrite.rkt"
+         "./rewrite-compatibility.rkt"
          racket/stxparam
          (for-syntax syntax/parse
                      racket/stxparam))
