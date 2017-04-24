@@ -250,9 +250,11 @@
         (format-op-declarations (hash-ref decls 'ops))
         (format-var-declarations (hash-ref decls 'vars))
         (format-rule-declarations (hash-ref decls 'rules)
-                                  (hash-ref decls 'vars))
+                                  (hash-ref decls 'vars)
+                                  (hash-ref decls 'compiled-signature #f))
         (format-eq-declarations (hash-ref decls 'equations)
-                                (hash-ref decls 'vars))))
+                                (hash-ref decls 'vars)
+                                (hash-ref decls 'compiled-signature #f))))
 
 (define (format-sort-declarations sort-decls)
   (define sorts
@@ -296,11 +298,11 @@
             (linebreak)
             (linebreak))))
 
-(define (format-rule-declarations rule-decls var-decls)
+(define (format-rule-declarations rule-decls var-decls signature)
   (define rules
     (for/list ([rd rule-decls])
       (elem #:style leibniz-output-style
-            (format-rule-declaration rd var-decls))))
+            (format-rule-declaration rd var-decls signature))))
   (if (empty? rule-decls)
       ""
       (list "Rules:" (linebreak)
@@ -308,11 +310,11 @@
                    (add-between rules (linebreak))
                    #:style 'inset))))
 
-(define (format-eq-declarations eq-decls var-decls)
+(define (format-eq-declarations eq-decls var-decls signature)
   (define eqs
     (for/list ([(label ed) eq-decls])
       (elem #:style leibniz-output-style
-            (format-eq-declaration ed var-decls))))
+            (format-eq-declaration ed var-decls signature))))
   (if (empty? eq-decls)
       ""
       (list "Equations:" (linebreak)
@@ -320,14 +322,14 @@
                    (add-between eqs (linebreak))
                    #:style 'inset))))
 
-(define (format-rule-declaration decl context-vars)
+(define (format-rule-declaration decl context-vars signature)
   (match-define `(rule ,vars ,pattern ,replacement ,condition) decl)
-  (define pattern-elem (format-decl-term pattern))
+  (define pattern-elem (format-decl-term pattern signature))
   (define proc-rule? (procedure? replacement))
   (define replacement-elem
     (if proc-rule?
         (italic "<procedure>")
-        (format-decl-term replacement)))
+        (format-decl-term replacement signature)))
   (define var-elems
     (for/list ([(name sort) vars])
       (if (equal? (hash-ref context-vars name #f) sort)
@@ -339,7 +341,7 @@
     (if condition
         (cons (list (linebreak) (hspace 2)
                     "if "
-                    (format-decl-term condition))
+                    (format-decl-term condition signature))
               var-elems)
         var-elems))
   (list* pattern-elem
@@ -347,18 +349,18 @@
          replacement-elem
          clause-elems))
 
-(define (format-eq-declaration decl context-vars)
+(define (format-eq-declaration decl context-vars signature)
   (match-define `(equation ,label ,vars ,left ,right ,condition) decl)
-  (define left-elem (format-decl-term left))
-  (define right-elem (format-decl-term right))
+  (define left-elem (format-decl-term left signature))
+  (define right-elem (format-decl-term right signature))
   (list* (bold (symbol->string label))
          ": "
          left-elem
          " = "
          right-elem
-         (format-clauses condition vars context-vars)))
+         (format-clauses condition vars context-vars signature)))
 
-(define (format-clauses condition vars context-vars)
+(define (format-clauses condition vars context-vars signature)
   (define var-elems
     (for/list ([(name sort) vars])
       (if (equal? (hash-ref context-vars name #f) sort)
@@ -369,11 +371,11 @@
   (if condition
         (cons (list (linebreak) (hspace 2)
                     "if "
-                    (format-decl-term condition))
+                    (format-decl-term condition signature))
               var-elems)
         var-elems))
 
-(define (format-decl-term decl-term)
+(define (format-decl-term decl-term signature)
 
   (define (infix-decl-term? decl-term [neighbor-op #f])
     (condd
@@ -389,7 +391,10 @@
   (match decl-term
     [(list 'term/var raw-name)
      (define-values (name _) (op-symbol-and-type raw-name))
-     name]
+     (if (and signature
+              (operators:lookup-var signature raw-name))
+         (italic name)
+         name)]
     [(list 'term raw-op args)
      (define-values (op type) (op-symbol-and-type raw-op))
      (condd
@@ -398,17 +403,19 @@
       [(equal? type 'prefix-op)
        (list op
              "("
-             (add-between (for/list ([arg args]) (format-decl-term arg)) ", ")
+             (add-between (for/list ([arg args])
+                            (format-decl-term arg signature)) ", ")
              ")")]
       #:do (define arg1 (first args))
-      #:do (define f-arg1 (format-decl-term arg1))
+      #:do (define f-arg1 (format-decl-term arg1 signature))
       [(equal? op "[]")
        (list (parenthesize f-arg1 (infix-decl-term? arg1))
              "["
-             (add-between (for/list ([arg (rest args)]) (format-decl-term arg)) ", ")
+             (add-between (for/list ([arg (rest args)])
+                            (format-decl-term arg signature)) ", ")
              "]")]
       #:do (define arg2 (second args))
-      #:do (define f-arg2 (format-decl-term arg2))
+      #:do (define f-arg2 (format-decl-term arg2 signature))
       [(equal? type 'infix-op)
        (list (parenthesize f-arg1 (infix-decl-term? arg1 op))
              " " op  " "
@@ -457,10 +464,10 @@
                 "foo ⊆ bar")
   (check-equal? (plain-text (format-rule-declaration
                              (list 'rule (hash) '(term/var X) '(term/var Y) #f)
-                             (hash)))
+                             (hash) #f))
                 "X ⇒ Y")
   (check-equal? (plain-text (format-eq-declaration
                              (list 'equation 'eq1 (hash)
                                    '(term/var X) '(term/var Y) #f)
-                             (hash)))
+                             (hash) #f))
                 "eq1: X = Y"))
