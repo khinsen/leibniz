@@ -17,6 +17,10 @@
          (prefix-in terms: "./terms.rkt")
          (prefix-in equations: "./equations.rkt"))
 
+(module+ test
+  (require rackunit))
+
+; HTML styles
 
 (define leibniz-css
   (make-css-addition
@@ -48,6 +52,8 @@
 
 ; Rendering of Leibniz data in terms of Scribble elements
 
+; Rendering of Leibniz data in terms of Scribble elements
+
 (define (format-sort symbol)
   (if symbol
       (symbol->string symbol)
@@ -58,7 +64,7 @@
         ":"
         (format-sort sort)))
 
-(define (format-var-or-sort var-or-sort-decl)
+(define (format-op-arg var-or-sort-decl)
   (match var-or-sort-decl
     [(list 'sort sort) (format-sort sort)]
     [(list 'var name sort) (format-var name sort)]))
@@ -86,31 +92,31 @@
      (list op-str
            (if (zero? (length arg-decls))
                ""
-               (list "(" (add-between (map format-var-or-sort arg-decls) ", ") ")"))
+               (list "(" (add-between (map format-op-arg arg-decls) ", ") ")"))
            " : "
            (format-sort result-sort))]
     [(infix-op)
-     (list (format-var-or-sort (first arg-decls))
+     (list (format-op-arg (first arg-decls))
            " " op-str " "
-           (format-var-or-sort (second arg-decls))
+           (format-op-arg (second arg-decls))
            " : "
            (format-sort result-sort))]
     [(special-op)
      (case op-str
        [("[]")
-        (list (format-var-or-sort (first arg-decls))
+        (list (format-op-arg (first arg-decls))
               "["
-              (add-between (map format-var-or-sort (rest arg-decls)) ", ")
+              (add-between (map format-op-arg (rest arg-decls)) ", ")
               "] : "
               (format-sort result-sort))]
        [("_")
-        (list (format-var-or-sort (first arg-decls))
-              (subscript (format-var-or-sort (second arg-decls)))
+        (list (format-op-arg (first arg-decls))
+              (subscript (format-op-arg (second arg-decls)))
               " : "
               (format-sort result-sort))]
        [("^")
-        (list (format-var-or-sort (first arg-decls))
-              (superscript (format-var-or-sort (second arg-decls)))
+        (list (format-op-arg (first arg-decls))
+              (superscript (format-op-arg (second arg-decls)))
               " : "
               (format-sort result-sort))])]))
 
@@ -236,7 +242,6 @@
         var-elems
         cond-elem))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (format-context-declarations decls)
@@ -244,8 +249,10 @@
         (format-subsort-declarations (hash-ref decls 'subsorts))
         (format-op-declarations (hash-ref decls 'ops))
         (format-var-declarations (hash-ref decls 'vars))
-        (format-rule-declarations (hash-ref decls 'rules) (hash-ref decls 'vars))
-        (format-eq-declarations (hash-ref decls 'equations) (hash-ref decls 'vars))))
+        (format-rule-declarations (hash-ref decls 'rules)
+                                  (hash-ref decls 'vars))
+        (format-eq-declarations (hash-ref decls 'equations)
+                                (hash-ref decls 'vars))))
 
 (define (format-sort-declarations sort-decls)
   (define sorts
@@ -414,3 +421,46 @@
      (term->string n)]
     [_ (error (format "illegal term ~a" decl-term))]))
 
+(define (plain-text body)
+  (cond
+    [(list? body)
+     (apply string-append (map plain-text (flatten body)))]
+    [(not (element? body))
+     ; replace math spaces by plain spaces
+     (string-normalize-spaces body #px"\\p{Zs}+" #:trim? #f)]
+    [(or (equal? 'italic (element-style body))
+         (equal? 'bold (element-style body)))
+     (plain-text (element-content body))]
+    [(equal? 'superscript (element-style body))
+     (string-append "^{" (plain-text (element-content body)) "}")]
+    [(equal? 'subscript (element-style body))
+     (string-append "_{" (plain-text (element-content body)) "}")]))
+
+(module+ test
+
+  (check-equal? (plain-text
+                 (format-op-declaration 'foo (list '(sort bar)) 'baz))
+                "foo(bar) : baz")
+  (check-equal? (plain-text
+                 (format-op-declaration '^ '((sort foo) (sort bar)) 'baz))
+                "foo^{bar} : baz")
+  (check-equal? (plain-text
+                 (format-op-declaration '_ '((sort foo) (sort bar)) 'baz))
+                "foo_{bar} : baz")
+  (check-equal? (plain-text
+                 (format-op-declaration '|[]| '((sort foo) (sort bar)) 'baz))
+                "foo[bar] : baz")
+  (check-equal? (plain-text
+                 (format-var 'X 'foo))
+                "X:foo")
+  (check-equal? (plain-text (format-declaration '(subsort foo bar)))
+                "foo ⊆ bar")
+  (check-equal? (plain-text (format-rule-declaration
+                             (list 'rule (hash) '(term/var X) '(term/var Y) #f)
+                             (hash)))
+                "X ⇒ Y")
+  (check-equal? (plain-text (format-eq-declaration
+                             (list 'equation 'eq1 (hash)
+                                   '(term/var X) '(term/var Y) #f)
+                             (hash)))
+                "eq1: X = Y"))
