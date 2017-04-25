@@ -7,7 +7,8 @@
          format-equation
          leibniz-input leibniz-input-with-hover
          leibniz-output leibniz-output-with-hover
-         leibniz-comment)
+         leibniz-comment
+         plain-text)
 
 (require scribble/core
          scribble/base
@@ -435,13 +436,14 @@
     [(not (element? body))
      ; replace math spaces by plain spaces
      (string-normalize-spaces body #px"\\p{Zs}+" #:trim? #f)]
-    [(or (equal? 'italic (element-style body))
-         (equal? 'bold (element-style body)))
-     (plain-text (element-content body))]
     [(equal? 'superscript (element-style body))
      (string-append "^{" (plain-text (element-content body)) "}")]
     [(equal? 'subscript (element-style body))
-     (string-append "_{" (plain-text (element-content body)) "}")]))
+     (string-append "_{" (plain-text (element-content body)) "}")]
+    [(member (element-style body) '(newline hspace))
+     " "]
+    [else
+     (plain-text (element-content body))]))
 
 (module+ test
 
