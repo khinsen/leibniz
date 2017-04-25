@@ -9,7 +9,8 @@
          comment-sort comment-op
          test eval-term
          inset
-         xml signature-graphs)
+         xml signature-graphs
+         use show reduce trace)
 
 (require scribble/doclang
          scribble/base
@@ -18,13 +19,16 @@
          (for-syntax syntax/parse
                      racket/syntax
                      racket/list
-                     "./lang/parser.rkt"
+                     "./parser.rkt"
                      megaparsack (except-in megaparsack/text integer/p)
                      data/monad
                      data/applicative)
          "./documents.rkt"
-         "./formatting.rkt"
          "./transformations.rkt"
+         "./parser.rkt"
+         "./formatting.rkt"
+         (only-in megaparsack/text parse-string)
+         (only-in megaparsack parse-result!)
          (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
@@ -294,3 +298,75 @@
     (syntax-parse stx
       [(_ directory:str)
        #`(write-signature-graphs #,leibniz-ref directory)])))
+
+; Support for interactive exploration
+
+(define current-context-name (make-parameter #f))
+(define current-context (make-parameter #f))
+(define current-document (make-parameter #f))
+
+(define-syntax (use stx)
+  (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
+    (syntax-parse stx
+      [(_ context-name:str)
+       #`(begin
+           (define context
+             (with-handlers ([exn:fail? (λ (e) #f)])
+               (get-context-declarations #,leibniz-ref context-name)))
+           (unless context
+             (error (format "Undefined context ~a" context-name)))
+           (current-document #,leibniz-ref)
+           (current-context-name context-name)
+           (current-context context))])))
+
+(define (assert-current-context)
+  (unless (current-context-name)
+    (error "No context has been selected")))
+
+(define (parse-term term-str)
+  (parse-result! (parse-string (to-eof/p term/p) term-str)))
+
+(define (show term-str)
+  (assert-current-context)
+  (define signature (hash-ref (current-context) 'compiled-signature))
+  (define term (make-term (current-document) (current-context-name)
+                          (parse-term term-str) #f))
+  (plain-text (format-term signature term)))
+
+(define (reduce term-str)
+  (assert-current-context)
+  (define term (make-term (current-document) (current-context-name)
+                          (parse-term term-str) #f))
+  (define signature (hash-ref (current-context) 'compiled-signature))
+  (define rules (hash-ref (current-context) 'compiled-rules))
+  (define rterm (rewrite:reduce signature rules term))
+  (plain-text (format-term signature rterm)))
+
+(define (trace term-str
+               #:max-level [max-level 0]
+               #:show-rules [show-rules #f])
+  (assert-current-context)
+  (define (display-trace level term rule rterm)
+    (cond
+      [(equal? level 0)
+       (when show-rules
+         (displayln (format "--- ~a"
+                            (plain-text (format-rule rule signature)))))
+       (displayln (format "... ~a"
+                         (plain-text (format-term signature rterm))))]
+      [(or (not max-level)
+           (<= level max-level))
+       (when show-rules
+         (displayln (format "~a ~a"
+                            (make-string (+ level 3) #\-)
+                            (plain-text (format-rule rule signature)))))
+       (displayln (format "~a ~a ⇒ ~a"
+                          (make-string (+ level 3) #\+)
+                          (plain-text (format-term signature term))
+                          (plain-text (format-term signature rterm))))]))
+  (define term (make-term (current-document) (current-context-name)
+                          (parse-term term-str) #f))
+  (define signature (hash-ref (current-context) 'compiled-signature))
+  (define rules (hash-ref (current-context) 'compiled-rules))
+  (rewrite:trace-reduce signature rules term display-trace)
+  (void))

@@ -3,7 +3,6 @@
 (provide
  (contract-out
   [reduce (context? term? . -> . term?)]
-  [trace-reduce (context? term? . -> . term?)]
   [reduce-equation ((context? equation?) ((or/c #f symbol?))
                     . ->* . equation?)]
   [transform (context? transformation? term? . -> . term?)]
@@ -20,9 +19,6 @@
 
 (define (reduce context term)
   (rewrite:reduce (context-signature context) (context-rules context) term))
-
-(define (trace-reduce context term)
-  (rewrite:trace-reduce (context-signature context) (context-rules context) term))
 
 (define (reduce-equation context equation [new-label #f])
   (rewrite:reduce-equation (context-signature context) (context-rules context)

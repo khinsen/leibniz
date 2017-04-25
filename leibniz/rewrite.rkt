@@ -3,7 +3,9 @@
 (provide
  (contract-out
   [reduce (signature? rulelist? term? . -> . term?)]
-  [trace-reduce (signature? rulelist? term? . -> . term?)]
+  [in-reduction (signature? rulelist? term? . -> . (sequence/c term?))]
+  [trace-reduce ((signature? rulelist? term? procedure?) (integer?)
+                            . ->* . term?)]
   [reduce-equation ((signature? rulelist? equation?) ((or/c #f symbol?))
                     . ->* . equation?)]
   [transform (signature? rulelist? transformation? term? . -> . term?)]
@@ -226,19 +228,6 @@
         ; Not equal: another round of rewriting
         [else                         (loop rewritten-term)]))))
 
-(define (trace-reduce signature rules term)
-  (displayln (format "-- ~a" term))
-  (define rt
-    (let loop ([term term])
-      (let* ([rewritten-term (rewrite-leftmost-innermost signature rules term)])
-        (displayln (format ".. ~a" rewritten-term))
-        (cond
-          [(eq? rewritten-term term)    term]
-          [(equal? rewritten-term term) term]
-          [else                         (loop rewritten-term)]))))
-  (displayln (format "-> ~a" rt))
-  rt)
-
 (module+ test
   (with-context test-context
     (define signature (context-signature test-context))
@@ -251,6 +240,48 @@
                   (T false))
     (check-equal? (reduce signature rules (T foo))
                   (T true))))
+
+;
+; Rewriting with trace generation
+;
+(define (in-reduction signature rules term)
+  (in-generator
+   (let loop ([term term])
+     (let* ([rewritten-term (rewrite-leftmost-innermost signature rules term)])
+       (define no-change? (or (eq? rewritten-term term)
+                              (equal? rewritten-term term)))
+       (if no-change?
+           (void)
+           (begin (yield rewritten-term)
+                  (loop rewritten-term)))))))
+
+(define (trace-reduce signature rules term callback-procedure [level 0])
+  (let loop ([term term])
+    (let* ([rewritten-term (trace-rewrite-leftmost-innermost signature rules term
+                                                             callback-procedure level)])
+      (cond
+        [(equal? rewritten-term term) term]
+        [else                         (loop rewritten-term)]))))
+
+(define (trace-rewrite-leftmost-innermost signature rules term callback-procedure level)
+  (define-values (op args) (term.op-and-args term))
+  (if op
+      (let* ([reduced-args (map (λ (arg) (trace-reduce signature rules arg
+                                                       callback-procedure (+ level 1)))
+                                args)]
+             [with-reduced-args (make-term* signature op reduced-args)])
+        (trace-rewrite-head-once signature rules with-reduced-args
+                                 callback-procedure level))
+      (trace-rewrite-head-once signature rules term
+                               callback-procedure level)))
+
+(define (trace-rewrite-head-once signature rules term callback-procedure level)
+  (or (for*/first ([(rule substitution) (in-matching-rules signature rules term #t)]
+                   [re-term (maybe-result
+                             (apply-substitution signature rule substitution))])
+        (callback-procedure level term rule re-term)
+        re-term)
+      term))
 
 ;
 ; Reduction of equations: reduce left and right
