@@ -4,7 +4,7 @@
          add-to-library
          new-context-from-source
          get-context get-context-declarations
-         make-term make-rule make-equation
+         make-term make-rule make-transformation make-equation
          make-test
          get-document-sxml get-context-sxml
          write-xml import-xml
@@ -641,6 +641,16 @@
                   (first (hash-ref (preprocess-declarations
                                     (list (cons rule-expr loc)))
                                    'rules)))))
+
+  (define (make-transformation context-name rule-expr loc)
+    (define context (get-context context-name))
+    (define signature (contexts:context-signature context))
+    (with-handlers ([exn:fail? (re-raise-exn loc)])
+      (equations:make-transformation signature
+       (make-rule* signature
+                   (first (hash-ref (preprocess-declarations
+                                     (list (cons rule-expr loc)))
+                                    'rules))))))
 
   (define (make-equation context-name equation-expr loc)
     (define context (get-context context-name))

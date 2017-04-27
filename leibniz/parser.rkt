@@ -1,6 +1,10 @@
 #lang racket
 
-(provide (all-defined-out))
+(provide to-eof/p
+         sort-or-subsort/p var/p operator/p
+         term/p
+         rule/p equation/p transformation/p
+         parse-scribble-text)
 
 (require megaparsack megaparsack/text
          data/monad
@@ -40,7 +44,7 @@
       [rest <-  (many/p letter-or-symbol-or-digit/p)]
       (pure (string->symbol (apply string (append (list first) rest))))))
 
-(define reserved-identifiers (set '⊆ '↣ '⇒ '= '∀ 'if))
+(define reserved-identifiers (set '⊆ '↣ '→ '⇒ '= '∀ 'if))
 
 (define non-reserved-identifier/p
   (guard/p identifier/p (λ (x) (not (set-member? reserved-identifiers x)))
@@ -387,15 +391,19 @@
   (do (many+/p space/p)
       (or/p var-clause/p condition-clause/p)))
 
-(define rule/p
+(define (rule-or-transformation/p separator)
   (do [pattern <- term/p]
       (many+/p space/p)
-      (char/p #\⇒)
+      separator
       (many+/p space/p)
       [replacement <- term/p]
       [clauses <- (many/p clause/p)]
       eof/p
       (pure `(rule ,pattern ,replacement ,clauses))))
+
+(define rule/p (rule-or-transformation/p (char/p #\⇒)))
+
+(define transformation/p (rule-or-transformation/p (char/p #\→)))
 
 (define equation/p
   (do [label <- identifier/p]
@@ -436,6 +444,10 @@
                       (term/var b)
                       ((term _> ((term/var a) (integer 0))))))
   (check-parse rule/p "a ⇒ b + c if a > 0"
+               '(rule (term/var a)
+                      (term _+ ((term/var b) (term/var c))) 
+                      ((term _> ((term/var a) (integer 0))))))
+  (check-parse transformation/p "a → b + c if a > 0"
                '(rule (term/var a)
                       (term _+ ((term/var b) (term/var c))) 
                       ((term _> ((term/var a) (integer 0))))))

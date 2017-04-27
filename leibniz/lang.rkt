@@ -10,7 +10,7 @@
          test eval-term
          inset
          xml signature-graphs
-         use show reduce trace)
+         use show reduce trace transform)
 
 (require scribble/doclang
          scribble/base
@@ -28,10 +28,13 @@
          "./parser.rkt"
          "./formatting.rkt"
          (only-in megaparsack/text parse-string)
-         (only-in megaparsack parse-result!)
+         (only-in megaparsack parse-result! parse-error->string)
+         data/either
+         threading
          (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
+         (prefix-in equations: "./equations.rkt")
          (prefix-in contexts: "./contexts.rkt")
          (prefix-in rewrite: "./rewrite.rkt"))
 
@@ -86,7 +89,8 @@
                                              (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
     (pattern ((~literal equation) equation-expr:str ...)
-             #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
+             #:attr parsed (parse-scribble-text (syntax/p
+ equation/p) #'(equation-expr ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
              #:with expansion #`(parsed-equation leibniz-doc current-context 
                                                  (quote parsed)
@@ -324,23 +328,51 @@
     (error "No context has been selected")))
 
 (define (parse-term term-str)
-  (parse-result! (parse-string (to-eof/p term/p) term-str)))
+  (parse-string (to-eof/p term/p) term-str))
+
+(define (parse-equation eq-str)
+  (parse-string equation/p eq-str))
+
+(define (parse-transformation tr-str)
+  (parse-string transformation/p tr-str))
+
+(define (make-parsed-term term-str)
+  (match (parse-term term-str)
+    [(success parsed-term)
+     (make-term (current-document) (current-context-name) parsed-term #f)]
+    [(failure message)
+     #f]))
+
+(define (make-parsed-term-or-eq str)
+  (match (parse-equation str)
+    [(success parsed-eq)
+     (displayln parsed-eq)
+     (make-equation (current-document) (current-context-name) parsed-eq #f)]
+    [(failure message)
+     (make-parsed-term str)]))
+
+(define (display-term signature term)
+  (when term
+    (displayln (plain-text (format-term signature term)))))
+
+(define (display-equation signature equation)
+  (when equation
+    (displayln (plain-text (format-equation equation signature)))))
 
 (define (show term-str)
   (assert-current-context)
   (define signature (hash-ref (current-context) 'compiled-signature))
-  (define term (make-term (current-document) (current-context-name)
-                          (parse-term term-str) #f))
-  (plain-text (format-term signature term)))
+  (define term (make-parsed-term term-str))
+  (display-term signature term))
 
 (define (reduce term-str)
   (assert-current-context)
-  (define term (make-term (current-document) (current-context-name)
-                          (parse-term term-str) #f))
   (define signature (hash-ref (current-context) 'compiled-signature))
   (define rules (hash-ref (current-context) 'compiled-rules))
-  (define rterm (rewrite:reduce signature rules term))
-  (plain-text (format-term signature rterm)))
+  (define term (make-parsed-term term-str))
+  (define rterm (and term
+                     (rewrite:reduce signature rules term)))
+  (display-term signature rterm))
 
 (define (trace term-str
                #:max-level [max-level 0]
@@ -364,9 +396,42 @@
                           (make-string (+ level 3) #\+)
                           (plain-text (format-term signature term))
                           (plain-text (format-term signature rterm))))]))
-  (define term (make-term (current-document) (current-context-name)
-                          (parse-term term-str) #f))
   (define signature (hash-ref (current-context) 'compiled-signature))
   (define rules (hash-ref (current-context) 'compiled-rules))
-  (rewrite:trace-reduce signature rules term display-trace)
+  (define term (make-parsed-term term-str))
+  (when term
+    (rewrite:trace-reduce signature rules term display-trace))
   (void))
+
+(define (transform term-or-eq-str transformation-str)
+  (define signature (hash-ref (current-context) 'compiled-signature))
+  (define sort-graph (operators:signature-sort-graph signature))
+  (define rules (hash-ref (current-context) 'compiled-rules))
+  (define term-or-eq (make-parsed-term-or-eq term-or-eq-str))
+  (define sort (terms:term.sort
+                (cond
+                  [(terms:term? term-or-eq)
+                   term-or-eq]
+                  [(equations:equation? term-or-eq)
+                   (equations:equation-left term-or-eq)])))
+  (define (term->transformation transformation-str)
+    (if (and (string-contains? transformation-str "%")
+             (not (string-contains? transformation-str "→")))
+        (string-append "% → " transformation-str " ∀ %:" (symbol->string sort))
+        transformation-str))
+  (define transformation
+    (make-transformation (current-document) (current-context-name)
+                         (~> transformation-str
+                             term->transformation
+                             
+                             parse-transformation
+                             parse-result!)
+                         #f))
+  (cond
+    [(terms:term? term-or-eq)
+     (display-term signature
+      (rewrite:transform signature rules transformation term-or-eq))]
+    [(equations:equation? term-or-eq)
+     (display-equation signature
+      (rewrite:transform-equation signature rules transformation term-or-eq
+                                  (equations:equation-label term-or-eq)))]))
