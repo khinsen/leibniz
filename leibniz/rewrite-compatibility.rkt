@@ -25,17 +25,17 @@
                            equation new-label))
 
 (define (transform context transformation term)
-  (rewrite:transform (context-signature context) (context-rules context)
+  (rewrite:transform (context-signature context)
                      transformation term))
 
 (define (transform-equation context transformation equation [new-label #f])
-  (rewrite:transform-equation (context-signature context) (context-rules context)
+  (rewrite:transform-equation (context-signature context)
                               transformation equation new-label))
 
 (define (substitute context transformation term)
-  (rewrite:substitute (context-signature context) (context-rules context)
+  (rewrite:substitute (context-signature context)
                      transformation term))
 
 (define (substitute-equation context transformation equation [new-label #f])
-  (rewrite:substitute-equation (context-signature context) (context-rules context)
+  (rewrite:substitute-equation (context-signature context)
                                transformation equation new-label))

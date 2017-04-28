@@ -413,29 +413,27 @@
 (define (transform term-or-eq-str transformation-str)
   (define signature (hash-ref (current-context) 'compiled-signature))
   (define sort-graph (operators:signature-sort-graph signature))
-  (define rules (hash-ref (current-context) 'compiled-rules))
   (define term-or-eq (make-parsed-term-or-eq term-or-eq-str))
   (define transformation (make-parsed-transformation transformation-str))
   (cond
     [(terms:term? term-or-eq)
      (display-term signature
-      (rewrite:transform signature rules transformation term-or-eq))]
+      (rewrite:transform signature transformation term-or-eq))]
     [(equations:equation? term-or-eq)
      (display-equation signature
-      (rewrite:transform-equation signature rules transformation term-or-eq
+      (rewrite:transform-equation signature transformation term-or-eq
                                   (equations:equation-label term-or-eq)))]))
 
 (define (substitute term-or-eq-str transformation-str)
   (define signature (hash-ref (current-context) 'compiled-signature))
   (define sort-graph (operators:signature-sort-graph signature))
-  (define rules (hash-ref (current-context) 'compiled-rules))
   (define term-or-eq (make-parsed-term-or-eq term-or-eq-str))
   (define transformation (make-parsed-transformation transformation-str))
   (cond
     [(terms:term? term-or-eq)
      (display-term signature
-      (rewrite:substitute signature rules transformation term-or-eq))]
+      (rewrite:substitute signature transformation term-or-eq))]
     [(equations:equation? term-or-eq)
      (display-equation signature
-      (rewrite:substitute-equation signature rules transformation term-or-eq
+      (rewrite:substitute-equation signature transformation term-or-eq
                                    (equations:equation-label term-or-eq)))]))

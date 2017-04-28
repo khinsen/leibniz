@@ -8,11 +8,11 @@
                             . ->* . term?)]
   [reduce-equation ((signature? rulelist? equation?) ((or/c #f symbol?))
                     . ->* . equation?)]
-  [transform (signature? rulelist? transformation? term? . -> . term?)]
-  [transform-equation ((signature? rulelist? transformation? equation?) ((or/c #f symbol?))
+  [transform (signature? transformation? term? . -> . term?)]
+  [transform-equation ((signature? transformation? equation?) ((or/c #f symbol?))
                        . ->* . equation?)]
-  [substitute (signature? rulelist? transformation? term? . -> . term?)]
-  [substitute-equation ((signature? rulelist? transformation? equation?) ((or/c #f symbol?))
+  [substitute (signature? transformation? term? . -> . term?)]
+  [substitute-equation ((signature? transformation? equation?) ((or/c #f symbol?))
                         . ->* . equation?)]))
 
 (require "./sorts.rkt"
@@ -325,51 +325,47 @@
   (apply-substitution signature rule
                       (one-match signature (rule-pattern rule) term)))
 
-(define (transform signature rules transformation term)
+(define (transform signature transformation term)
   (define tr-rule (transformation-converted-rule transformation))
   (check-var-conflicts tr-rule term)
-  (reduce signature rules
-          (transform* signature tr-rule term)))
+  (transform* signature tr-rule term))
 
-(define (transform-equation signature rules transformation equation [new-label #f])
+(define (transform-equation signature transformation equation [new-label #f])
   (make-equation signature
-                 (transform signature rules transformation (equation-left equation))
+                 (transform signature transformation (equation-left equation))
                  (equation-condition equation)
-                 (transform signature rules transformation (equation-right equation))
+                 (transform signature  transformation (equation-right equation))
                  new-label))
 
 (module+ test
   (with-context test-with-var
     (define transformation (tr #:var (X boolean) X (not X)))
     (define signature (context-signature test-with-var))
-    (define rules (context-rules test-with-var))
-    (check-equal? (transform signature rules transformation (T foo))
+    (check-equal? (transform signature transformation (T foo))
                   (T (not foo)))
-    (check-equal? (transform signature rules transformation (T X))
+    (check-equal? (transform signature transformation (T X))
                   (T (not X)))
-    (check-equal? (transform signature rules transformation (T (not X)))
-                  (T X))
-    (check-equal? (transform-equation signature rules transformation
+    (check-equal? (transform signature transformation (T (not X)))
+                  (T (not (not X))))
+    (check-equal? (transform-equation signature transformation
                                       (eq foo bar))
                   (eq (not foo) (not bar)))
-    (check-equal? (transform-equation signature rules transformation
+    (check-equal? (transform-equation signature transformation
                                       (eq #:label original foo bar)
                                       'negated)
                   (eq #:label negated (not foo) (not bar))))
   (with-context test-with-var
     (define transformation (tr #:vars ([% boolean] [Y FooBar]) % Y))
     (define signature (context-signature test-with-var))
-    (define rules (context-rules test-with-var))
     (check-exn exn:fail?
-               (thunk (transform signature rules transformation
+               (thunk (transform signature transformation
                                  (T #:var (Y boolean) (not Y))))))
   (with-context test-context
     (define transformation (tr #:var (X boolean) X (not X)))
     (define signature (context-signature test-context))
-    (define rules (context-rules test-context))
-    (check-equal? (transform-equation signature rules transformation
+    (check-equal? (transform-equation signature transformation
                                       (eq an-equation))
-                  (eq false false))))
+                  (eq (not foo) (not true)))))
 
 ;
 ; Substitutions in terms and equations
@@ -391,32 +387,30 @@
         (substitute* signature rule with-tr-args))
       (substitute* signature rule term)))
 
-(define (substitute signature rules transformation term)
+(define (substitute signature transformation term)
   (define tr-rule (transformation-converted-rule transformation))
   (check-var-conflicts tr-rule term)
-  (reduce signature rules
-          (substitute*-leftmost-innermost signature tr-rule term)))
+  (substitute*-leftmost-innermost signature tr-rule term))
 
-(define (substitute-equation signature rules transformation equation [new-label #f])
+(define (substitute-equation signature transformation equation [new-label #f])
   (make-equation signature
-                 (substitute signature rules transformation (equation-left equation))
+                 (substitute signature transformation (equation-left equation))
                  (equation-condition equation)
-                 (substitute signature rules transformation (equation-right equation))
+                 (substitute signature transformation (equation-right equation))
                  new-label))
 
 (module+ test
   (with-context test-context
     (define signature (context-signature test-context))
-    (define rules (context-rules test-context))
-    (check-equal? (substitute signature rules
+    (check-equal? (substitute signature
                               (tr bar (not bar))
                               (T (not bar)))
                   (T (not (not bar))))
-    (check-equal? (substitute signature rules
+    (check-equal? (substitute signature
                               (tr foo (not foo))
                               (T (not foo)))
-                  (T true))
-    (check-equal? (substitute-equation signature rules
+                  (T (not (not foo))))
+    (check-equal? (substitute-equation signature
                                        (tr foo (not bar))
                                        (eq foo bar))
                   (eq (not bar) bar))))
