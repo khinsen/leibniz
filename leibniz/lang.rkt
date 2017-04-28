@@ -10,7 +10,7 @@
          test eval-term
          inset
          xml signature-graphs
-         use show reduce trace transform)
+         use show reduce trace transform substitute)
 
 (require scribble/doclang
          scribble/base
@@ -351,6 +351,13 @@
     [(failure message)
      (make-parsed-term str)]))
 
+(define (make-parsed-transformation transformation-str)
+  (make-transformation (current-document) (current-context-name)
+                       (~> transformation-str
+                           parse-transformation
+                           parse-result!)
+                       #f))
+
 (define (display-term signature term)
   (when term
     (displayln (plain-text (format-term signature term)))))
@@ -408,25 +415,7 @@
   (define sort-graph (operators:signature-sort-graph signature))
   (define rules (hash-ref (current-context) 'compiled-rules))
   (define term-or-eq (make-parsed-term-or-eq term-or-eq-str))
-  (define sort (terms:term.sort
-                (cond
-                  [(terms:term? term-or-eq)
-                   term-or-eq]
-                  [(equations:equation? term-or-eq)
-                   (equations:equation-left term-or-eq)])))
-  (define (term->transformation transformation-str)
-    (if (and (string-contains? transformation-str "%")
-             (not (string-contains? transformation-str "→")))
-        (string-append "% → " transformation-str " ∀ %:" (symbol->string sort))
-        transformation-str))
-  (define transformation
-    (make-transformation (current-document) (current-context-name)
-                         (~> transformation-str
-                             term->transformation
-                             
-                             parse-transformation
-                             parse-result!)
-                         #f))
+  (define transformation (make-parsed-transformation transformation-str))
   (cond
     [(terms:term? term-or-eq)
      (display-term signature
@@ -435,3 +424,18 @@
      (display-equation signature
       (rewrite:transform-equation signature rules transformation term-or-eq
                                   (equations:equation-label term-or-eq)))]))
+
+(define (substitute term-or-eq-str transformation-str)
+  (define signature (hash-ref (current-context) 'compiled-signature))
+  (define sort-graph (operators:signature-sort-graph signature))
+  (define rules (hash-ref (current-context) 'compiled-rules))
+  (define term-or-eq (make-parsed-term-or-eq term-or-eq-str))
+  (define transformation (make-parsed-transformation transformation-str))
+  (cond
+    [(terms:term? term-or-eq)
+     (display-term signature
+      (rewrite:substitute signature rules transformation term-or-eq))]
+    [(equations:equation? term-or-eq)
+     (display-equation signature
+      (rewrite:substitute-equation signature rules transformation term-or-eq
+                                   (equations:equation-label term-or-eq)))]))
