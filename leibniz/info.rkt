@@ -1,11 +1,19 @@
 #lang info
 (define collection "leibniz")
-(define deps '("base"
-               "threading"
-               "rackunit-lib"
+(define deps '("at-exp-lib"
+               "base"
                "chk"
+               "drracket"
+               "functional-lib"
+               "gui-lib"
                "megaparsack"
-               "sxml"))
+               "net-lib"
+               "rackunit-lib"
+               "scribble-lib"
+               "sxml"
+               "threading"))
+(define build-deps '("racket-doc"
+                     "scribble-doc"))
 (define pkg-desc "Leibniz - A Digital Scientific Notation")
 (define version "0.2")
 
