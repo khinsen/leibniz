@@ -249,6 +249,22 @@
       [`(,number-tag (@ (value ,v)))
        (list number-tag (read (open-input-string v)))]))
 
+  (define (sxml->rule sxml-rule)
+    (match sxml-rule
+      [`(rule (vars ,rv ...)
+              (pattern ,rp)
+              ,rc
+              (replacement ,rr))
+       (list 'rule
+             (sxml->vars rv)
+             (sxml->term rp)
+             (sxml->term rr)
+             (match rc
+               [`(condition)
+                #f]
+               [`(condition ,term)
+                term]))]))
+
   (match-define
     `(context (@ (id, name))
               (includes ,sxml-includes ...)
@@ -282,20 +298,7 @@
                         (sort (@ (id ,os))))
                    (list (string->symbol on) (map sxml->arg oa) (string->symbol os))])))
   (define rules (for/list ([rule sxml-rules])
-                  (match rule
-                    [`(rule (vars ,rv ...)
-                            (pattern ,rp)
-                            ,rc
-                            (replacement ,rr))
-                     (list 'rule
-                           (sxml->vars rv)
-                           (sxml->term rp)
-                           (sxml->term rr)
-                           (match rc
-                             [`(condition)
-                              #f]
-                             [`(condition ,term) 
-                              term]))])))
+                  (sxml->rule rule)))
   (define equations (for/hash ([eq sxml-equations])
                       (match eq
                         [`(equation (@ (id ,elabel))
@@ -568,10 +571,36 @@
         `(var (@ (id ,(symbol->string name))
                  (sort ,(symbol->string sort))))))
 
+    (define (op->sxml op)
+      `(op (@ (id ,(symbol->string (first op))))
+           (arity ,@(for/list ([sv (second op)])
+                      (if (equal? (first sv) 'sort)
+                          `(sort (@ (id ,(symbol->string (second sv)))))
+                          `(var (@ (id ,(symbol->string (second sv)))
+                                   (sort ,(symbol->string (third sv))))))))
+           (sort (@ (id ,(symbol->string (third op)))))))
+
     (define (condition->sxml condition)
       (if (equal? condition #f)
           `(condition)
           `(condition ,(term->sxml condition))))
+
+    (define (rule->sxml rule)
+      (match-let
+          ([(list 'rule vars pattern replacement condition) rule])
+        `(rule (vars ,@(vars->sxml vars))
+               (pattern ,(term->sxml pattern))
+               ,(condition->sxml condition)
+               (replacement ,(term->sxml replacement)))))
+
+    (define (equation->sxml eq)
+      (match-let
+          ([(list 'equation label vars left right condition) eq])
+        `(equation (@ (id ,(symbol->string label)))
+                   (vars ,@(vars->sxml vars))
+                   (left ,(term->sxml left))
+                   ,(condition->sxml condition)
+                   (right ,(term->sxml right)))))
 
     (define cdecls (hash-ref decls name))
 
@@ -585,31 +614,12 @@
                                          (supersort ,(symbol->string (cdr sd)))))))
               (vars ,@(vars->sxml (hash-ref cdecls 'vars)))
               (ops ,@(for/list ([od (hash-ref cdecls 'ops)])
-                       `(op (@ (id ,(symbol->string (first od))))
-                            (arity ,@(for/list ([sv (second od)])
-                                       (if (equal? (first sv) 'sort)
-                                           `(sort (@ (id ,(symbol->string (second sv)))))
-                                           `(var (@ (id ,(symbol->string (second sv)))
-                                                    (sort ,(symbol->string (third sv))))))))
-                            (sort (@ (id ,(symbol->string (third od))))))))
+                       (op->sxml od)))
               (rules ,@(for/list ([rd (hash-ref cdecls 'rules)])
-                         (match-let
-                             ([(list 'rule vars pattern replacement condition) rd])
-                           `(rule (vars ,@(vars->sxml vars))
-                                  (pattern ,(term->sxml pattern))
-                                  ,(condition->sxml condition)
-                                  (replacement ,(term->sxml replacement))))))
+                         (rule->sxml rd)))
               (equations ,@(for/list ([(label ed) (hash-ref cdecls 'equations)])
-                             (match-let
-                                 ([(list 'equation label2 vars left right condition) ed])
-                               (unless (equal? label label2)
-                                 (error (format "inconsistent equation labels ~a / ~a"
-                                                label label2)))
-                               `(equation (@ (id ,(symbol->string label)))
-                                          (vars ,@(vars->sxml vars))
-                                          (left ,(term->sxml left))
-                                          ,(condition->sxml condition)
-                                          (right ,(term->sxml right))))))))
+                             (equation->sxml ed)))))
+
   (define (write-xml filename)
     (define sxml (get-document-sxml))
     (call-with-output-file filename
