@@ -51,7 +51,7 @@
     (=> #:var (X foo) (a-foo X) a-foo #:if (_∧ (a-test X) (another-test X)))
     (eq #:label eq1 a-foo (a-foo a-foo))))
 
-; Re-raise exceptions with the source location information from the document
+;; Re-raise exceptions with the source location information from the document
 
 (define-struct (exn:fail:leibniz exn:fail) (a-srcloc)
   #:property prop:exn:srclocs
@@ -68,7 +68,7 @@
               (apply srcloc loc)))
       (raise e)))
 
-; Make a signature from a sequence of declarations
+;; Make a signature from a sequence of declarations
 
 (define (get-loc locs decl)
   (cond
@@ -191,7 +191,7 @@
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ed))])
       (equations:add-equation eq (make-equation* signature ed)))))
 
-; Combine varsets checking for name clashes. For use with hash-union.
+;; Combine varsets checking for name clashes. For use with hash-union.
 
 (define (combine-varsets name sort1 sort2)
   (unless (equal? sort1 sort2)
@@ -199,14 +199,14 @@
                    name sort1 sort2)))
   sort1)
 
-; Combine equationsets checking for name clashes. For use with hash-union.
+;; Combine equationsets checking for name clashes. For use with hash-union.
 
 (define (combine-eqsets label eq1 eq2)
   (unless (equal? eq1 eq2)
     (error (format "Equation label ~a already used: ~a" label eq1)))
   eq1)
 
-; Convert SXML to document
+;; Convert SXML to document
 
 (define (sxml->document sxml-document)
   (match-define
@@ -325,17 +325,17 @@
                 'equations equations
                 'locs (hash))))
 
-; Documents track declarations and expressions embedded in a Scribble document
+;; Documents track declarations and expressions embedded in a Scribble document
 
 (define-class document
 
   (field contexts decls order library)
-  ; contexts: a hash mapping context names (strings) to contexts
-  ; decls: a hash mapping context names to hashes with keys
-  ;        'includes 'sorts 'ops 'vars 'rules 'equations,
-  ;        values are lists/sets/hashes of the declarations in each category
-  ; order: a list of context names in the inverse order of definition
-  ; library: a hash mapping document names to documents
+  ;; contexts: a hash mapping context names (strings) to contexts
+  ;; decls: a hash mapping context names to hashes with keys
+  ;;        'includes 'sorts 'ops 'vars 'rules 'equations 'labelled,
+  ;;        values are lists/sets/hashes of the declarations in each category
+  ;; order: a list of context names in the inverse order of definition
+  ;; library: a hash mapping document names to documents
 
   (define (add-to-library name library-document)
     (document contexts decls order
@@ -719,7 +719,7 @@
         (thunk (system* dot "-Tpng" dot-file)))
       (delete-file dot-file))))
 
-; Utility functions for processing context declarations
+;; Utility functions for processing context declarations
 
 (define (clean-declarations cdecls)
   (for/fold ([c cdecls])
@@ -727,7 +727,7 @@
              #:when (string-prefix? (symbol->string key) "compiled"))
     (hash-remove c key)))
 
-; A document containing the builtin contexts
+;; A document containing the builtin contexts
 
 (define builtins
   (~> (document (hash) (hash) empty (hash))
@@ -860,7 +860,7 @@
     (check-not-exn (thunk
                     (~> empty-document
                         (new-context-from-source "test" (take decls 4)))))
-    ; var name redefined
+    ;; var name redefined
     (check-exn exn:fail?
                (thunk
                 (~> empty-document
@@ -885,7 +885,7 @@
     (check-not-exn (thunk
                     (~> empty-document
                         (new-context-from-source "test" (take decls 6)))))
-    ; equation name redefined
+    ;; equation name redefined
     (check-exn exn:fail?
                (thunk
                 (~> empty-document
@@ -928,7 +928,7 @@
                                (term/var a-foo)
                                ())
                              #f)
-                  ; check if the last two (out of three) elements are equal
+                  ;; check if the last two (out of three) elements are equal
                   rest
                   list->set
                   set-count
