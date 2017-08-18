@@ -511,6 +511,7 @@
           [(sorts subsorts ops) (set-union v1 v2)]
           [(vars) (hash-union v1 v2 #:combine/key combine-varsets)]
           [(equations) (hash-union v1 v2 #:combine/key combine-eqsets)]
+          [(assets) (hash-union v1 v2 #:combine/key combine-assets)]
           [(locs) (hash-union v1 v2 #:combine (λ (a b) a))]))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
         (hash-union decls1 decls2
@@ -1075,3 +1076,202 @@
                     (hash-remove 'locs))
                 (~> (get-context-declarations test-document "test")
                     (hash-remove 'locs))))
+
+;; Tests for module "transformations.rkt"
+;; Put here to avoid cyclic dependencies.
+
+(module+ test
+
+  (define a-document
+    (~> empty-document
+        (new-context-from-source
+         "template"
+         (list (cons '(subsort SQ Q) #f)
+               (cons '(var a Q) #f)
+               (cons '(var b SQ) #f)
+               (cons '(op foo () SQ) #f)
+               (cons '(op + ((sort SQ) (sort SQ)) SQ) #f)
+               (cons '(op * ((sort SQ) (sort SQ)) Q) #f)
+               (cons '(rule (term + ((term/var b) (term/var x)))
+                            (term/var b)
+                            ((var x SQ))) #f)
+               (cons '(equation eq
+                                (term + ((term/var b) (term/var x)))
+                                (term/var b)
+                                ((var x SQ))) #f)
+               (cons '(asset eq-asset
+                             (equation eq
+                                       (term + ((term/var b) (term/var x)))
+                                       (term/var b)
+                                       ((var x SQ)))) #f)
+               (cons '(asset term-asset (term/var foo)) #f)))))
+
+  ;; hide-vars
+  (check-equal? (~> a-document
+                    (new-context-from-source
+                     "test"
+                     (list (cons '(insert "template" hide-vars) #f)))
+                    (get-context-declarations "test"))
+                (~> a-document
+                    (new-context-from-source
+                     "test"
+                     (list (cons '(subsort SQ Q) #f)
+                           (cons '(op foo () SQ) #f)
+                           (cons '(op + ((sort SQ) (sort SQ)) SQ) #f)
+                           (cons '(op * ((sort SQ) (sort SQ)) Q) #f)
+                           (cons '(rule (term + ((term/var b) (term/var x)))
+                                        (term/var b)
+                                        ((var a Q) (var b SQ) (var x SQ))) #f)
+                           (cons '(equation eq
+                                            (term + ((term/var b) (term/var x)))
+                                            (term/var b)
+                                            ((var a Q) (var b SQ) (var x SQ))) #f)
+                           (cons '(asset eq-asset
+                                         (equation eq
+                                                   (term + ((term/var b) (term/var x)))
+                                                   (term/var b)
+                                                   ((var a Q) (var b SQ) (var x SQ)))) #f)
+                           (cons '(asset term-asset (term/var foo)) #f)))
+                    (get-context-declarations "test")))
+
+  (check-exn exn:fail?
+             (thunk (~> a-document
+                        (new-context-from-source
+                         "with-var-term"
+                         (list (cons '(insert "template") #f)
+                               (cons '(asset var-term-asset (term/var b)) #f)))
+                        (new-context-from-source
+                         "test"
+                         (list (cons '(insert "with-var-term" hide-vars) #f))))))
+
+  ;; rename-sort
+  (check-equal? (~> a-document
+                    (new-context-from-source
+                     "test"
+                     (list (cons '(insert "template" (rename-sort SQ M)) #f)))
+                    (get-context-declarations "test"))
+                (~> a-document
+                    (new-context-from-source
+                     "test"
+                     (list (cons '(subsort M Q) #f)
+                           (cons '(var a Q) #f)
+                           (cons '(var b M) #f)
+                           (cons '(op foo () M) #f)
+                           (cons '(op + ((sort M) (sort M)) M) #f)
+                           (cons '(op * ((sort M) (sort M)) Q) #f)
+                           (cons '(rule (term + ((term/var b) (term/var x)))
+                                        (term/var b)
+                                        ((var x M))) #f)
+                           (cons '(equation eq
+                                            (term + ((term/var b) (term/var x)))
+                                            (term/var b)
+                                            ((var x M))) #f)
+                           (cons '(asset eq-asset
+                                         (equation eq
+                                                   (term + ((term/var b) (term/var x)))
+                                                   (term/var b)
+                                                   ((var x M)))) #f)
+                           (cons '(asset term-asset (term/var foo)) #f)))
+                    (get-context-declarations "test")))
+
+  ;; real->float
+  (define heron
+    (~> empty-document
+        (new-context-from-source
+         "using-rational"
+         (list (cons '(use "builtins/real-numbers") #f)
+               (cons '(op heron ((var x ℝnn) (var ε ℝp) (var e ℝnn)) ℝnn) #f)
+               (cons '(rule (term heron ((term/var x) (term/var ε) (term/var e)))
+                            (term/var e)
+                            ((term _< ((term abs ((term _- ((term/var x)
+                                                            (term ^ ((term/var e)
+                                                                     (integer 2)))))))
+                                       (term/var ε))))) #f)
+               (cons '(rule (term heron ((term/var x) (term/var ε) (term/var e)))
+                            (term heron ((term/var x) (term/var ε) 
+                                         (term _× ((rational 1/2)
+                                                   (term _+ ((term/var e)
+                                                             (term _÷ ((term/var x)
+                                                                       (term/var e))))))))) 
+                            ()) #f)
+               (cons '(equation test-eq
+                                (term heron ((term/var x) (term/var ε) (term/var e)))
+                                (term heron ((term/var x) (term/var ε) 
+                                             (term _× ((rational 1/2)
+                                                       (term _+ ((term/var e)
+                                                                 (term _÷ ((term/var x)
+                                                                           (term/var e))))))))) 
+                                ()) #f)
+               (cons '(asset rule-asset
+                             (rule (term heron ((term/var x) (term/var ε) (term/var e)))
+                                   (term heron ((term/var x) (term/var ε) 
+                                                (term _× ((rational 1/2)
+                                                          (term _+ ((term/var e)
+                                                                    (term _÷ ((term/var x)
+                                                                              (term/var e))))))))) 
+                                   ())) #f)
+               (cons '(asset eq-asset
+                             (equation label
+                                       (term heron ((term/var x) (term/var ε) (term/var e)))
+                                       (term heron ((term/var x) (term/var ε) 
+                                                    (term _× ((rational 1/2)
+                                                              (term _+ ((term/var e)
+                                                                        (term _÷ ((term/var x)
+                                                                                  (term/var e))))))))) 
+                                       ())) #f)
+               (cons '(asset term-asset
+                             (term _× ((rational 1/2)
+                                       (term heron ((term/var x) (term/var ε) (term/var e)))))) #f)))
+        (new-context-from-source
+         "using-float"
+         (list (cons '(use "builtins/real-numbers") #f)
+               (cons '(use "builtins/IEEE-floating-point") #f)
+               (cons '(op heron ((var x FP64) (var ε FP64) (var e FP64)) FP64) #f)
+               (cons '(rule (term heron ((term/var x) (term/var ε) (term/var e)))
+                            (term/var e)
+                            ((term _< ((term abs ((term _- ((term/var x)
+                                                            (term ^ ((term/var e)
+                                                                     (integer 2)))))))
+                                       (term/var ε))))) #f)
+               (cons '(rule (term heron ((term/var x) (term/var ε) (term/var e)))
+                            (term heron ((term/var x) (term/var ε) 
+                                         (term _× ((floating-point 0.5)
+                                                   (term _+ ((term/var e)
+                                                             (term _÷ ((term/var x)
+                                                                       (term/var e))))))))) 
+                            ()) #f)
+               (cons '(equation test-eq
+                                (term heron ((term/var x) (term/var ε) (term/var e)))
+                                (term heron ((term/var x) (term/var ε) 
+                                             (term _× ((floating-point 0.5)
+                                                       (term _+ ((term/var e)
+                                                                 (term _÷ ((term/var x)
+                                                                           (term/var e))))))))) 
+                                ()) #f)
+               (cons '(asset rule-asset
+                             (rule (term heron ((term/var x) (term/var ε) (term/var e)))
+                                   (term heron ((term/var x) (term/var ε) 
+                                                (term _× ((floating-point 0.5)
+                                                          (term _+ ((term/var e)
+                                                                    (term _÷ ((term/var x)
+                                                                              (term/var e))))))))) 
+                                   ())) #f)
+               (cons '(asset eq-asset
+                             (equation label
+                                       (term heron ((term/var x) (term/var ε) (term/var e)))
+                                       (term heron ((term/var x) (term/var ε) 
+                                                    (term _× ((floating-point 0.5)
+                                                              (term _+ ((term/var e)
+                                                                        (term _÷ ((term/var x)
+                                                                                  (term/var e))))))))) 
+                                       ())) #f)
+               (cons '(asset term-asset
+                             (term _× ((floating-point 0.5)
+                                       (term heron ((term/var x) (term/var ε) (term/var e)))))) #f)))
+        (new-context-from-source
+         "converted-to-float"
+         (list (cons '(insert "using-rational" (real->float FP64)) #f)))))
+  (check-equal? (~> heron
+                    (get-context-declarations "converted-to-float"))
+                (~> heron
+                    (get-context-declarations "using-float"))))

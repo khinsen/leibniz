@@ -8,6 +8,8 @@
          racket/hash
          threading)
 
+;; Test cases are in documents.rkt, to avoid cyclic dependencies.
+
 (define (transform-context-declarations decls transformations)
   (for/fold ([decls decls])
             ([tr transformations])
@@ -22,6 +24,8 @@
                                           (transformer r))))
          (hash-update 'equations (λ (eqs) (for/hash ([(label eq) eqs])
                                             (values label (transformer eq)))))
+         (hash-update 'assets (λ (assets) (for/hash ([(label value) assets])
+                                            (values label (transformer value)))))
          (hash-set 'vars (hash)))]
     [(list 'rename-sort sort1 sort2)
      (replace-sorts decls (λ (s) (if (equal? s sort1) sort2 s)))]
@@ -36,16 +40,27 @@
                    name sort1 sort2)))
   sort1)
 
-(define ((add-context-vars var-decls) rule-or-eq-decl)
-  (match rule-or-eq-decl
-    [(list 'rule vars term1 term2 condition)
-     (define combined-vars 
-       (hash-union vars var-decls #:combine/key combine-varsets))
-     (list 'rule combined-vars term1 term2 condition)]
-    [(list 'equation label vars term1 term2 condition)
-     (define combined-vars 
-       (hash-union vars var-decls #:combine/key combine-varsets))
-     (list 'equation label combined-vars term1 term2 condition)]))
+(define ((add-context-vars var-decls) item-decl)
+  (define (combined-vars local-vars)
+    (hash-union local-vars var-decls #:combine/key combine-varsets))
+  (define (transform item)
+    (match item
+      [(list 'rule vars term1 term2 condition)
+       (list 'rule (combined-vars vars) term1 term2 condition)]
+      [(list 'equation label vars term1 term2 condition)
+       (list 'equation label (combined-vars vars) term1 term2 condition)]
+      [(hash-table (_ _) ...)
+       (for/hash ([(label value) item])
+         (values label (transform value)))]
+      [(list 'term/var name)
+       (when (hash-has-key? var-decls name)
+         (error (format "variable ~a has been removed" name)))
+       item]
+      [(list 'term op args)
+       (list 'term op (map transform args))]
+      [other-term
+       other-term]))
+  (transform item-decl))
 
 ; Replace sorts by applying sort-transformer to every sort in a context
 
@@ -77,19 +92,27 @@
             (map transform-arg arity)
             (sort-transformer rsort))))
 
+  (define (transform-item item)
+    (match item
+      [(list 'rule vars pattern replacement condition)
+       (list 'rule (transform-vars vars) pattern replacement condition)]
+      [(list 'equation label vars left right condition)
+       (list 'equation label (transform-vars vars) left right condition)]
+      [(hash-table (_ _) ...)
+       (transform-assets item)]
+      [term
+       term]))
+
   (define (transform-rules rules)
-    (for/list ([r rules])
-      (match-define (list 'rule vars pattern replacement condition) r)
-      (list 'rule (transform-vars vars) pattern replacement condition)))
+    (map transform-item rules))
 
   (define (transform-equations eqs)
     (for/hash ([(label eq) eqs])
-      (match-define (list 'equation label-again vars left right condition) eq)
-      (unless (equal? label label-again)
-        (error "can't happen"))
-      (values label
-              (list 'equation label (transform-vars vars)
-                    left right condition))))
+      (values label (transform-item eq))))
+
+  (define (transform-assets assets)
+    (for/hash ([(label value) assets])
+      (values label (transform-item value))))
 
   (~> context
       (hash-remove 'locs)
@@ -98,7 +121,8 @@
       (hash-update 'vars transform-vars)
       (hash-update 'ops transform-ops)
       (hash-update 'rules transform-rules)
-      (hash-update 'equations transform-equations)))
+      (hash-update 'equations transform-equations)
+      (hash-update 'assets transform-assets)))
 
 ; Add include (use/extend)
 
@@ -175,37 +199,57 @@
       [#f
        (values #f #f)]))
 
+  (define (transform-rule rule)
+    (match-define (list 'rule vars pattern replacement condition) rule)
+    (define-values (psort mod-pattern) (transform-term pattern vars))
+    (define-values (rsort mod-replacement) (transform-term replacement vars))
+    (define-values (csort mod-condition) (transform-term condition vars))
+    (if (or (real-sort? rsort) (real-sort? psort))
+        (list 'rule vars
+              (transform-literal mod-pattern rsort)
+              (transform-literal mod-replacement psort)
+              mod-condition)
+        (list 'rule vars mod-pattern mod-replacement mod-condition)))
+
   (define (transform-rules rules)
-    (for/list ([r rules])
-      (match-define (list 'rule vars pattern replacement condition) r)
-      (define-values (psort mod-pattern) (transform-term pattern vars))
-      (define-values (rsort mod-replacement) (transform-term replacement vars))
-      (define-values (csort mod-condition) (transform-term condition vars))
-      (if (or (real-sort? rsort) (real-sort? psort))
-          (list 'rule vars
-                (transform-literal mod-pattern rsort)
-                (transform-literal mod-replacement psort)
-                mod-condition)
-          (list 'rule vars mod-pattern mod-replacement mod-condition))))
+    (map transform-rule rules))
+
+  (define (transform-equation eq)
+    (match-define (list 'equation label vars left right condition) eq)
+    (define-values (lsort mod-left) (transform-term left vars))
+    (define-values (rsort mod-right) (transform-term right vars))
+    (define-values (csort mod-condition) (transform-term condition vars))
+    (if (or (real-sort? lsort) (real-sort? rsort))
+        (list 'equation label vars
+              (transform-literal mod-left rsort)
+              (transform-literal mod-right lsort)
+              mod-condition)
+        (list 'equation label vars mod-left mod-right mod-condition)))
 
   (define (transform-equations eqs)
     (for/hash ([(label eq) eqs])
-      (match-define (list 'equation label-again vars left right condition) eq)
-      (unless (equal? label label-again)
-        (error "can't happen"))
-      (define-values (lsort mod-left) (transform-term left vars))
-      (define-values (rsort mod-right) (transform-term right vars))
-      (define-values (csort mod-condition) (transform-term condition vars))
-      (values label
-              (if (or (real-sort? lsort) (real-sort? rsort))
-                  (list 'equation label vars
-                        (transform-literal mod-left rsort)
-                        (transform-literal mod-right lsort)
-                        mod-condition)
-                  (list 'equation label vars mod-left mod-right mod-condition)))))
+      (values label (transform-equation eq))))
+
+  (define (transform-item item)
+    (match item
+      [(list 'equation args ...)
+       (transform-equation item)]
+      [(list 'rule args ...)
+       (transform-rule item)]
+      [(hash-table (_ _) ...)
+       (for/hash ([(label value) item])
+         (values label (transform-item value)))]
+      [term
+       (define-values (t-sort t-term) (transform-term term (hash)))
+       t-term]))
+
+  (define (transform-assets assets)
+    (for/hash ([(label value) assets])
+      (values label (transform-item value))))
 
   (~> context
       (hash-update 'rules transform-rules)
       (hash-update 'equations transform-equations)
+      (hash-update 'assets transform-assets)
       (replace-sorts transform-sort)
       (add-include 'use "builtins/IEEE-floating-point")))
