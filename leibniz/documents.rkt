@@ -206,6 +206,13 @@
     (error (format "Equation label ~a already used: ~a" label eq1)))
   eq1)
 
+;; Combine assets checking for name clashes. For use with hash-union.
+
+(define (combine-assets label asset1 asset2)
+  (unless (equal? asset1 asset2)
+    (error (format "Asset label ~a already used: ~a" label asset1)))
+  asset1)
+
 ;; Convert SXML to document
 
 (define (sxml->document sxml-document)
@@ -265,6 +272,46 @@
                [`(condition ,term)
                 term]))]))
 
+  (define (sxml->equation sxml-eq)
+    (match sxml-eq
+      [`(equation (@ (id ,elabel))
+                  (vars ,ev ...)
+                  (left ,el)
+                  ,ec
+                  (right ,er))
+       (list 'equation
+             (string->symbol elabel)
+             (sxml->vars ev)
+             (sxml->term el)
+             (sxml->term er)
+             (match ec
+               [`(condition)
+                #f]
+               [`(condition ,term) 
+                term]))]))
+
+  (define (sxml->assets sxml-assets)
+    (match sxml-assets
+      [`(assets (asset (@ (id ,label)) ,value) ...)
+       (for/hash ([l label]
+                  [v value])
+         (values (string->symbol l) (sxml->asset v)))]))
+
+  (define (sxml->asset sxml-asset)
+    (define (try-term asset)
+      (with-handlers ([exn:misc:match? (λ (exn) (try-rule sxml-asset))])
+        (sxml->term sxml-asset)))
+    (define (try-rule asset)
+      (with-handlers ([exn:misc:match? (λ (exn) (try-eq sxml-asset))])
+        (sxml->rule sxml-asset)))
+    (define (try-eq asset)
+      (with-handlers ([exn:misc:match? (λ (exn) (try-assets sxml-asset))])
+        (sxml->equation sxml-asset)))
+    (define (try-assets asset)
+      (with-handlers ([exn:misc:match? (λ (exn) #f)])
+        (sxml->assets sxml-asset)))
+    (try-term sxml-asset))
+
   (match-define
     `(context (@ (id, name))
               (includes ,sxml-includes ...)
@@ -273,7 +320,8 @@
               (vars ,sxml-vars ...)
               (ops ,sxml-ops ...)
               (rules ,sxml-rules ...)
-              (equations ,sxml-equations ...))
+              (equations ,sxml-equations ...)
+              (assets ,sxml-assets ...))
     sxml-context)
  
   (define includes (for/list ([include sxml-includes])
@@ -317,6 +365,12 @@
                                           #f]
                                          [`(condition ,term) 
                                           term])))])))
+  (define assets (for/hash ([asset sxml-assets])
+                   (match asset
+                     [`(asset (@ (id ,alabel))
+                              ,value)
+                      (values (string->symbol alabel)
+                              (sxml->asset value))])))
 
   (values name
           (hash 'includes includes
@@ -326,6 +380,7 @@
                 'ops ops
                 'rules rules
                 'equations equations
+                'assets assets
                 'locs (hash))))
 
 ;; Documents track declarations and expressions embedded in a Scribble document
@@ -335,7 +390,7 @@
   (field contexts decls order library)
   ;; contexts: a hash mapping context names (strings) to contexts
   ;; decls: a hash mapping context names to hashes with keys
-  ;;        'includes 'sorts 'ops 'vars 'rules 'equations 'labelled,
+  ;;        'includes 'sorts 'ops 'vars 'rules 'equations 'assets,
   ;;        values are lists/sets/hashes of the declarations in each category
   ;; order: a list of context names in the inverse order of definition
   ;; library: a hash mapping document names to documents
@@ -427,6 +482,28 @@
                                                        #:combine/key combine-eqsets)))
           (add-loc new-eq loc)))
 
+    (define (preprocess-asset value loc)
+      (match value
+        [(list 'rule pattern replacement clauses)
+         (define-values (vars condition) (group-clauses clauses loc))
+         (list 'rule vars pattern replacement condition)]
+        [(list 'equation label left right clauses)
+         (define-values (vars condition) (group-clauses clauses loc))
+         (list 'equation label vars left right condition)]
+        [(list 'assets (list label value) ...)
+         (for/hash ([l label]
+                    [v value])
+           (values l (preprocess-asset v loc)))]
+        [term
+         term]))
+
+    (define (add-asset decls label value loc)
+      (define new-asset (hash label (preprocess-asset value loc)))
+      (~> decls
+          (hash-update 'assets (λ (assets) (hash-union assets new-asset
+                                                       #:combine/key combine-assets)))
+          (add-loc new-asset loc)))
+
     (define (merge decls1 decls2 loc)
       (define (merge* key v1 v2)
         (case key
@@ -446,6 +523,7 @@
                                 'vars (hash)
                                 'rules (list)
                                 'equations (hash)
+                                'assets (hash)
                                 'locs (hash))])
                   ([decl/loc context-decls])
           (match-define (cons decl loc) decl/loc)
@@ -481,7 +559,9 @@
             [(list 'rule pattern replacement clauses)
              (add-rule decls pattern replacement clauses loc)]
             [(list 'equation label left right clauses)
-             (add-equation decls label left right clauses loc)]))))
+             (add-equation decls label left right clauses loc)]
+            [(list 'asset label value)
+             (add-asset decls label value loc)]))))
 
   (define (new-context-from-source name context-decls)
     (new-context name (preprocess-declarations context-decls)))
@@ -602,6 +682,25 @@
                    ,(condition->sxml condition)
                    (right ,(term->sxml right)))))
 
+    (define (asset->sxml asset)
+      (define (try-term asset)
+        (with-handlers ([exn:misc:match? (λ (exn) (try-rule asset))])
+          (term->sxml asset)))
+      (define (try-rule asset)
+        (with-handlers ([exn:misc:match? (λ (exn) (try-eq asset))])
+          (rule->sxml asset)))
+      (define (try-eq asset)
+        (with-handlers ([exn:misc:match? (λ (exn) (try-assets asset))])
+          (equation->sxml asset)))
+      (define (try-assets asset)
+        (with-handlers ([exn:misc:match? (λ (exn) #f)])
+          (assets->sxml asset)))
+      (try-term asset))
+
+    (define (assets->sxml assets)
+      `(assets ,@(for/list ([(label asset) assets])
+                   `(asset (@ (id ,(symbol->string label))) ,(asset->sxml asset)))))
+
     (define cdecls (hash-ref decls name))
 
     `(context (@ (id ,name))
@@ -618,7 +717,8 @@
               (rules ,@(for/list ([rd (hash-ref cdecls 'rules)])
                          (rule->sxml rd)))
               (equations ,@(for/list ([(label ed) (hash-ref cdecls 'equations)])
-                             (equation->sxml ed)))))
+                             (equation->sxml ed)))
+              ,(assets->sxml (hash-ref cdecls 'assets))))
 
   (define (write-xml filename)
     (define sxml (get-document-sxml))
@@ -860,7 +960,8 @@
                                              (hash)
                                              '(term/var a-foo)
                                              '(term a-foo ((term/var a-foo)))
-                                             #f))))
+                                             #f))
+                      'assets (hash)))
 
   (let ([decls (list (cons '(sort foo) #f)
                      (cons '(sort bar) #f)
@@ -929,7 +1030,24 @@
                (cons '(equation eq2
                                 (integer 2)
                                 (integer 3)
-                                ()) #f)))))
+                                ()) #f)
+               (cons '(asset a-term (term/var a-foo)) #f)
+               (cons '(asset a-rule (rule (term a-foo ((term/var X)))
+                                          (term/var a-foo)
+                                          ((var X foo)))) #f)
+               (cons '(asset eq1
+                             (equation eq1
+                                       (term a-foo ((term/var X)))
+                                       (term/var a-foo)
+                                       ((var X foo)))) #f)
+               (cons '(asset eq2
+                             (equation eq2
+                                       (integer 2)
+                                       (integer 3)
+                                       ())) #f)
+               (cons '(asset more-assets
+                             (assets [int1 (integer 2)]
+                                     [int2 (integer 3)])) #f)))))
 
   (check-true (~> test-document
                   (make-test "test"
@@ -948,4 +1066,12 @@
                     get-document-sxml
                     sxml->document
                     (get-context "test"))
-                (get-context test-document "test")))
+                (get-context test-document "test"))
+
+  (check-equal? (~> test-document
+                    get-document-sxml
+                    sxml->document
+                    (get-context-declarations "test")
+                    (hash-remove 'locs))
+                (~> (get-context-declarations test-document "test")
+                    (hash-remove 'locs))))
