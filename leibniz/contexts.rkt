@@ -241,13 +241,12 @@
   (define-syntax-class (equation sig vars)
     #:description "equation declaration"
     (pattern ((~datum eq)
-              a-label:opt-label
               local-vars:opt-vars
               (~var left (embedded-pattern sig vars))
               (~var right (embedded-pattern sig vars))
               (~var condition (opt-condition sig vars)))
              #:with expr #`(make-equation #,sig left.expr condition.expr
-                                          right.expr a-label.expr)
+                                          right.expr)
              #:with vars #'local-vars.expr))
   (define-syntax-class (rule sig vars)
     #:description "rule declaration"
@@ -405,7 +404,7 @@
     (check-equal? (set-count
                    (term.vars
                     (equation-left
-                     (eq #:label an-equation #:var (Foo A) (foo Foo) a-B))))
+                     (eq #:var (Foo A) (foo Foo) a-B))))
                   1)
     (check-equal? (set-count
                    (term.vars

@@ -16,8 +16,7 @@
   [lookup-rules (rulelist? term? . -> . list?)]
   [merge-rulelists (rulelist? rulelist? signature? . -> . rulelist?)]
   [display-rule (rule? output-port? . -> . void?)]
-  [make-equation ((signature? term? (or/c #f term?) term?) ((or/c #f symbol?))
-                  . ->* . equation?)]
+  [make-equation (signature? term? (or/c #f term?) term? . -> . equation?)]
   [valid-equation? (signature? any/c . -> . boolean?)]
   [in-signature (rule? signature? . -> . rule?)]
   [display-equation (equation? output-port? . -> . void?)]
@@ -68,7 +67,6 @@
 
 (define (display-equation equation port [mode #f])
   (display "(eq " port)
-  (display-label (equation-label equation) port)
   (display-vars (set-union (term.vars (equation-left equation))
                            (term.vars (equation-right equation)))
                 port)
@@ -80,7 +78,7 @@
     (display-term (equation-condition equation) port))
   (display ")" port))
 
-(struct equation (left condition right label)
+(struct equation (left condition right)
         #:transparent
         #:methods gen:custom-write
         [(define write-proc display-equation)])
@@ -173,11 +171,10 @@
     (check-exn exn:fail?
                (thunk (make-rule a-signature (T IntVar) #f (T (foo a-B)) #f #t)))))
 
-(define (make-equation signature left condition right [label #f])
+(define (make-equation signature left condition right)
   (define sort-graph (signature-sort-graph signature))
   (check-term signature left)
   (check-term signature right)
-  (check-label label)
   (check-condition signature condition
                    (set-union (term.vars left) (term.vars right)))
   (define left-sort-or-kind
@@ -191,25 +188,23 @@
   (unless (or (conforms-to? sort-graph left-sort-or-kind right-sort-or-kind)
               (conforms-to? sort-graph right-sort-or-kind left-sort-or-kind))
     (error "Left and right terms have incompatible sorts"))
-  (equation left condition right label))
+  (equation left condition right))
 
 (define (valid-equation? signature equation)
   (and (equation? equation)
        (valid-term? signature (equation-left equation))
        (valid-term? signature (equation-right equation))
        (or (not (equation-condition equation))
-           (valid-term? signature (equation-condition equation)))
-       (or (not (equation-label equation))
-           (symbol? (equation-label equation)))))
+           (valid-term? signature (equation-condition equation)))))
 
 (module+ test
   (with-signature a-signature
     (check-equal? (make-equation a-signature (T IntVar) #f (T 2))
-                  (equation (T IntVar) #f (T 2) #f))
+                  (equation (T IntVar) #f (T 2)))
     (check-equal? (make-equation a-signature (T IntVar) (T true) (T 2))
-                  (equation (T IntVar) (T true) (T 2) #f))
-    (check-true (valid-equation? a-signature (equation (T IntVar) #f (T 2) #f)))
-    (check-true (valid-equation? a-signature (equation (T IntVar) (T true) (T 2) #f)))
+                  (equation (T IntVar) (T true) (T 2)))
+    (check-true (valid-equation? a-signature (equation (T IntVar) #f (T 2))))
+    (check-true (valid-equation? a-signature (equation (T IntVar) (T true) (T 2))))
     ; Term 'bar not allowed in signature
     (check-exn exn:fail? (thunk (make-equation a-signature 'bar #f (T 2))))
     (check-exn exn:fail? (thunk (make-equation a-signature (T Avar) 'bar (T 2))))

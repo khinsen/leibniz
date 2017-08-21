@@ -216,7 +216,7 @@
         var-elems
         cond-elem))
 
-(define (format-equation equation signature)
+(define (format-equation label equation signature)
   (define vars (set-union (terms:term.vars (equations:equation-left equation))
                           (terms:term.vars (equations:equation-right equation))))
   (define cond (equations:equation-condition equation))
@@ -235,8 +235,10 @@
               "if "
               (format-term signature cond))
         ""))
-  (list (bold (symbol->string (equations:equation-label equation)))
-        ": "
+  (list (if label
+            (list (bold (symbol->string label))
+                  ": ")
+            "")
         left-elem
         " = "
         right-elem
@@ -253,9 +255,9 @@
         (format-rule-declarations (hash-ref decls 'rules)
                                   (hash-ref decls 'vars)
                                   (hash-ref decls 'compiled-signature #f))
-        (format-eq-declarations (hash-ref decls 'equations)
-                                (hash-ref decls 'vars)
-                                (hash-ref decls 'compiled-signature #f))))
+        (format-asset-declarations (hash-ref decls 'assets)
+                                   (hash-ref decls 'vars)
+                                   (hash-ref decls 'compiled-signature #f))))
 
 (define (format-sort-declarations sort-decls)
   (define sorts
@@ -311,16 +313,16 @@
                    (add-between rules (linebreak))
                    #:style 'inset))))
 
-(define (format-eq-declarations eq-decls var-decls signature)
-  (define eqs
-    (for/list ([(label ed) eq-decls])
+(define (format-asset-declarations asset-decls var-decls signature)
+  (define assets
+    (for/list ([(label ad) asset-decls])
       (elem #:style leibniz-output-style
-            (format-eq-declaration ed var-decls signature))))
-  (if (empty? eq-decls)
+            (format-asset-declaration label ad var-decls signature))))
+  (if (empty? asset-decls)
       ""
-      (list "Equations:" (linebreak)
+      (list "Assets:" (linebreak)
             (apply nested
-                   (add-between eqs (linebreak))
+                   (add-between assets (linebreak))
                    #:style 'inset))))
 
 (define (format-rule-declaration decl context-vars signature)
@@ -350,8 +352,9 @@
          replacement-elem
          clause-elems))
 
-(define (format-eq-declaration decl context-vars signature)
-  (match-define `(equation ,label ,vars ,left ,right ,condition) decl)
+(define (format-asset-declaration label decl context-vars signature)
+  ;; TODO other asset types
+  (match-define `(equation ,vars ,left ,right ,condition) decl)
   (define left-elem (format-decl-term left signature))
   (define right-elem (format-decl-term right signature))
   (list* (bold (symbol->string label))
@@ -468,8 +471,9 @@
                              (list 'rule (hash) '(term/var X) '(term/var Y) #f)
                              (hash) #f))
                 "X ⇒ Y")
-  (check-equal? (plain-text (format-eq-declaration
-                             (list 'equation 'eq1 (hash)
+  (check-equal? (plain-text (format-asset-declaration
+                             'eq1
+                             (list 'equation (hash)
                                    '(term/var X) '(term/var Y) #f)
                              (hash) #f))
                 "eq1: X = Y"))

@@ -30,30 +30,30 @@
     (=> foo (not true) #:if false)
     (=> foo (not false) #:if true)))
 
-(define (reduce-anything context x [opt-label #f])
+(define (reduce-anything context x)
   (cond
     [(term? x)
      (reduce context x)]
     [(equation? x)
-     (reduce-equation context x opt-label)]
+     (reduce-equation context x)]
     [else
      (error (format "cannot reduce ~s" x))]))
 
-(define (transform-anything context tr x [opt-label #f])
+(define (transform-anything context tr x)
   (cond
     [(term? x)
      (transform context tr x)]
     [(equation? x)
-     (transform-equation context tr x opt-label)]
+     (transform-equation context tr x)]
     [else
      (error (format "cannot transform ~s" x))]))
 
-(define (substitute-anything context tr x [opt-label #f])
+(define (substitute-anything context tr x)
   (cond
     [(term? x)
      (substitute context tr x)]
     [(equation? x)
-     (substitute-equation context tr x opt-label)]
+     (substitute-equation context tr x)]
     [else
      (error (format "cannot substitute ~s" x))]))
 
@@ -80,11 +80,7 @@
            ([R (λ (stx)
                  (syntax-parse stx
                    [(_ arg:expr)
-                    #'(reduce-anything context arg)]
-                   [(_ arg:expr (~seq #:label label:id))
-                    #'(reduce-anything context arg (quote label))]
-                   [(_ (~seq #:label label:id) arg:expr)
-                    #'(reduce-anything context arg (quote label))]))]
+                    #'(reduce-anything context arg)]))]
             [RT (λ (stx)
                   (syntax-parse stx
                     [(_ term)
@@ -92,23 +88,11 @@
             [A (λ (stx)
                  (syntax-parse stx
                    [(_ tr:expr arg:expr)
-                    #'(transform-anything context tr arg)]
-                   [(_ tr:expr arg:expr (~seq #:label label:id))
-                    #'(transform-anything context tr arg (quote label))]
-                   [(_ tr:expr (~seq #:label label:id) arg:expr)
-                    #'(transform-anything context tr arg (quote label))]
-                   [(_ (~seq #:label label:id) tr:expr arg:expr)
-                    #'(transform-anything context tr arg (quote label))]))]
+                    #'(transform-anything context tr arg)]))]
             [S (λ (stx)
                  (syntax-parse stx
                    [(_ tr:expr arg:expr)
-                    #'(substitute-anything context tr arg)]
-                   [(_ tr:expr arg:expr (~seq #:label label:id))
-                    #'(substitute-anything context tr arg (quote label))]
-                   [(_ tr:expr (~seq #:label label:id) arg:expr)
-                    #'(substitute-anything context tr arg (quote label))]
-                   [(_ (~seq #:label label:id) tr:expr arg:expr)
-                    #'(substitute-anything context tr arg (quote label))]))])
+                    #'(substitute-anything context tr arg)]))])
          (c:with-context context
            body) ...)]))
 
@@ -120,18 +104,18 @@
      #:= (RT (not (not false)))  (T false)
      #:= (R (T foo))             (T true)
      #:= (R (eq foo true))       (eq true true)
-     #:= (R (eq foo true) #:label label)
-         (eq #:label label true true)
-     #:= (R #:label label (eq foo true))
-         (eq #:label label true true)
+     #:= (R (eq foo true))
+         (eq true true)
+     #:= (R (eq foo true))
+         (eq true true)
      #:= (A (tr #:var (X boolean) X (not X)) (T bar))
          (T (not bar))
      #:= (A (tr #:var (X boolean) X (not X)) (T foo))
          (T (not foo))
      #:= (A (tr #:var (X boolean) X (not X)) (eq bar foo))
          (eq (not bar) (not foo))
-     #:= (A (tr #:var (X boolean) X (not X)) (eq bar foo) #:label an-eq)
-         (eq #:label an-eq (not bar) (not foo))
+     #:= (A (tr #:var (X boolean) X (not X)) (eq bar foo))
+         (eq (not bar) (not foo))
      #:= (S (tr bar (not bar))
             (T (not bar)))
          (T (not (not bar)))

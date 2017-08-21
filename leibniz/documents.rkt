@@ -171,13 +171,12 @@
 
 (define (make-equation* signature equation-expr)
   (match equation-expr
-    [(list 'equation label vars left right condition)
+    [(list 'equation vars left right condition)
      (let ([mp (make-pattern* signature vars)])
        (equations:make-equation signature
                                 (mp left)
                                 (mp condition)
-                                (mp right)
-                                label))]
+                                (mp right)))]
     [_ #f]))
 
 (define (make-assets signature includes asset-decls locs)
@@ -278,13 +277,11 @@
 
   (define (sxml->equation sxml-eq)
     (match sxml-eq
-      [`(equation (@ (id ,elabel))
-                  (vars ,ev ...)
+      [`(equation (vars ,ev ...)
                   (left ,el)
                   ,ec
                   (right ,er))
        (list 'equation
-             (string->symbol elabel)
              (sxml->vars ev)
              (sxml->term el)
              (sxml->term er)
@@ -463,9 +460,9 @@
         [(list 'rule pattern replacement clauses)
          (define-values (vars condition) (group-clauses clauses loc))
          (list 'rule vars pattern replacement condition)]
-        [(list 'equation label left right clauses)
+        [(list 'equation left right clauses)
          (define-values (vars condition) (group-clauses clauses loc))
-         (list 'equation label vars left right condition)]
+         (list 'equation vars left right condition)]
         [(list 'assets (list label value) ...)
          (for/hash ([l label]
                     [v value])
@@ -651,9 +648,8 @@
 
     (define (equation->sxml eq)
       (match-let
-          ([(list 'equation label vars left right condition) eq])
-        `(equation (@ (id ,(symbol->string label)))
-                   (vars ,@(vars->sxml vars))
+          ([(list 'equation vars left right condition) eq])
+        `(equation (vars ,@(vars->sxml vars))
                    (left ,(term->sxml left))
                    ,(condition->sxml condition)
                    (right ,(term->sxml right)))))
@@ -904,8 +900,7 @@
                                         (term/var a-foo)
                                         ((var X foo))) #f)
                            (cons '(asset eq1
-                                         (equation eq1
-                                                   (term/var a-foo)
+                                         (equation (term/var a-foo)
                                                    (term a-foo ((term/var a-foo)))
                                                    ())) #f)))
                     (get-context-declarations "test")
@@ -926,7 +921,6 @@
                                     '(term/var a-foo)
                                     #f))
                       'assets (hash 'eq1 (list 'equation
-                                               'eq1
                                                (hash)
                                                '(term/var a-foo)
                                                '(term a-foo ((term/var a-foo)))
@@ -951,18 +945,15 @@
                      (cons '(op a-foo ((sort bar)) foo) #f)
                      (cons '(op a-bar ((var X foo)) bar) #f)
                      (cons '(asset eq1
-                                   (equation eq1
-                                             (term/var a-foo)
+                                   (equation (term/var a-foo)
                                              (term a-foo ((term/var a-foo)))
                                              ())) #f)
                      (cons '(asset eq1
-                                   (equation eq1
-                                             (term/var a-foo)
+                                   (equation (term/var a-foo)
                                              (term a-foo ((term/var a-foo)))
                                              ())) #f)
                      (cons '(asset eq1
-                                   (equation eq1
-                                             (term a-foo ((term/var a-foo)))
+                                   (equation (term a-foo ((term/var a-foo)))
                                              (term/var a-foo)
                                              ())) #f))])
     (check-not-exn (thunk
@@ -1004,13 +995,11 @@
                                           (term/var a-foo)
                                           ((var X foo)))) #f)
                (cons '(asset eq1
-                             (equation eq1
-                                       (term a-foo ((term/var X)))
+                             (equation (term a-foo ((term/var X)))
                                        (term/var a-foo)
                                        ((var X foo)))) #f)
                (cons '(asset eq2
-                             (equation eq2
-                                       (integer 2)
+                             (equation (integer 2)
                                        (integer 3)
                                        ())) #f)
                (cons '(asset more-assets
@@ -1063,8 +1052,7 @@
                             (term/var b)
                             ((var x SQ))) #f)
                (cons '(asset eq-asset
-                             (equation eq
-                                       (term + ((term/var b) (term/var x)))
+                             (equation (term + ((term/var b) (term/var x)))
                                        (term/var b)
                                        ((var x SQ)))) #f)
                (cons '(asset term-asset (term/var foo)) #f)))))
@@ -1086,8 +1074,7 @@
                                         (term/var b)
                                         ((var a Q) (var b SQ) (var x SQ))) #f)
                            (cons '(asset eq-asset
-                                         (equation eq
-                                                   (term + ((term/var b) (term/var x)))
+                                         (equation (term + ((term/var b) (term/var x)))
                                                    (term/var b)
                                                    ((var a Q) (var b SQ) (var x SQ)))) #f)
                            (cons '(asset term-asset (term/var foo)) #f)))
@@ -1122,8 +1109,7 @@
                                         (term/var b)
                                         ((var x M))) #f)
                            (cons '(asset eq-asset
-                                         (equation eq
-                                                   (term + ((term/var b) (term/var x)))
+                                         (equation (term + ((term/var b) (term/var x)))
                                                    (term/var b)
                                                    ((var x M)))) #f)
                            (cons '(asset term-asset (term/var foo)) #f)))
@@ -1158,8 +1144,7 @@
                                                                               (term/var e))))))))) 
                                    ())) #f)
                (cons '(asset eq-asset
-                             (equation label
-                                       (term heron ((term/var x) (term/var ε) (term/var e)))
+                             (equation (term heron ((term/var x) (term/var ε) (term/var e)))
                                        (term heron ((term/var x) (term/var ε) 
                                                     (term _× ((rational 1/2)
                                                               (term _+ ((term/var e)
@@ -1196,8 +1181,7 @@
                                                                               (term/var e))))))))) 
                                    ())) #f)
                (cons '(asset eq-asset
-                             (equation label
-                                       (term heron ((term/var x) (term/var ε) (term/var e)))
+                             (equation (term heron ((term/var x) (term/var ε) (term/var e)))
                                        (term heron ((term/var x) (term/var ε) 
                                                     (term _× ((floating-point 0.5)
                                                               (term _+ ((term/var e)

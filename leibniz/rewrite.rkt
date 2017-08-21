@@ -6,14 +6,13 @@
   [in-reduction (signature? rulelist? term? . -> . (sequence/c term?))]
   [trace-reduce ((signature? rulelist? term? procedure?) (integer?)
                             . ->* . term?)]
-  [reduce-equation ((signature? rulelist? equation?) ((or/c #f symbol?))
-                    . ->* . equation?)]
+  [reduce-equation (signature? rulelist? equation? . -> . equation?)]
   [transform (signature? transformation? term? . -> . term?)]
-  [transform-equation ((signature? transformation? equation?) ((or/c #f symbol?))
-                       . ->* . equation?)]
+  [transform-equation (signature? transformation? equation?
+                       . -> . equation?)]
   [substitute (signature? transformation? term? . -> . term?)]
-  [substitute-equation ((signature? transformation? equation?) ((or/c #f symbol?))
-                        . ->* . equation?)]))
+  [substitute-equation (signature? transformation? equation?
+                        . -> . equation?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -284,12 +283,11 @@
 ;
 ; Reduction of equations: reduce left and right
 ;
-(define (reduce-equation signature rules equation [new-label #f])
+(define (reduce-equation signature rules equation)
   (make-equation signature
                  (reduce signature rules (equation-left equation))
                  (equation-condition equation)
-                 (reduce signature rules (equation-right equation))
-                 new-label))
+                 (reduce signature rules (equation-right equation))))
 
 (module+ test
   (with-context test-context
@@ -297,8 +295,8 @@
     (define rules (context-rules test-context))
     (check-equal? (reduce-equation signature rules (eq foo true))
                   (eq true true))
-    (check-equal? (reduce-equation signature rules (eq foo true) 'new-equation)
-                  (eq #:label new-equation true true))))
+    (check-equal? (reduce-equation signature rules (eq foo true))
+                  (eq true true))))
 
 ;
 ; Transformations of terms and equations
@@ -328,12 +326,11 @@
   (check-var-conflicts tr-rule term)
   (transform* signature tr-rule term))
 
-(define (transform-equation signature transformation equation [new-label #f])
+(define (transform-equation signature transformation equation)
   (make-equation signature
                  (transform signature transformation (equation-left equation))
                  (equation-condition equation)
-                 (transform signature  transformation (equation-right equation))
-                 new-label))
+                 (transform signature  transformation (equation-right equation))))
 
 (module+ test
   (with-context test-with-var
@@ -349,9 +346,8 @@
                                       (eq foo bar))
                   (eq (not foo) (not bar)))
     (check-equal? (transform-equation signature transformation
-                                      (eq #:label original foo bar)
-                                      'negated)
-                  (eq #:label negated (not foo) (not bar))))
+                                      (eq foo bar))
+                  (eq (not foo) (not bar))))
   (with-context test-with-var
     (define transformation (tr #:vars ([% boolean] [Y FooBar]) % Y))
     (define signature (context-signature test-with-var))
@@ -390,12 +386,11 @@
   (check-var-conflicts tr-rule term)
   (substitute*-leftmost-innermost signature tr-rule term))
 
-(define (substitute-equation signature transformation equation [new-label #f])
+(define (substitute-equation signature transformation equation)
   (make-equation signature
                  (substitute signature transformation (equation-left equation))
                  (equation-condition equation)
-                 (substitute signature transformation (equation-right equation))
-                 new-label))
+                 (substitute signature transformation (equation-right equation))))
 
 (module+ test
   (with-context test-context

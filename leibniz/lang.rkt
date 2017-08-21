@@ -90,7 +90,7 @@
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
     (pattern ((~literal equation) equation-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
-             #:attr as-asset (syntax-case #'parsed () [(_ label left right clauses) #'(asset label (equation label left right clauses))])
+             #:attr as-asset (syntax-case #'parsed () [(_ label left right clauses) #'(asset label (equation left right clauses))])
              #:attr decl (list #`(cons (quote as-asset) #,(source-loc this-syntax)))
              #:with expansion #`(parsed-equation leibniz-doc current-context 
                                                  (quote parsed)
@@ -194,8 +194,9 @@
 
 (define (parsed-equation leibniz-doc current-context parsed-equation-expr loc)
   (define context (get-context leibniz-doc current-context))
-  (define equation (make-equation leibniz-doc current-context parsed-equation-expr loc))
-  (leibniz-input (format-equation equation (contexts:context-signature context))))
+  (define label (second parsed-equation-expr))
+  (define equation (make-equation leibniz-doc current-context (cons 'equation (rest (rest parsed-equation-expr))) loc))
+  (leibniz-input (format-equation label equation (contexts:context-signature context))))
 
 (define (parsed-test leibniz-doc current-context parsed-rule-expr loc)
   (define context (get-context leibniz-doc current-context))
@@ -364,7 +365,7 @@
 
 (define (display-equation signature equation)
   (when equation
-    (displayln (plain-text (format-equation equation signature)))))
+    (displayln (plain-text (format-equation #f equation signature)))))
 
 (define (show term-str)
   (assert-current-context)
@@ -421,8 +422,7 @@
       (rewrite:transform signature transformation term-or-eq))]
     [(equations:equation? term-or-eq)
      (display-equation signature
-      (rewrite:transform-equation signature transformation term-or-eq
-                                  (equations:equation-label term-or-eq)))]))
+      (rewrite:transform-equation signature transformation term-or-eq))]))
 
 (define (substitute term-or-eq-str transformation-str)
   (define signature (hash-ref (current-context) 'compiled-signature))
@@ -435,5 +435,4 @@
       (rewrite:substitute signature transformation term-or-eq))]
     [(equations:equation? term-or-eq)
      (display-equation signature
-      (rewrite:substitute-equation signature transformation term-or-eq
-                                   (equations:equation-label term-or-eq)))]))
+      (rewrite:substitute-equation signature transformation term-or-eq))]))

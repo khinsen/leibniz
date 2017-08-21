@@ -45,8 +45,8 @@
     (match item
       [(list 'rule vars term1 term2 condition)
        (list 'rule (combined-vars vars) term1 term2 condition)]
-      [(list 'equation label vars term1 term2 condition)
-       (list 'equation label (combined-vars vars) term1 term2 condition)]
+      [(list 'equation vars term1 term2 condition)
+       (list 'equation (combined-vars vars) term1 term2 condition)]
       [(hash-table (_ _) ...)
        (for/hash ([(label value) item])
          (values label (transform value)))]
@@ -94,8 +94,8 @@
     (match item
       [(list 'rule vars pattern replacement condition)
        (list 'rule (transform-vars vars) pattern replacement condition)]
-      [(list 'equation label vars left right condition)
-       (list 'equation label (transform-vars vars) left right condition)]
+      [(list 'equation vars left right condition)
+       (list 'equation (transform-vars vars) left right condition)]
       [(hash-table (_ _) ...)
        (transform-assets item)]
       [term
@@ -208,16 +208,16 @@
     (map transform-rule rules))
 
   (define (transform-equation eq)
-    (match-define (list 'equation label vars left right condition) eq)
+    (match-define (list 'equation vars left right condition) eq)
     (define-values (lsort mod-left) (transform-term left vars))
     (define-values (rsort mod-right) (transform-term right vars))
     (define-values (csort mod-condition) (transform-term condition vars))
     (if (or (real-sort? lsort) (real-sort? rsort))
-        (list 'equation label vars
+        (list 'equation vars
               (transform-literal mod-left rsort)
               (transform-literal mod-right lsort)
               mod-condition)
-        (list 'equation label vars mod-left mod-right mod-condition)))
+        (list 'equation vars mod-left mod-right mod-condition)))
 
   (define (transform-item item)
     (match item
