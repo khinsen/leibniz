@@ -182,7 +182,7 @@
     [_ #f]))
 
 (define (make-equationset signature includes eq-decls locs)
-    (define after-includes
+  (define after-includes
     (for/fold ([mes equations:empty-equationset])
               ([m/c includes])
       (equations:merge-equationsets mes (contexts:context-equations (cdr m/c)) signature)))
@@ -190,6 +190,28 @@
             ([(label ed) eq-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ed))])
       (equations:add-equation eq (make-equation* signature ed)))))
+
+(define (make-assets signature includes asset-decls locs)
+  (define (compile-asset decl)
+    (match decl
+      [(list 'rule arg ...)
+       (make-rule* signature decl)]
+      [(list 'equation arg ...)
+       (make-equation* signature decl)]
+      [(hash-table (_ _) ...)
+       (for/hash ([(label value) decl])
+         (values label (compile-asset value)))]
+      [term
+       ((make-term* signature) decl)]))
+  (define after-includes
+    (for/fold ([merged-assets (hash)])
+              ([m/c includes])
+      (hash-union merged-assets (hash-ref (cdr m/c) 'compiled-assets (hash))
+                  #:combine/key combine-assets)))
+  (for/fold ([assets after-includes])
+            ([(label ad) asset-decls])
+    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash label ad)))])
+      (hash-union assets (hash label (compile-asset ad)) #:combine/key combine-assets))))
 
 ;; Combine varsets checking for name clashes. For use with hash-union.
 
@@ -210,7 +232,7 @@
 
 (define (combine-assets label asset1 asset2)
   (unless (equal? asset1 asset2)
-    (error (format "Asset label ~a already used: ~a" label asset1)))
+    (error (format "Asset label ~a already used for value ~a" label asset1)))
   asset1)
 
 ;; Convert SXML to document
@@ -570,9 +592,13 @@
   (define (new-context name cdecls)
     (define locs (hash-ref cdecls 'locs))
     (define included-contexts
-        (for/list ([mode/name (hash-ref cdecls 'includes)])
-          (with-handlers ([exn:fail? (re-raise-exn (get-loc locs name))])
-            (cons (car mode/name) (get-context (cdr mode/name))))))
+      (for/list ([mode/name (hash-ref cdecls 'includes)])
+        (with-handlers ([exn:fail? (re-raise-exn (get-loc locs name))])
+          (cons (car mode/name) (get-context (cdr mode/name))))))
+    (define included-context-decls
+      (for/list ([mode/name (hash-ref cdecls 'includes)])
+        (with-handlers ([exn:fail? (re-raise-exn (get-loc locs name))])
+          (cons (car mode/name) (get-context-declarations (cdr mode/name))))))
     (define sorts (make-sort-graph included-contexts
                                    (hash-ref cdecls 'sorts)
                                    (hash-ref cdecls 'subsorts)
@@ -587,13 +613,17 @@
     (define equations (make-equationset signature included-contexts
                                         (hash-ref cdecls 'equations)
                                         locs))
+    (define assets (make-assets signature included-context-decls
+                                (hash-ref cdecls 'assets)
+                                locs))
     (define context (contexts:make-context sorts
                                            signature
                                            rules
                                            equations))
     (define compiled (hash 'compiled-signature signature
                            'compiled-rules rules
-                           'compiled-equations equations))
+                           'compiled-equations equations
+                           'compiled-assets assets))
     (document (hash-set contexts name context)
               (hash-set decls name (hash-union cdecls compiled))
               (cons name order)
@@ -733,10 +763,10 @@
 
   (define (import-xml document-name filename)
     (import-sxml document-name
-      (call-with-input-file filename
-        (λ (input-port)
-          (ssax:xml->sxml input-port empty))
-        #:mode 'text)))
+                 (call-with-input-file filename
+                   (λ (input-port)
+                     (ssax:xml->sxml input-port empty))
+                   #:mode 'text)))
 
   (define (make-term context-name term-expr loc)
     (define context (get-context context-name))
@@ -758,10 +788,10 @@
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (equations:make-transformation signature
-       (make-rule* signature
-                   (first (hash-ref (preprocess-declarations
-                                     (list (cons rule-expr loc)))
-                                    'rules))))))
+                                     (make-rule* signature
+                                                 (first (hash-ref (preprocess-declarations
+                                                                   (list (cons rule-expr loc)))
+                                                                  'rules))))))
 
   (define (make-equation context-name equation-expr loc)
     (define context (get-context context-name))
