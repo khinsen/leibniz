@@ -22,8 +22,6 @@
      (~> decls
          (hash-update 'rules (λ (rules) (for/list ([r rules])
                                           (transformer r))))
-         (hash-update 'equations (λ (eqs) (for/hash ([(label eq) eqs])
-                                            (values label (transformer eq)))))
          (hash-update 'assets (λ (assets) (for/hash ([(label value) assets])
                                             (values label (transformer value)))))
          (hash-set 'vars (hash)))]
@@ -106,10 +104,6 @@
   (define (transform-rules rules)
     (map transform-item rules))
 
-  (define (transform-equations eqs)
-    (for/hash ([(label eq) eqs])
-      (values label (transform-item eq))))
-
   (define (transform-assets assets)
     (for/hash ([(label value) assets])
       (values label (transform-item value))))
@@ -121,7 +115,6 @@
       (hash-update 'vars transform-vars)
       (hash-update 'ops transform-ops)
       (hash-update 'rules transform-rules)
-      (hash-update 'equations transform-equations)
       (hash-update 'assets transform-assets)))
 
 ; Add include (use/extend)
@@ -226,10 +219,6 @@
               mod-condition)
         (list 'equation label vars mod-left mod-right mod-condition)))
 
-  (define (transform-equations eqs)
-    (for/hash ([(label eq) eqs])
-      (values label (transform-equation eq))))
-
   (define (transform-item item)
     (match item
       [(list 'equation args ...)
@@ -249,7 +238,6 @@
 
   (~> context
       (hash-update 'rules transform-rules)
-      (hash-update 'equations transform-equations)
       (hash-update 'assets transform-assets)
       (replace-sorts transform-sort)
       (add-include 'use "builtins/IEEE-floating-point")))

@@ -89,9 +89,9 @@
                                              (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
     (pattern ((~literal equation) equation-expr:str ...)
-             #:attr parsed (parse-scribble-text (syntax/p
- equation/p) #'(equation-expr ...))
-             #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
+             #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
+             #:attr as-asset (syntax-case #'parsed () [(_ label left right clauses) #'(asset label (equation label left right clauses))])
+             #:attr decl (list #`(cons (quote as-asset) #,(source-loc this-syntax)))
              #:with expansion #`(parsed-equation leibniz-doc current-context 
                                                  (quote parsed)
                                                  #,(source-loc (first (syntax->list #'(equation-expr ...))))))

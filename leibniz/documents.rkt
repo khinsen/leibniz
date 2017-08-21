@@ -48,8 +48,7 @@
     (op (a-test foo) boolean)
     (op (another-test foo) boolean)
     (var a-var foo)
-    (=> #:var (X foo) (a-foo X) a-foo #:if (_∧ (a-test X) (another-test X)))
-    (eq #:label eq1 a-foo (a-foo a-foo))))
+    (=> #:var (X foo) (a-foo X) a-foo #:if (_∧ (a-test X) (another-test X)))))
 
 ;; Re-raise exceptions with the source location information from the document
 
@@ -181,16 +180,6 @@
                                 label))]
     [_ #f]))
 
-(define (make-equationset signature includes eq-decls locs)
-  (define after-includes
-    (for/fold ([mes equations:empty-equationset])
-              ([m/c includes])
-      (equations:merge-equationsets mes (contexts:context-equations (cdr m/c)) signature)))
-  (for/fold ([eq after-includes])
-            ([(label ed) eq-decls])
-    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ed))])
-      (equations:add-equation eq (make-equation* signature ed)))))
-
 (define (make-assets signature includes asset-decls locs)
   (define (compile-asset decl)
     (match decl
@@ -220,13 +209,6 @@
     (error (format "Var ~a of sort ~a redefined with sort ~a"
                    name sort1 sort2)))
   sort1)
-
-;; Combine equationsets checking for name clashes. For use with hash-union.
-
-(define (combine-eqsets label eq1 eq2)
-  (unless (equal? eq1 eq2)
-    (error (format "Equation label ~a already used: ~a" label eq1)))
-  eq1)
 
 ;; Combine assets checking for name clashes. For use with hash-union.
 
@@ -342,7 +324,6 @@
               (vars ,sxml-vars ...)
               (ops ,sxml-ops ...)
               (rules ,sxml-rules ...)
-              (equations ,sxml-equations ...)
               (assets ,sxml-assets ...))
     sxml-context)
  
@@ -369,24 +350,6 @@
                    (list (string->symbol on) (map sxml->arg oa) (string->symbol os))])))
   (define rules (for/list ([rule sxml-rules])
                   (sxml->rule rule)))
-  (define equations (for/hash ([eq sxml-equations])
-                      (match eq
-                        [`(equation (@ (id ,elabel))
-                                    (vars ,ev ...)
-                                    (left ,el)
-                                    ,ec
-                                    (right ,er))
-                         (values (string->symbol elabel)
-                                 (list 'equation
-                                       (string->symbol elabel)
-                                       (sxml->vars ev)
-                                       (sxml->term el)
-                                       (sxml->term er)
-                                       (match ec
-                                         [`(condition)
-                                          #f]
-                                         [`(condition ,term) 
-                                          term])))])))
   (define assets (for/hash ([asset sxml-assets])
                    (match asset
                      [`(asset (@ (id ,alabel))
@@ -401,7 +364,6 @@
                 'vars vars
                 'ops ops
                 'rules rules
-                'equations equations
                 'assets assets
                 'locs (hash))))
 
@@ -412,7 +374,7 @@
   (field contexts decls order library)
   ;; contexts: a hash mapping context names (strings) to contexts
   ;; decls: a hash mapping context names to hashes with keys
-  ;;        'includes 'sorts 'ops 'vars 'rules 'equations 'assets,
+  ;;        'includes 'sorts 'ops 'vars 'rules 'assets,
   ;;        values are lists/sets/hashes of the declarations in each category
   ;; order: a list of context names in the inverse order of definition
   ;; library: a hash mapping document names to documents
@@ -496,14 +458,6 @@
                                              (append rules (list new-rule)))))
           (add-loc new-rule loc)))
 
-    (define (add-equation decls label left right clauses loc)
-      (define-values (vars condition) (group-clauses clauses loc))
-      (define new-eq (hash label (list 'equation label vars left right condition)))
-      (~> decls
-          (hash-update 'equations (λ (eqs) (hash-union eqs new-eq
-                                                       #:combine/key combine-eqsets)))
-          (add-loc new-eq loc)))
-
     (define (preprocess-asset value loc)
       (match value
         [(list 'rule pattern replacement clauses)
@@ -532,7 +486,6 @@
           [(includes rules) (remove-duplicates (append v1 v2))]
           [(sorts subsorts ops) (set-union v1 v2)]
           [(vars) (hash-union v1 v2 #:combine/key combine-varsets)]
-          [(equations) (hash-union v1 v2 #:combine/key combine-eqsets)]
           [(assets) (hash-union v1 v2 #:combine/key combine-assets)]
           [(locs) (hash-union v1 v2 #:combine (λ (a b) a))]))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
@@ -545,7 +498,6 @@
                                 'ops (set)
                                 'vars (hash)
                                 'rules (list)
-                                'equations (hash)
                                 'assets (hash)
                                 'locs (hash))])
                   ([decl/loc context-decls])
@@ -581,8 +533,6 @@
              (add-var decls name sort loc)] 
             [(list 'rule pattern replacement clauses)
              (add-rule decls pattern replacement clauses loc)]
-            [(list 'equation label left right clauses)
-             (add-equation decls label left right clauses loc)]
             [(list 'asset label value)
              (add-asset decls label value loc)]))))
 
@@ -610,19 +560,15 @@
     (define rules (make-rulelist signature included-contexts
                                  (hash-ref cdecls 'rules)
                                  locs))
-    (define equations (make-equationset signature included-contexts
-                                        (hash-ref cdecls 'equations)
-                                        locs))
     (define assets (make-assets signature included-context-decls
                                 (hash-ref cdecls 'assets)
                                 locs))
     (define context (contexts:make-context sorts
                                            signature
                                            rules
-                                           equations))
+                                           equations:empty-equationset))
     (define compiled (hash 'compiled-signature signature
                            'compiled-rules rules
-                           'compiled-equations equations
                            'compiled-assets assets))
     (document (hash-set contexts name context)
               (hash-set decls name (hash-union cdecls compiled))
@@ -747,8 +693,6 @@
                        (op->sxml od)))
               (rules ,@(for/list ([rd (hash-ref cdecls 'rules)])
                          (rule->sxml rd)))
-              (equations ,@(for/list ([(label ed) (hash-ref cdecls 'equations)])
-                             (equation->sxml ed)))
               ,(assets->sxml (hash-ref cdecls 'assets))))
 
   (define (write-xml filename)
@@ -797,13 +741,13 @@
     (define context (get-context context-name))
     (define signature (contexts:context-signature context))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (define ed (hash-ref (preprocess-declarations
-                            (list (cons equation-expr loc)))
-                           'equations))
-      (unless (equal? (hash-count ed) 1)
+      (define ad (hash-ref (preprocess-declarations
+                            (list (cons (list 'asset (second equation-expr) equation-expr) loc)))
+                           'assets))
+      (unless (equal? (hash-count ad) 1)
         (error "can't happen"))
       (make-equation* signature
-                      (first (hash-values ed)))))
+                      (first (hash-values ad)))))
 
   (define (make-test context-name rule-expr loc)
     (define context (get-context context-name))
@@ -946,11 +890,7 @@
                                         (term/var a-foo)
                                         ((var X foo)
                                          (term a-test ((term/var X)))
-                                         (term another-test ((term/var X))))) #f)
-                           (cons '(equation eq1
-                                            (term/var a-foo)
-                                            (term a-foo ((term/var a-foo)))
-                                            ()) #f)))
+                                         (term another-test ((term/var X))))) #f)))
                     (get-context "test"))
                 test-context2)
 
@@ -964,10 +904,11 @@
                            (cons '(rule (term a-foo ((term/var X)))
                                         (term/var a-foo)
                                         ((var X foo))) #f)
-                           (cons '(equation eq1
-                                            (term/var a-foo)
-                                            (term a-foo ((term/var a-foo)))
-                                            ()) #f)))
+                           (cons '(asset eq1
+                                         (equation eq1
+                                                   (term/var a-foo)
+                                                   (term a-foo ((term/var a-foo)))
+                                                   ())) #f)))
                     (get-context-declarations "test")
                     (clean-declarations))
                 (hash 'includes empty
@@ -985,14 +926,12 @@
                                     '(term a-foo ((term/var X)))
                                     '(term/var a-foo)
                                     #f))
-                      'equations (hash 'eq1
-                                       (list 'equation
-                                             'eq1
-                                             (hash)
-                                             '(term/var a-foo)
-                                             '(term a-foo ((term/var a-foo)))
-                                             #f))
-                      'assets (hash)))
+                      'assets (hash 'eq1 (list 'equation
+                                               'eq1
+                                               (hash)
+                                               '(term/var a-foo)
+                                               '(term a-foo ((term/var a-foo)))
+                                               #f))))
 
   (let ([decls (list (cons '(sort foo) #f)
                      (cons '(sort bar) #f)
@@ -1012,22 +951,29 @@
                      (cons '(op a-foo () foo) #f)
                      (cons '(op a-foo ((sort bar)) foo) #f)
                      (cons '(op a-bar ((var X foo)) bar) #f)
-                     (cons '(equation eq1
-                                      (term/var a-foo)
-                                      (term a-foo ((term/var a-foo)))
-                                      ()) #f)
-                     (cons '(equation eq1
-                                      (term/var a-foo)
-                                      (term a-foo ((term/var a-foo)))
-                                      ()) #f)
-                     (cons '(equation eq1
-                                      (term a-foo ((term/var a-foo)))
-                                      (term/var a-foo)
-                                      ()) #f))])
+                     (cons '(asset eq1
+                                   (equation eq1
+                                             (term/var a-foo)
+                                             (term a-foo ((term/var a-foo)))
+                                             ())) #f)
+                     (cons '(asset eq1
+                                   (equation eq1
+                                             (term/var a-foo)
+                                             (term a-foo ((term/var a-foo)))
+                                             ())) #f)
+                     (cons '(asset eq1
+                                   (equation eq1
+                                             (term a-foo ((term/var a-foo)))
+                                             (term/var a-foo)
+                                             ())) #f))])
+    (check-not-exn (thunk
+                    (~> empty-document
+                        (new-context-from-source "test" (take decls 5)))))
+    ;; asset name redefined to the same value
     (check-not-exn (thunk
                     (~> empty-document
                         (new-context-from-source "test" (take decls 6)))))
-    ;; equation name redefined
+    ;; asset name redefined to a different value
     (check-exn exn:fail?
                (thunk
                 (~> empty-document
@@ -1054,14 +1000,6 @@
                (cons '(rule (term a-foo ((term/var X)))
                             (term/var a-foo)
                             ((var X foo))) #f)
-               (cons '(equation eq1
-                                (term a-foo ((term/var X)))
-                                (term/var a-foo)
-                                ((var X foo))) #f)
-               (cons '(equation eq2
-                                (integer 2)
-                                (integer 3)
-                                ()) #f)
                (cons '(asset a-term (term/var a-foo)) #f)
                (cons '(asset a-rule (rule (term a-foo ((term/var X)))
                                           (term/var a-foo)
@@ -1125,10 +1063,6 @@
                (cons '(rule (term + ((term/var b) (term/var x)))
                             (term/var b)
                             ((var x SQ))) #f)
-               (cons '(equation eq
-                                (term + ((term/var b) (term/var x)))
-                                (term/var b)
-                                ((var x SQ))) #f)
                (cons '(asset eq-asset
                              (equation eq
                                        (term + ((term/var b) (term/var x)))
@@ -1152,10 +1086,6 @@
                            (cons '(rule (term + ((term/var b) (term/var x)))
                                         (term/var b)
                                         ((var a Q) (var b SQ) (var x SQ))) #f)
-                           (cons '(equation eq
-                                            (term + ((term/var b) (term/var x)))
-                                            (term/var b)
-                                            ((var a Q) (var b SQ) (var x SQ))) #f)
                            (cons '(asset eq-asset
                                          (equation eq
                                                    (term + ((term/var b) (term/var x)))
@@ -1192,10 +1122,6 @@
                            (cons '(rule (term + ((term/var b) (term/var x)))
                                         (term/var b)
                                         ((var x M))) #f)
-                           (cons '(equation eq
-                                            (term + ((term/var b) (term/var x)))
-                                            (term/var b)
-                                            ((var x M))) #f)
                            (cons '(asset eq-asset
                                          (equation eq
                                                    (term + ((term/var b) (term/var x)))
@@ -1224,14 +1150,6 @@
                                                              (term _÷ ((term/var x)
                                                                        (term/var e))))))))) 
                             ()) #f)
-               (cons '(equation test-eq
-                                (term heron ((term/var x) (term/var ε) (term/var e)))
-                                (term heron ((term/var x) (term/var ε) 
-                                             (term _× ((rational 1/2)
-                                                       (term _+ ((term/var e)
-                                                                 (term _÷ ((term/var x)
-                                                                           (term/var e))))))))) 
-                                ()) #f)
                (cons '(asset rule-asset
                              (rule (term heron ((term/var x) (term/var ε) (term/var e)))
                                    (term heron ((term/var x) (term/var ε) 
@@ -1270,14 +1188,6 @@
                                                              (term _÷ ((term/var x)
                                                                        (term/var e))))))))) 
                             ()) #f)
-               (cons '(equation test-eq
-                                (term heron ((term/var x) (term/var ε) (term/var e)))
-                                (term heron ((term/var x) (term/var ε) 
-                                             (term _× ((floating-point 0.5)
-                                                       (term _+ ((term/var e)
-                                                                 (term _÷ ((term/var x)
-                                                                           (term/var e))))))))) 
-                                ()) #f)
                (cons '(asset rule-asset
                              (rule (term heron ((term/var x) (term/var ε) (term/var e)))
                                    (term heron ((term/var x) (term/var ε) 
