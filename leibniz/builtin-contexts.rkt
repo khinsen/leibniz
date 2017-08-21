@@ -37,8 +37,7 @@
                        (make-term signature
                                   (if (equal? x y) 'true 'false)
                                   empty)))
-                   #f #f)))
-   empty-equationset))
+                   #f #f)))))
 
 (module+ test
   (with-context truth
@@ -93,8 +92,7 @@
   (expt x y))
 
 (define integer*
-  (make-context integer-sorts integer-signature
-                empty-rulelist empty-equationset))
+  (make-context integer-sorts integer-signature empty-rulelist))
 
 (define-context integers
   (include integer*)
@@ -207,8 +205,7 @@
      #:= (RT (^ 0 an-int)) (T (^ 0 an-int)))))
 
 (define rationals*
-  (make-context rational-sorts rational-signature
-                empty-rulelist empty-equationset))
+  (make-context rational-sorts rational-signature empty-rulelist))
 
 (define-context rationals**
   (include rationals*)
@@ -425,8 +422,7 @@
 ; Floating-point numbers (IEEE binary32 and binary64)
 ;
 (define IEEE-float*
-  (make-context IEEE-float-sorts IEEE-float-signature
-                empty-rulelist empty-equationset))
+  (make-context IEEE-float-sorts IEEE-float-signature empty-rulelist))
 
 (define-context IEEE-floating-point
   (include IEEE-float*)

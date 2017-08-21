@@ -565,8 +565,7 @@
                                 locs))
     (define context (contexts:make-context sorts
                                            signature
-                                           rules
-                                           equations:empty-equationset))
+                                           rules))
     (define compiled (hash 'compiled-signature signature
                            'compiled-rules rules
                            'compiled-assets assets))

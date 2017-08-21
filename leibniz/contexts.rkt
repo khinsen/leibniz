@@ -4,20 +4,17 @@
  (rename-out [is-context? context?]
              [context- context])
  define-context
- with-context eq tr
+ with-context tr eq
  (contract-out
-  [make-context       (sort-graph? signature? rulelist? equationset?
+  [make-context       (sort-graph? signature? rulelist?
                        . -> . context?)]
   [check-regularity   (context? . -> . void?)]
   [context-sort-graph (context? . -> . sort-graph?)]
   [context-signature  (context? . -> . signature?)]
   [context-rules      (context? . -> . rulelist?)]
-  [context-equations  (context? . -> . equationset?)]
   [merge-contexts     (context? context? . -> . context?)]
   [rules-by-label     (context? symbol? . -> . list?)]
-  [rule-by-label      (context? symbol? . -> . rule?)]
-  [equations-by-label (context? symbol? . -> . set?)]
-  [equation-by-label  (context? symbol? . -> . equation?)]))
+  [rule-by-label      (context? symbol? . -> . rule?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -39,10 +36,9 @@
            racket/function))
 
 ;
-; A context combines a sort-graph, a signature, a rulelist,
-; and an equationset.
+; A context combines a sort-graph, a signature, and a rulelist.
 ;
-(struct context (sort-graph signature rules equations)
+(struct context (sort-graph signature rules)
         #:transparent
         #:methods gen:custom-write
         [(define (write-proc context port mode)
@@ -52,15 +48,10 @@
            (for ([rule (in-rules (context-rules context))])
              (display "\n  " port)
              (write rule port))
-           (display "\n  ; equations" port)
-           (for ([eq (in-equations (context-equations context))])
-             (display "\n  " port)
-             (write eq port))
            (display ")\n" port))])
 
-(define (make-context sort-graph signature rules equations)
-  (context sort-graph signature
-           rules equations))
+(define (make-context sort-graph signature rules)
+  (context sort-graph signature rules))
 
 (define (is-context? c)
   (context? c))
@@ -71,10 +62,8 @@
    #:do (define sorts (context-sort-graph context))
    #:do (define signature (context-signature context))
    [(not (equal? (signature-sort-graph signature) sorts)) #f]
-   [else (and (for/and ([r (in-rules (context-rules context))])
-                (valid-rule? signature r))
-              (for/and ([e (in-equations (context-equations context))])
-                (valid-equation? signature e)))]))
+   [else (for/and ([r (in-rules (context-rules context))])
+           (valid-rule? signature r))]))
 
 (define (check-regularity context)
   (define non-regular (non-regular-op-example
@@ -86,8 +75,7 @@
   (let ([sorts empty-sort-graph])
     (context sorts
              (empty-signature sorts)
-             empty-rulelist
-             empty-equationset)))
+             empty-rulelist)))
 
 (module+ test
   (check-true (valid-context? empty-context)))
@@ -100,29 +88,22 @@
                                       sorts)]
          [rules (merge-rulelists (context-rules context1)
                                  (context-rules context2)
-                                 signature)]
-         [equations (merge-equationsets (context-equations context1)
-                                        (context-equations context2)
-                                        signature)])
-    (context sorts signature rules equations)))
+                                 signature)])
+    (context sorts signature rules)))
 
 (module+ test
 
   (define basic-truth-context
-    (context truth-sorts truth-signature
-             empty-rulelist empty-equationset))
+    (context truth-sorts truth-signature empty-rulelist))
 
   (define basic-string-context
-    (context string-sorts string-signature
-             empty-rulelist empty-equationset))
+    (context string-sorts string-signature empty-rulelist))
 
   (define basic-integer-context
-    (context integer-sorts integer-signature
-             empty-rulelist empty-equationset))
+    (context integer-sorts integer-signature empty-rulelist))
 
   (define basic-rational-context
-    (context rational-sorts rational-signature
-             empty-rulelist empty-equationset))
+    (context rational-sorts rational-signature empty-rulelist))
 
   (check-equal? (merge-contexts basic-truth-context basic-string-context)
                 (merge-contexts basic-string-context basic-truth-context))
@@ -185,14 +166,14 @@
   ; Rules and equations
 
   (define-splicing-syntax-class opt-label
-    #:description "optional label in a rule or equation"
+    #:description "optional label in a rule"
     (pattern (~seq #:label a-symbol:id)
              #:with expr #'(quote a-symbol))
     (pattern (~seq)
              #:with expr #'#f))
 
   (define-splicing-syntax-class opt-vars
-    #:description "optional variable declaration in a rule or equation"
+    #:description "optional variable declaration in a rule"
     (pattern (~seq #:vars ([var-name:id var-sort:id] ...))
              #:with expr #'(list (cons (quote var-name)
                                        (quote var-sort)) ...))
@@ -217,12 +198,12 @@
              #:with expr #'empty))
 
   (define-splicing-syntax-class (embedded-pattern sig var)
-    #:description "embedded pattern in a rule or equation"
+    #:description "embedded pattern in a rule"
     (pattern p:expr
              #:with expr #`(ts:pattern #,sig #,var p)))
 
   (define-splicing-syntax-class (opt-condition sig vars)
-    #:description "optional condition in a rule or equation"
+    #:description "optional condition in a rule"
     (pattern (~seq #:if (~var condition (embedded-pattern sig vars)))
              #:with expr #'condition.expr)
     (pattern (~seq)
@@ -268,28 +249,17 @@
              #:with expr #`(make-equation #,sig left.expr condition.expr
                                           right.expr a-label.expr)
              #:with vars #'local-vars.expr))
-
-  (define-syntax-class (rule-or-eq sig vars)
-    #:description "rule or equation declaration"
+  (define-syntax-class (rule sig vars)
+    #:description "rule declaration"
     (pattern (~var pr (pattern-rule sig vars))
              #:with expr #'pr.expr
              #:with vars #'pr.vars)
     (pattern (~var fr (fn-rule sig vars))
              #:with expr #'fr.expr
-             #:with vars #'fr.vars)
-    (pattern (~var e (equation sig vars))
-             #:with expr #'e.expr
-             #:with vars #'e.vars)))
+             #:with vars #'fr.vars)))
 
 (define (local-vars vars var-defs)
   (foldl (λ (vd vs) (hash-set vs (car vd) (cdr vd))) vars var-defs))
-
-(define (add-rule-or-eq ruleqs rule-or-eq)
-  (if (rule? rule-or-eq)
-      (cons (add-rule (car ruleqs) rule-or-eq)
-                (cdr ruleqs))
-      (cons (car ruleqs)
-            (add-equation (cdr ruleqs) rule-or-eq))))
 
 (define-syntax (context- stx)
   (syntax-parse stx
@@ -297,7 +267,7 @@
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
         var-defs:variable ...
-        (~var ruleq-defs (rule-or-eq #'signature #'vars*)) ...)
+        (~var rule-defs (rule #'signature #'vars*)) ...)
      #`(let* ([sorts (~> (for/fold ([ms empty-sort-graph])
                                    ([s (list (context-sort-graph
                                               included-contexts.context) ...)])
@@ -310,20 +280,15 @@
                                (merge-signatures msig sig sorts))
                              op-defs.value ...
                              var-defs.value ...)]
-              [rules (for/fold ([mrl empty-rulelist])
-                               ([rl (list (context-rules
-                                           included-contexts.context) ...)])
-                       (merge-rulelists mrl rl signature))]
-              [equations (for/fold ([mes empty-equationset])
-                                   ([es (list (context-equations
+              [rules (~> (for/fold ([mrl empty-rulelist])
+                                   ([rl (list (context-rules
                                                included-contexts.context) ...)])
-                           (merge-equationsets mes es signature))]
-              [ruleqs (~> (cons rules equations)
-                          (add-rule-or-eq
-                           (let ([vars* (local-vars (hash) ruleq-defs.vars)])
-                             ruleq-defs.expr))
-                          ...)])
-         (context sorts signature (car ruleqs) (cdr ruleqs)))]))
+                           (merge-rulelists mrl rl signature))
+                         (add-rule
+                          (let ([vars* (local-vars (hash) rule-defs.vars)])
+                            rule-defs.expr))
+                         ...)])
+         (context sorts signature rules))]))
 
 (define-syntax (define-context stx)
   (syntax-parse stx
@@ -332,7 +297,7 @@
         sort-defs:sort-or-subsort ...
         op-defs:operator ...
         var-defs:variable ...
-        (~var ruleq-defs (rule-or-eq #'signature #'vars)) ...)
+        (~var ruleq-defs (rule #'signature #'vars)) ...)
      #'(begin
          (define name
            (context- included-contexts ...
@@ -376,8 +341,7 @@
     (var X B)
     (=> #:label a-rule (foo an-A) a-B)
     (=> (foo X) an-A
-        #:if true)
-    (eq #:label an-equation an-A (foo a-B)))
+        #:if true))
 
   (check-equal? (hash-keys (context-rules test1)) '(foo))
   (check-equal? (length (hash-ref (context-rules test1) 'foo)) 2 )
@@ -386,7 +350,7 @@
     (check-equal? (term.sort (T an-A)) 'A)))
 
 ;
-; Lookup rules and equations by label
+; Lookup rules by label
 ;
 (define (rules-by-label context label)
   (for/list ([rule (in-rules (context-rules context))]
@@ -401,21 +365,7 @@
         (error (format "More than one rule with label ~a" label))))
   (first all))
 
-(define (equations-by-label context label)
-  (for/set ([equation (in-equations (context-equations context))]
-             #:when (equal? label (equation-label equation)))
-    equation))
-
-(define (equation-by-label context label)
-  (define all (equations-by-label context label))
-  (unless (equal? (set-count all) 1)
-    (if (set-empty? all)
-        (error (format "No equation with label ~a" label))
-        (error (format "More than one equation with label ~a" label))))
-  (set-first all))
-
 (module+ test
-  (check-equal? (equations-by-label test1 'foo) (set))
   (check-equal? (rules-by-label test1 'foo) empty))
 
 ;
@@ -438,9 +388,7 @@
                     [(~var eqn (equation #'(context-signature c)
                                          #'vars*))
                      #'(let ([vars* (local-vars (hash) eqn.vars)])
-                         eqn.expr)]
-                    [(_ label:id)
-                     #'(equation-by-label c (quote label))]))]
+                         eqn.expr)]))]
             [tr (λ (stx)
                   (syntax-parse stx
                     [(_  (~var pr (rule-hp #'(context-signature c)
@@ -454,12 +402,10 @@
 
 (module+ test
   (with-context test1
-    (check-equal? (eq an-equation)
-                  (eq #:label an-equation an-A (foo a-B)))
     (check-equal? (set-count
                    (term.vars
                     (equation-left
-                     (eq #:label another-equation #:var (Foo A) (foo Foo) a-B))))
+                     (eq #:label an-equation #:var (Foo A) (foo Foo) a-B))))
                   1)
     (check-equal? (set-count
                    (term.vars

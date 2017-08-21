@@ -41,9 +41,7 @@
     (=> (not true) false)
     (=> (not false) true)
     (=> foo (not true) #:if false)
-    (=> foo (not false) #:if true)
-    (eq #:label an-equation
-        foo true))
+    (=> foo (not false) #:if true))
 
   (define-context test-with-var
     (sort boolean)
@@ -297,9 +295,9 @@
   (with-context test-context
     (define signature (context-signature test-context))
     (define rules (context-rules test-context))
-    (check-equal? (reduce-equation signature rules (eq an-equation))
+    (check-equal? (reduce-equation signature rules (eq foo true))
                   (eq true true))
-    (check-equal? (reduce-equation signature rules (eq an-equation) 'new-equation)
+    (check-equal? (reduce-equation signature rules (eq foo true) 'new-equation)
                   (eq #:label new-equation true true))))
 
 ;
@@ -364,7 +362,7 @@
     (define transformation (tr #:var (X boolean) X (not X)))
     (define signature (context-signature test-context))
     (check-equal? (transform-equation signature transformation
-                                      (eq an-equation))
+                                      (eq foo true))
                   (eq (not foo) (not true)))))
 
 ;
