@@ -35,7 +35,6 @@
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
          (prefix-in equations: "./equations.rkt")
-         (prefix-in contexts: "./contexts.rkt")
          (prefix-in rewrite: "./rewrite.rkt"))
 
 ; Translate the location information from a syntax object into strings and numbers
@@ -179,8 +178,8 @@
                       (add-to-library leibniz-id name library-id))))]))
 
 (define (parsed-term leibniz-doc current-context parsed-term-expr loc)
-  (define context (get-context leibniz-doc current-context))
-  (define signature (contexts:context-signature context))
+  (define context (get-context-declarations leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
   (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
                                             (terms:term.sort term)))
@@ -188,19 +187,21 @@
   (leibniz-input-with-hover sort-str term-elem))
 
 (define (parsed-rule leibniz-doc current-context parsed-rule-expr loc)
-  (define context (get-context leibniz-doc current-context))
+  (define context (get-context-declarations leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
   (define rule (make-rule leibniz-doc current-context parsed-rule-expr loc))
-  (leibniz-input (format-rule rule (contexts:context-signature context))))
+  (leibniz-input (format-rule rule signature)))
 
 (define (parsed-equation leibniz-doc current-context parsed-equation-expr loc)
-  (define context (get-context leibniz-doc current-context))
+  (define context (get-context-declarations leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
   (define label (second parsed-equation-expr))
   (define equation (make-equation leibniz-doc current-context (cons 'equation (rest (rest parsed-equation-expr))) loc))
-  (leibniz-input (format-equation label equation (contexts:context-signature context))))
+  (leibniz-input (format-equation label equation signature)))
 
 (define (parsed-test leibniz-doc current-context parsed-rule-expr loc)
-  (define context (get-context leibniz-doc current-context))
-  (define signature (contexts:context-signature context))
+  (define context (get-context-declarations leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
   (define test (make-test leibniz-doc current-context parsed-rule-expr loc))
   (define success (equal? (second test) (third test)))
   (list
@@ -216,9 +217,9 @@
         (list "❌ " (format-term signature (third test)))))))
 
 (define (parsed-eval-term leibniz-doc current-context parsed-term-expr loc)
-  (define context (get-context leibniz-doc current-context))
-  (define signature (contexts:context-signature context))
-  (define rules (contexts:context-rules context))
+  (define context (get-context-declarations leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
+  (define rules (hash-ref context 'compiled-rules))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
   (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
                                             (terms:term.sort term)))

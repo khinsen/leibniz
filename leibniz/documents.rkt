@@ -3,7 +3,7 @@
 (provide empty-document
          add-to-library
          new-context-from-source
-         get-context get-context-declarations
+         get-context-declarations
          make-term make-rule make-transformation make-equation
          make-test
          get-document-sxml get-context-sxml
@@ -27,28 +27,7 @@
          threading)
 
 (module+ test
-  (require rackunit)
-
-  (contexts:define-context test-context1
-    (sort foo)
-    (sort bar)
-    (subsort foo bar))
-  
-  (contexts:define-context test-context2
-    (sort foo)
-    (sort bar)
-    (sort boolean)
-    (subsort foo bar)
-    (op a-foo foo)
-    (op (a-foo bar) foo)
-    (op (a-bar foo) bar)
-    (op true boolean)
-    (op false boolean)
-    (op (_∧ boolean boolean) boolean)
-    (op (a-test foo) boolean)
-    (op (another-test foo) boolean)
-    (var a-var foo)
-    (=> #:var (X foo) (a-foo X) a-foo #:if (_∧ (a-test X) (another-test X)))))
+  (require rackunit))
 
 ;; Re-raise exceptions with the source location information from the document
 
@@ -82,7 +61,9 @@
   (define after-includes
     (for/fold ([ms sorts:empty-sort-graph])
               ([m/c includes])
-      (sorts:merge-sort-graphs ms (contexts:context-sort-graph (cdr m/c)))))
+      (sorts:merge-sort-graphs ms
+                               (operators:signature-sort-graph
+                                (hash-ref (cdr m/c) 'compiled-signature)))))
   (define after-sorts
     (for/fold ([sorts after-includes])
               ([s sort-decls])
@@ -101,7 +82,7 @@
   (define after-includes
     (for/fold ([msig (operators:empty-signature sorts)])
               ([m/c includes])
-      (define csig (contexts:context-signature (cdr m/c)))
+      (define csig (hash-ref (cdr m/c) 'compiled-signature))
       (define isig (case (car m/c)
                      [(use) (operators:remove-vars csig)]
                      [(extend) csig]))
@@ -163,7 +144,9 @@
   (define after-includes
     (for/fold ([mrl equations:empty-rulelist])
               ([m/c includes])
-      (equations:merge-rulelists mrl (contexts:context-rules (cdr m/c)) signature)))
+      (equations:merge-rulelists mrl
+                                 (hash-ref (cdr m/c) 'compiled-rules)
+                                 signature)))
   (for/fold ([rl after-includes])
             ([rd rule-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs rd))])
@@ -368,8 +351,7 @@
 
 (define-class document
 
-  (field contexts decls order library)
-  ;; contexts: a hash mapping context names (strings) to contexts
+  (field decls order library)
   ;; decls: a hash mapping context names to hashes with keys
   ;;        'includes 'sorts 'ops 'vars 'rules 'assets,
   ;;        values are lists/sets/hashes of the declarations in each category
@@ -377,19 +359,31 @@
   ;; library: a hash mapping document names to documents
 
   (define (add-to-library name library-document)
-    (document contexts decls order
+    (document decls order
               (hash-set library name library-document)))
 
-  (define (add-context name include-decls context)
+  (define (add-builtin-context name include-decls context)
     (define temp-doc (new-context-from-source name include-decls))
-    (define inclusion-context (send temp-doc get-context name))
     (define inclusion-decls (send temp-doc get-context-declarations name))
-    (define full-context
-      (contexts:merge-contexts inclusion-context context))
-    (document (hash-set contexts name full-context)
-              (hash-set decls name
+    (define signature
+      (operators:merge-signatures
+       (hash-ref inclusion-decls 'compiled-signature)
+       (contexts:context-signature context)
+       #f))
+    (define rules
+      (equations:merge-rulelists
+       (hash-ref inclusion-decls 'compiled-rules)
+       (contexts:context-rules context)
+       signature))
+    (document (hash-set decls name
                         (hash 'includes
-                              (hash-ref inclusion-decls 'includes)))
+                              (hash-ref inclusion-decls 'includes)
+                              'compiled-signature
+                              signature
+                              'compiled-rules
+                              rules
+                              'compiled-assets
+                              (hash)))
               (cons name order)
               library))
 
@@ -538,23 +532,19 @@
 
   (define (new-context name cdecls)
     (define locs (hash-ref cdecls 'locs))
-    (define included-contexts
-      (for/list ([mode/name (hash-ref cdecls 'includes)])
-        (with-handlers ([exn:fail? (re-raise-exn (get-loc locs name))])
-          (cons (car mode/name) (get-context (cdr mode/name))))))
     (define included-context-decls
       (for/list ([mode/name (hash-ref cdecls 'includes)])
         (with-handlers ([exn:fail? (re-raise-exn (get-loc locs name))])
           (cons (car mode/name) (get-context-declarations (cdr mode/name))))))
-    (define sorts (make-sort-graph included-contexts
+    (define sorts (make-sort-graph included-context-decls
                                    (hash-ref cdecls 'sorts)
                                    (hash-ref cdecls 'subsorts)
                                    locs))
-    (define signature (make-signature sorts included-contexts
+    (define signature (make-signature sorts included-context-decls
                                       (hash-ref cdecls 'ops)
                                       (hash-ref cdecls 'vars)
                                       locs))
-    (define rules (make-rulelist signature included-contexts
+    (define rules (make-rulelist signature included-context-decls
                                  (hash-ref cdecls 'rules)
                                  locs))
     (define assets (make-assets signature included-context-decls
@@ -566,31 +556,15 @@
     (define compiled (hash 'compiled-signature signature
                            'compiled-rules rules
                            'compiled-assets assets))
-    (document (hash-set contexts name context)
-              (hash-set decls name (hash-union cdecls compiled))
+    (document (hash-set decls name (hash-union cdecls compiled))
               (cons name order)
               library))
-
-  (define (get-context name)
-    (define elements (map string-trim (string-split name "/")))
-    (case (length elements)
-      [(1)
-       (unless (hash-has-key? contexts (first elements))
-         (error (format "no context named ~a" name)))
-       (hash-ref contexts (first elements))]
-      [(2)
-       (unless (hash-has-key? library (first elements))
-         (error (format "no library named ~a" (first elements))))
-       (define library-doc (hash-ref library (first elements)))
-       (send library-doc get-context (second elements))]
-      [else
-       (error (format "illegal context specification ~a" name))]))
 
   (define (get-context-declarations name)
     (define elements (map string-trim (string-split name "/")))
     (case (length elements)
       [(1)
-       (unless (hash-has-key? contexts (first elements))
+       (unless (hash-has-key? decls (first elements))
          (error (format "no context named ~a" name)))
        (hash-ref decls (first elements))]
       [(2)
@@ -708,14 +682,14 @@
                    #:mode 'text)))
 
   (define (make-term context-name term-expr loc)
-    (define context (get-context context-name))
-    (define signature (contexts:context-signature context))
+    (define context (get-context-declarations context-name))
+    (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       ((make-term* signature) term-expr)))
 
   (define (make-rule context-name rule-expr loc)
-    (define context (get-context context-name))
-    (define signature (contexts:context-signature context))
+    (define context (get-context-declarations context-name))
+    (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (make-rule* signature
                   (first (hash-ref (preprocess-declarations
@@ -723,8 +697,8 @@
                                    'rules)))))
 
   (define (make-transformation context-name rule-expr loc)
-    (define context (get-context context-name))
-    (define signature (contexts:context-signature context))
+    (define context (get-context-declarations context-name))
+    (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (equations:make-transformation signature
                                      (make-rule* signature
@@ -733,8 +707,8 @@
                                                                   'rules))))))
 
   (define (make-equation context-name equation-expr loc)
-    (define context (get-context context-name))
-    (define signature (contexts:context-signature context))
+    (define context (get-context-declarations context-name))
+    (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (define ad (hash-ref (preprocess-declarations
                             (list (cons (list 'asset (second equation-expr) equation-expr) loc)))
@@ -745,9 +719,9 @@
                       (first (hash-values ad)))))
 
   (define (make-test context-name rule-expr loc)
-    (define context (get-context context-name))
-    (define signature (contexts:context-signature context))
-    (define rules (contexts:context-rules context))
+    (define context (get-context-declarations context-name))
+    (define signature (hash-ref context 'compiled-signature))
+    (define rules (hash-ref context 'compiled-rules))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (define rd (hash-ref (preprocess-declarations
                             (list (cons rule-expr loc)))
@@ -787,9 +761,9 @@
             (recursive-file-list path)]))))
 
     (delete-directory-recursive directory)
-    (for ([(name context) (in-hash contexts)])
+    (for ([(name context) (in-hash decls)])
       (define path (build-path directory name))
-      (tools:signature->graphviz path context))
+      (tools:signature->graphviz path (hash-ref context 'compiled-signature)))
 
     (define dot (find-executable-path "dot"))
     (unless dot
@@ -810,42 +784,40 @@
 ;; A document containing the builtin contexts
 
 (define builtins
-  (~> (document (hash) (hash) empty (hash))
-      (add-context "truth"
+  (~> (document (hash) empty (hash))
+      (add-builtin-context "truth"
                    empty
                    builtins:truth)
-      (add-context "integers"
+      (add-builtin-context "integers"
                    (list (cons '(use "truth") #f))
                    builtins:integers)
-      (add-context "rational-numbers"
+      (add-builtin-context "rational-numbers"
                    (list (cons '(use "truth") #f))
                    builtins:rational-numbers)
-      (add-context "real-numbers"
+      (add-builtin-context "real-numbers"
                    (list (cons '(use "truth") #f))
                    builtins:real-numbers)
-      (add-context "IEEE-floating-point"
+      (add-builtin-context "IEEE-floating-point"
                    (list (cons '(use "integers") #f))
                    builtins:IEEE-floating-point)))
 
 (define empty-document
-  (~> (document (hash) (hash) empty  (hash))
+  (~> (document (hash) empty  (hash))
       (add-to-library "builtins" builtins)))
 
 (module+ test
+  (define test-document1
+    (~> empty-document
+        (new-context-from-source
+         "test"
+         (list (cons '(sort foo) #f)
+               (cons '(sort bar) #f)
+               (cons '(subsort foo bar) #f)))))
   (check-equal? (~> empty-document
                     (new-context-from-source
                      "test"
-                     (list (cons '(sort foo) #f)
-                           (cons '(sort bar) #f)
-                           (cons '(subsort foo bar) #f)))
-                    (get-context "test"))
-                test-context1)
-  (check-equal? (~> empty-document
-                    (new-context-from-source
-                     "test"
-                     (list (cons '(subsort foo bar) #f)))
-                    (get-context "test"))
-                test-context1)
+                     (list (cons '(subsort foo bar) #f))))
+                test-document1)
   (check-equal? (~> empty-document
                     (new-context-from-source
                      "test"
@@ -854,9 +826,8 @@
                            (cons '(subsort foo bar) #f)
                            (cons '(sort bar) #f)
                            (cons '(subsort foo bar) #f)
-                           (cons '(sort foo) #f)))
-                    (get-context "test"))
-                test-context1)
+                           (cons '(sort foo) #f))))
+                test-document1)
 
   (check-equal? (~> empty-document
                     (new-context-from-source
@@ -866,28 +837,6 @@
                     (make-term "test" '(term/var a-foo) #f)
                     (terms:term->string))
                 "foo:a-foo")
-
-  (check-equal? (~> empty-document
-                    (new-context-from-source
-                     "test"
-                     (list (cons '(subsort foo bar) #f)
-                           (cons '(sort boolean) #f)
-                           (cons '(op a-foo () foo) #f)
-                           (cons '(op a-foo ((sort bar)) foo) #f)
-                           (cons '(op a-bar ((sort foo)) bar) #f)
-                           (cons '(op true () boolean) #f)
-                           (cons '(op false () boolean) #f)
-                           (cons '(op _∧ ((sort boolean) (sort boolean)) boolean) #f)
-                           (cons '(op a-test ((sort foo)) boolean) #f)
-                           (cons '(op another-test ((sort foo)) boolean) #f)
-                           (cons '(var a-var foo) #f)
-                           (cons '(rule (term a-foo ((term/var X)))
-                                        (term/var a-foo)
-                                        ((var X foo)
-                                         (term a-test ((term/var X)))
-                                         (term another-test ((term/var X))))) #f)))
-                    (get-context "test"))
-                test-context2)
 
   (check-equal? (~> empty-document
                     (new-context-from-source
@@ -979,7 +928,7 @@
   ;;                                    (cons '(op foo ((sort B)) B) #f)
   ;;                                    (cons '(op foo ((sort C)) C) #f))))))
 
-  (define test-document
+  (define test-document2
     (~> empty-document
         (new-context-from-source
          "test"
@@ -1006,7 +955,7 @@
                              (assets [int1 (integer 2)]
                                      [int2 (integer 3)])) #f)))))
 
-  (check-true (~> test-document
+  (check-true (~> test-document2
                   (make-test "test"
                              '(rule
                                (term a-foo ((term/var a-foo)))
@@ -1019,18 +968,12 @@
                   set-count
                   (equal? 1)))
 
-  (check-equal? (~> test-document
-                    get-document-sxml
-                    sxml->document
-                    (get-context "test"))
-                (get-context test-document "test"))
-
-  (check-equal? (~> test-document
+  (check-equal? (~> test-document2
                     get-document-sxml
                     sxml->document
                     (get-context-declarations "test")
                     (hash-remove 'locs))
-                (~> (get-context-declarations test-document "test")
+                (~> (get-context-declarations test-document2 "test")
                     (hash-remove 'locs))))
 
 ;; Tests for module "transformations.rkt"
