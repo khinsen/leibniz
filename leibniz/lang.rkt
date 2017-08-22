@@ -120,11 +120,11 @@
     (pattern ((~literal show-context) name:str)
              #:attr decl empty
              #:with expansion #'(format-context-declarations
-                                 (get-context-declarations leibniz-doc name)))
+                                 (get-context leibniz-doc name)))
     (pattern ((~literal show-context))
              #:attr decl empty
              #:with expansion #'(format-context-declarations
-                                 (get-context-declarations leibniz-doc current-context)))
+                                 (get-context leibniz-doc current-context)))
     (pattern (element args:arg-or-kw-arg ...)
              #:attr decl (apply append (attribute args.decl))
              #:with expansion
@@ -152,7 +152,7 @@
           include:context-ref ...
           body:body-item ...)
        #`(begin (set! #,leibniz-ref
-                      (new-context-from-source #,leibniz-ref name
+                      (add-context-from-source #,leibniz-ref name
                                                (append
                                                 (list include.ref ...)
                                                 #,(cons #'list (apply append (attribute body.decl))))))
@@ -178,7 +178,7 @@
                       (add-to-library leibniz-id name library-id))))]))
 
 (define (parsed-term leibniz-doc current-context parsed-term-expr loc)
-  (define context (get-context-declarations leibniz-doc current-context))
+  (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
   (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
@@ -187,20 +187,20 @@
   (leibniz-input-with-hover sort-str term-elem))
 
 (define (parsed-rule leibniz-doc current-context parsed-rule-expr loc)
-  (define context (get-context-declarations leibniz-doc current-context))
+  (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define rule (make-rule leibniz-doc current-context parsed-rule-expr loc))
   (leibniz-input (format-rule rule signature)))
 
 (define (parsed-equation leibniz-doc current-context parsed-equation-expr loc)
-  (define context (get-context-declarations leibniz-doc current-context))
+  (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define label (second parsed-equation-expr))
   (define equation (make-equation leibniz-doc current-context (cons 'equation (rest (rest parsed-equation-expr))) loc))
   (leibniz-input (format-equation label equation signature)))
 
 (define (parsed-test leibniz-doc current-context parsed-rule-expr loc)
-  (define context (get-context-declarations leibniz-doc current-context))
+  (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define test (make-test leibniz-doc current-context parsed-rule-expr loc))
   (define success (equal? (second test) (third test)))
@@ -217,7 +217,7 @@
         (list "❌ " (format-term signature (third test)))))))
 
 (define (parsed-eval-term leibniz-doc current-context parsed-term-expr loc)
-  (define context (get-context-declarations leibniz-doc current-context))
+  (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define rules (hash-ref context 'compiled-rules))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
@@ -276,7 +276,7 @@
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
       [(_ name:str)
-       #`(format-context-declarations (get-context-declarations #,leibniz-ref name))])))
+       #`(format-context-declarations (get-context #,leibniz-ref name))])))
 
 ; Support code for nicer formatting
 
@@ -318,7 +318,7 @@
        #`(begin
            (define context
              (with-handlers ([exn:fail? (λ (e) #f)])
-               (get-context-declarations #,leibniz-ref context-name)))
+               (get-context #,leibniz-ref context-name)))
            (unless context
              (error (format "Undefined context ~a" context-name)))
            (current-document #,leibniz-ref)

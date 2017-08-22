@@ -2,8 +2,8 @@
 
 (provide empty-document
          add-to-library
-         new-context-from-source
-         get-context-declarations
+         add-context-from-source
+         get-context
          make-term make-rule make-transformation make-equation
          make-test
          get-document-sxml get-context-sxml
@@ -28,8 +28,9 @@
 (module+ test
   (require rackunit))
 
+;;
 ;; Re-raise exceptions with the source location information from the document
-
+;;
 (define-struct (exn:fail:leibniz exn:fail) (a-srcloc)
   #:property prop:exn:srclocs
   (λ (a-struct)
@@ -45,8 +46,9 @@
               (apply srcloc loc)))
       (raise e)))
 
-;; Make a signature from a sequence of declarations
-
+;;
+;; Compile declarations from a context to internal datas tructures.
+;;
 (define (get-loc locs decl)
   (cond
     [(procedure? locs)
@@ -56,28 +58,32 @@
     [else
      #f]))
 
-(define (make-sort-graph includes sort-decls subsort-decls locs)
+(define (compile-sort-graph includes sort-decls subsort-decls locs)
+  ;; Merge the sort graphs of the included contexts.
   (define after-includes
     (for/fold ([ms sorts:empty-sort-graph])
               ([m/c includes])
       (sorts:merge-sort-graphs ms
                                (operators:signature-sort-graph
                                 (hash-ref (cdr m/c) 'compiled-signature)))))
+  ;; Process the sort declarations.
   (define after-sorts
     (for/fold ([sorts after-includes])
               ([s sort-decls])
       (with-handlers ([exn:fail? (re-raise-exn (get-loc locs s))])
         (sorts:add-sort sorts s))))
+  ;; Process the subsort declarations.
   (for/fold ([sorts after-sorts])
             ([ss subsort-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ss))])
       (sorts:add-subsort-relation sorts (car ss) (cdr ss)))))
 
-(define (make-signature sorts includes op-decls var-decls locs)
+(define (compile-signature sorts includes op-decls var-decls locs)
   (define (argsort sort-or-var-decl)
     (match sort-or-var-decl
       [(list 'sort sort-id) sort-id]
       [(list 'var var-name sort-id) sort-id]))
+  ;; Merge the signatures of the included contexts.
   (define after-includes
     (for/fold ([msig (operators:empty-signature sorts)])
               ([m/c includes])
@@ -86,6 +92,7 @@
                      [(use) (operators:remove-vars csig)]
                      [(extend) csig]))
       (operators:merge-signatures msig isig sorts)))
+  ;; Process the op declarations.
   (define after-ops
     (for/fold ([sig after-includes])
               ([od op-decls])
@@ -93,11 +100,13 @@
         (match-define (list name arity rsort) od)
         (operators:add-op sig name (map argsort arity) rsort
                           #:meta (get-loc locs od)))))
+  ;; Process the var declarations.
   (define signature
     (for/fold ([sig after-ops])
               ([(vname vsort) var-decls])
       (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash vname vsort)))])
         (operators:add-var sig vname vsort))))
+  ;; Check for non-regularity.
   (define non-regular (operators:non-regular-op-example signature))
   (when non-regular
     (match-let ([(list op arity rsorts) non-regular])
@@ -139,13 +148,15 @@
                             #f #t))]
     [_ #f]))
 
-(define (make-rulelist signature includes rule-decls locs)
+(define (compile-rules signature includes rule-decls locs)
+  ;; Merge the rule lists of the included contexts.
   (define after-includes
     (for/fold ([mrl equations:empty-rulelist])
               ([m/c includes])
       (equations:merge-rulelists mrl
                                  (hash-ref (cdr m/c) 'compiled-rules)
                                  signature)))
+  ;; Process the rule declarations
   (for/fold ([rl after-includes])
             ([rd rule-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs rd))])
@@ -161,7 +172,13 @@
                                 (mp right)))]
     [_ #f]))
 
-(define (make-assets signature includes asset-decls locs)
+(define (combine-assets label asset1 asset2)
+  (unless (equal? asset1 asset2)
+    (error (format "Asset label ~a already used for value ~a" label asset1)))
+  asset1)
+
+(define (compile-assets signature includes asset-decls locs)
+  ;; Helper function for compiling a single asset.
   (define (compile-asset decl)
     (match decl
       [(list 'rule arg ...)
@@ -173,32 +190,27 @@
          (values label (compile-asset value)))]
       [term
        ((make-term* signature) decl)]))
+  ;; Merge the assets of the included contexts.
   (define after-includes
     (for/fold ([merged-assets (hash)])
               ([m/c includes])
       (hash-union merged-assets (hash-ref (cdr m/c) 'compiled-assets (hash))
                   #:combine/key combine-assets)))
+  ;; Process the asset declarations
   (for/fold ([assets after-includes])
             ([(label ad) asset-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash label ad)))])
-      (hash-union assets (hash label (compile-asset ad)) #:combine/key combine-assets))))
+      (hash-union assets (hash label (compile-asset ad))
+                  #:combine/key combine-assets))))
 
-;; Combine varsets checking for name clashes. For use with hash-union.
-
+;;
+;; Convert an SXML document to the internal document data structure.
+;;
 (define (combine-varsets name sort1 sort2)
   (unless (equal? sort1 sort2)
     (error (format "Var ~a of sort ~a redefined with sort ~a"
                    name sort1 sort2)))
   sort1)
-
-;; Combine assets checking for name clashes. For use with hash-union.
-
-(define (combine-assets label asset1 asset2)
-  (unless (equal? asset1 asset2)
-    (error (format "Asset label ~a already used for value ~a" label asset1)))
-  asset1)
-
-;; Convert SXML to document
 
 (define (sxml->document sxml-document)
   (match-define
@@ -206,10 +218,10 @@
     sxml-document)
   (for/fold ([doc empty-document])
             ([sxml-context sxml-contexts])
-    (define-values (name context-decls) (sxml->declarations sxml-context))
-    (send doc new-context name (hash-set context-decls 'locs (λ (x) #f)))))
+    (define-values (name context-decls) (sxml->context sxml-context))
+    (send doc add-context name (hash-set context-decls 'locs (λ (x) #f)))))
 
-(define (sxml->declarations sxml-context)
+(define (sxml->context sxml-context)
 
   (define (sxml->arg sxml-arg)
     (match sxml-arg
@@ -326,7 +338,9 @@
                   [`(op (@ (id ,on))
                         (arity ,oa ...)
                         (sort (@ (id ,os))))
-                   (list (string->symbol on) (map sxml->arg oa) (string->symbol os))])))
+                   (list (string->symbol on)
+                         (map sxml->arg oa)
+                         (string->symbol os))])))
   (define rules (for/list ([rule sxml-rules])
                   (sxml->rule rule)))
   (define assets (for/hash ([asset sxml-assets])
@@ -346,25 +360,33 @@
                 'assets assets
                 'locs (hash))))
 
-;; Documents track declarations and expressions embedded in a Scribble document
-
+;;
+;; A document is a collection of contexts that can refer to each other by name.
+;; Each document also keeps a library of other documents to whose contexts
+;; its own contexts can refer. The dependency graph is acyclic by construction.
+;;
 (define-class document
 
-  (field decls order library)
-  ;; decls: a hash mapping context names to hashes with keys
-  ;;        'includes 'sorts 'ops 'vars 'rules 'assets,
-  ;;        values are lists/sets/hashes of the declarations in each category
+  (field contexts order library)
+  ;; contexts: a hash mapping context names to hashes with keys
+  ;;           'includes 'sorts 'ops 'vars 'rules 'assets,
+  ;;           values are lists/sets/hashes of the declarations in
+  ;;            each category
   ;; order: a list of context names in the inverse order of definition
   ;; library: a hash mapping document names to documents
 
+  ;; Add another document to the library.
   (define (add-to-library name library-document)
-    (document decls order
+    (document contexts order
               (hash-set library name library-document)))
 
+  ;; Add a built-in context. Used only for preparing a single document
+  ;; called "builtins", which is automatically added to every other
+  ;; document's library.
   (define (add-builtin-context name include-decls signature rules)
-    (define temp-doc (new-context-from-source name include-decls))
-    (define inclusion-decls (send temp-doc get-context-declarations name))
-    (document (hash-set decls name
+    (define temp-doc (add-context-from-source name include-decls))
+    (define inclusion-decls (send temp-doc get-context name))
+    (document (hash-set contexts name
                         (hash 'includes
                               (hash-ref inclusion-decls 'includes)
                               'compiled-signature
@@ -376,40 +398,42 @@
               (cons name order)
               library))
 
-  (define (preprocess-declarations context-decls)
+  ;; Take context declarations parsed by Leibniz' extensions to Scribble
+  ;; and convert them to the internal context data structure.
+  (define (preprocess-source-declarations source-decls)
 
-    (define (add-loc decls decl loc)
-      (hash-update decls 'locs
+    (define (add-loc context decl loc)
+      (hash-update context 'locs
                    (λ (ls)
                      (if (and loc (not (hash-has-key? ls decl)))
                          (hash-set ls decl loc)
                          ls))))
 
-    (define (add-include decls mode cname loc)
-      (~> decls
+    (define (add-include context mode cname loc)
+      (~> context
           (hash-update 'includes (λ (cnames) (append cnames (list (cons mode cname)))))
           (add-loc cname loc)))
 
-    (define (add-sort decls s loc)
-      (~> decls
+    (define (add-sort context s loc)
+      (~> context
           (hash-update 'sorts (λ (ss) (set-add ss s)))
           (add-loc s loc)))
 
-    (define (add-subsort decls s1 s2 loc)
+    (define (add-subsort context s1 s2 loc)
       (define new-ss (cons s1 s2))
-      (~> decls
+      (~> context
           (hash-update 'subsorts (λ (ss) (set-add ss new-ss)))
           (add-loc new-ss loc)))
 
-    (define (add-op decls name arity rsort loc)
+    (define (add-op context name arity rsort loc)
       (define new-op (list name arity rsort))
-      (~> decls
+      (~> context
           (hash-update 'ops (λ (ops) (set-add ops new-op)))
           (add-loc new-op loc)))
 
-    (define (add-var decls name sort loc)
+    (define (add-var context name sort loc)
       (define new-var (hash name sort))
-      (~> decls
+      (~> context
           (hash-update 'vars (λ (vars)
                                (hash-union vars new-var
                                            #:combine/key combine-varsets)))
@@ -429,10 +453,10 @@
                (values vars (list 'term '_∧ (list condition term)))
                (values vars term))])))
 
-    (define (add-rule decls pattern replacement clauses loc)
+    (define (add-rule context pattern replacement clauses loc)
       (define-values (vars condition) (group-clauses clauses loc))
       (define new-rule (list 'rule vars pattern replacement condition))
-      (~> decls
+      (~> context
           (hash-update 'rules (λ (rules) (if (member new-rule rules)
                                              rules
                                              (append rules (list new-rule)))))
@@ -453,14 +477,14 @@
         [term
          term]))
 
-    (define (add-asset decls label value loc)
+    (define (add-asset context label value loc)
       (define new-asset (hash label (preprocess-asset value loc)))
-      (~> decls
+      (~> context
           (hash-update 'assets (λ (assets) (hash-union assets new-asset
                                                        #:combine/key combine-assets)))
           (add-loc new-asset loc)))
 
-    (define (merge decls1 decls2 loc)
+    (define (merge context1 context2 loc)
       (define (merge* key v1 v2)
         (case key
           [(includes rules) (remove-duplicates (append v1 v2))]
@@ -469,103 +493,108 @@
           [(assets) (hash-union v1 v2 #:combine/key combine-assets)]
           [(locs) (hash-union v1 v2 #:combine (λ (a b) a))]))
       (with-handlers ([exn:fail? (re-raise-exn loc)])
-        (hash-union decls1 decls2
+        (hash-union context1 context2
                     #:combine/key merge*)))
 
-    (~> (for/fold ([decls (hash 'includes empty
-                                'sorts (set)
-                                'subsorts (set)
-                                'ops (set)
-                                'vars (hash)
-                                'rules (list)
-                                'assets (hash)
-                                'locs (hash))])
-                  ([decl/loc context-decls])
+    (~> (for/fold ([context (hash 'includes empty
+                                  'sorts (set)
+                                  'subsorts (set)
+                                  'ops (set)
+                                  'vars (hash)
+                                  'rules (list)
+                                  'assets (hash)
+                                  'locs (hash))])
+                  ([decl/loc source-decls])
           (match-define (cons decl loc) decl/loc)
           (match decl
             [(list 'use cname)
-             (add-include decls 'use cname loc)]
+             (add-include context 'use cname loc)]
             [(list 'extend cname)
-             (add-include decls 'extend cname loc)]
+             (add-include context 'extend cname loc)]
             [(list 'insert cname tr ...)
-             (merge decls
+             (merge context
                     (clean-declarations
-                     (transform-context-declarations (get-context-declarations cname) tr))
+                     (transform-context-declarations (get-context cname) tr))
                     loc)]
             [(list 'sort s)
-             (add-sort decls s loc)]
+             (add-sort context s loc)]
             [(list 'subsort s1 s2)
-             (~> decls
+             (~> context
                  (add-sort s1 loc)
                  (add-sort s2 loc)
                  (add-subsort s1 s2 loc))]
             [(list 'op name arity rsort)
-             (for/fold ([decls (~> decls
-                                   (add-sort rsort loc)
-                                   (add-op name arity rsort loc))])
+             (for/fold ([context (~> context
+                                     (add-sort rsort loc)
+                                     (add-op name arity rsort loc))])
                        ([arg arity])
                (match arg
                  [(list 'var name sort)
-                  (add-var decls name sort loc)]
+                  (add-var context name sort loc)]
                  [(list 'sort s)
-                  decls]))]
+                  context]))]
             [(list 'var name sort)
-             (add-var decls name sort loc)] 
+             (add-var context name sort loc)] 
             [(list 'rule pattern replacement clauses)
-             (add-rule decls pattern replacement clauses loc)]
+             (add-rule context pattern replacement clauses loc)]
             [(list 'asset label value)
-             (add-asset decls label value loc)]))))
+             (add-asset context label value loc)]))))
 
-  (define (new-context-from-source name context-decls)
-    (new-context name (preprocess-declarations context-decls)))
+  ;; Add a context defined by a sequence of source declarations.
+  (define (add-context-from-source name source-decls)
+    (add-context name (preprocess-source-declarations source-decls)))
 
-  (define (new-context name cdecls)
-    (define locs (hash-ref cdecls 'locs))
-    (define included-context-decls
-      (for/list ([mode/name (hash-ref cdecls 'includes)])
+  ;; Add a context defined by a context data structure.
+  (define (add-context name context)
+    (define locs (hash-ref context 'locs))
+    (define included-contexts
+      (for/list ([mode/name (hash-ref context 'includes)])
         (with-handlers ([exn:fail? (re-raise-exn (get-loc locs name))])
-          (cons (car mode/name) (get-context-declarations (cdr mode/name))))))
-    (define sorts (make-sort-graph included-context-decls
-                                   (hash-ref cdecls 'sorts)
-                                   (hash-ref cdecls 'subsorts)
-                                   locs))
-    (define signature (make-signature sorts included-context-decls
-                                      (hash-ref cdecls 'ops)
-                                      (hash-ref cdecls 'vars)
+          (cons (car mode/name) (get-context (cdr mode/name))))))
+    (define sorts (compile-sort-graph included-contexts
+                                      (hash-ref context 'sorts)
+                                      (hash-ref context 'subsorts)
                                       locs))
-    (define rules (make-rulelist signature included-context-decls
-                                 (hash-ref cdecls 'rules)
+    (define signature (compile-signature sorts included-contexts
+                                         (hash-ref context 'ops)
+                                         (hash-ref context 'vars)
+                                         locs))
+    (define rules (compile-rules signature included-contexts
+                                 (hash-ref context 'rules)
                                  locs))
-    (define assets (make-assets signature included-context-decls
-                                (hash-ref cdecls 'assets)
-                                locs))
+    (define assets (compile-assets signature included-contexts
+                                   (hash-ref context 'assets)
+                                   locs))
     (define compiled (hash 'compiled-signature signature
                            'compiled-rules rules
                            'compiled-assets assets))
-    (document (hash-set decls name (hash-union cdecls compiled))
+    (document (hash-set contexts name (hash-union context compiled))
               (cons name order)
               library))
 
-  (define (get-context-declarations name)
+  ;; Retrieve a context by name
+  (define (get-context name)
     (define elements (map string-trim (string-split name "/")))
     (case (length elements)
       [(1)
-       (unless (hash-has-key? decls (first elements))
+       (unless (hash-has-key? contexts (first elements))
          (error (format "no context named ~a" name)))
-       (hash-ref decls (first elements))]
+       (hash-ref contexts (first elements))]
       [(2)
        (unless (hash-has-key? library (first elements))
          (error (format "no library named ~a" (first elements))))
        (define library-doc (hash-ref library (first elements)))
-       (send library-doc get-context-declarations (second elements))]
+       (send library-doc get-context (second elements))]
       [else
        (error (format "illegal context specification ~a" name))]))
 
+  ;; Return an SXML representation of the document
   (define (get-document-sxml)
     `(*TOP* (leibniz-document
              ,@(for/list ([name (reverse order)])
                  (get-context-sxml name)))))
 
+  ;; Return an SXML representation of a context.
   (define (get-context-sxml name)
 
     (define (term->sxml term)
@@ -633,7 +662,7 @@
       `(assets ,@(for/list ([(label asset) assets])
                    `(asset (@ (id ,(symbol->string label))) ,(asset->sxml asset)))))
 
-    (define cdecls (hash-ref decls name))
+    (define cdecls (hash-ref contexts name))
 
     `(context (@ (id ,name))
               (includes ,@(for/list ([mode/name (hash-ref cdecls 'includes)])
@@ -650,6 +679,7 @@
                          (rule->sxml rd)))
               ,(assets->sxml (hash-ref cdecls 'assets))))
 
+  ;; Write the document to an XML file.
   (define (write-xml filename)
     (define sxml (get-document-sxml))
     (call-with-output-file filename
@@ -657,9 +687,11 @@
         (srl:sxml->xml sxml output-port))
       #:mode 'text #:exists 'replace))
 
+   ;; Import an SXML document to the library.
   (define (import-sxml document-name sxml-document)
     (add-to-library document-name (sxml->document sxml-document)))
 
+   ;; Import an document from an XML file to the library.
   (define (import-xml document-name filename)
     (import-sxml document-name
                  (call-with-input-file filename
@@ -667,36 +699,39 @@
                      (ssax:xml->sxml input-port empty))
                    #:mode 'text)))
 
+  ;; Create internal data structures from source declarations
+  ;; for various asset types.
+
   (define (make-term context-name term-expr loc)
-    (define context (get-context-declarations context-name))
+    (define context (get-context context-name))
     (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       ((make-term* signature) term-expr)))
 
   (define (make-rule context-name rule-expr loc)
-    (define context (get-context-declarations context-name))
+    (define context (get-context context-name))
     (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (make-rule* signature
-                  (first (hash-ref (preprocess-declarations
+                  (first (hash-ref (preprocess-source-declarations
                                     (list (cons rule-expr loc)))
                                    'rules)))))
 
   (define (make-transformation context-name rule-expr loc)
-    (define context (get-context-declarations context-name))
+    (define context (get-context context-name))
     (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (equations:make-transformation signature
-                                     (make-rule* signature
-                                                 (first (hash-ref (preprocess-declarations
-                                                                   (list (cons rule-expr loc)))
-                                                                  'rules))))))
+        (make-rule* signature
+                    (first (hash-ref (preprocess-source-declarations
+                                      (list (cons rule-expr loc)))
+                                     'rules))))))
 
   (define (make-equation context-name equation-expr loc)
-    (define context (get-context-declarations context-name))
+    (define context (get-context context-name))
     (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (define ad (hash-ref (preprocess-declarations
+      (define ad (hash-ref (preprocess-source-declarations
                             (list (cons (list 'asset (second equation-expr) equation-expr) loc)))
                            'assets))
       (unless (equal? (hash-count ad) 1)
@@ -705,11 +740,11 @@
                       (first (hash-values ad)))))
 
   (define (make-test context-name rule-expr loc)
-    (define context (get-context-declarations context-name))
+    (define context (get-context context-name))
     (define signature (hash-ref context 'compiled-signature))
     (define rules (hash-ref context 'compiled-rules))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (define rd (hash-ref (preprocess-declarations
+      (define rd (hash-ref (preprocess-source-declarations
                             (list (cons rule-expr loc)))
                            'rules))
       (unless (equal? (length rd) 1)
@@ -723,6 +758,8 @@
            (list term expected rterm))]
         [_ (error "test may not contain rule clauses")])))
 
+  ;; Make a graphical representation of the signatures of all documents
+  ;; (using graphviz).
   (define (write-signature-graphs directory)
 
     (define (delete-directory-recursive directory)
@@ -747,7 +784,7 @@
             (recursive-file-list path)]))))
 
     (delete-directory-recursive directory)
-    (for ([(name context) (in-hash decls)])
+    (for ([(name context) (in-hash contexts)])
       (define path (build-path directory name))
       (tools:signature->graphviz path (hash-ref context 'compiled-signature)))
 
@@ -792,25 +829,30 @@
                    builtins:IEEE-float-signature
                    builtins:merged-IEEE-float-rules)))
 
+;; An empty document has "builtins" in its library, ensuring that
+;; it is always available.
+
 (define empty-document
   (~> (document (hash) empty  (hash))
       (add-to-library "builtins" builtins)))
 
+;; Tests
+
 (module+ test
   (define test-document1
     (~> empty-document
-        (new-context-from-source
+        (add-context-from-source
          "test"
          (list (cons '(sort foo) #f)
                (cons '(sort bar) #f)
                (cons '(subsort foo bar) #f)))))
   (check-equal? (~> empty-document
-                    (new-context-from-source
+                    (add-context-from-source
                      "test"
                      (list (cons '(subsort foo bar) #f))))
                 test-document1)
   (check-equal? (~> empty-document
-                    (new-context-from-source
+                    (add-context-from-source
                      "test"
                      (list (cons '(sort foo) #f)
                            (cons '(sort bar) #f)
@@ -821,7 +863,7 @@
                 test-document1)
 
   (check-equal? (~> empty-document
-                    (new-context-from-source
+                    (add-context-from-source
                      "test"
                      (list (cons '(subsort foo bar) #f)
                            (cons '(op a-foo () foo) #f)))
@@ -830,7 +872,7 @@
                 "foo:a-foo")
 
   (check-equal? (~> empty-document
-                    (new-context-from-source
+                    (add-context-from-source
                      "test"
                      (list (cons '(subsort foo bar) #f)
                            (cons '(op a-foo () foo) #f)
@@ -841,9 +883,10 @@
                                         ((var X foo))) #f)
                            (cons '(asset eq1
                                          (equation (term/var a-foo)
-                                                   (term a-foo ((term/var a-foo)))
+                                                   (term a-foo
+                                                         ((term/var a-foo)))
                                                    ())) #f)))
-                    (get-context-declarations "test")
+                    (get-context "test")
                     (clean-declarations))
                 (hash 'includes empty
                       'locs (hash)
@@ -873,12 +916,12 @@
                      (cons '(var X bar) #f))])
     (check-not-exn (thunk
                     (~> empty-document
-                        (new-context-from-source "test" (take decls 4)))))
+                        (add-context-from-source "test" (take decls 4)))))
     ;; var name redefined
     (check-exn exn:fail?
                (thunk
                 (~> empty-document
-                    (new-context-from-source "test" decls)))))
+                    (add-context-from-source "test" decls)))))
 
   (let ([decls (list (cons '(subsort foo bar) #f)
                      (cons '(op a-foo () foo) #f)
@@ -898,22 +941,22 @@
                                              ())) #f))])
     (check-not-exn (thunk
                     (~> empty-document
-                        (new-context-from-source "test" (take decls 5)))))
+                        (add-context-from-source "test" (take decls 5)))))
     ;; asset name redefined to the same value
     (check-not-exn (thunk
                     (~> empty-document
-                        (new-context-from-source "test" (take decls 6)))))
+                        (add-context-from-source "test" (take decls 6)))))
     ;; asset name redefined to a different value
     (check-exn exn:fail?
                (thunk
                 (~> empty-document
-                    (new-context-from-source "test" decls)))))
+                    (add-context-from-source "test" decls)))))
 
   ;; (check-exn exn:fail?
   ;;            ; non-regular signature
   ;;            (thunk
   ;;             (~> empty-document
-  ;;                 (new-context-from-source "test"
+  ;;                 (add-context-from-source "test"
   ;;                              (list (cons '(subsort A B) #f)
   ;;                                    (cons '(subsort A C) #f)
   ;;                                    (cons '(op foo ((sort B)) B) #f)
@@ -921,7 +964,7 @@
 
   (define test-document2
     (~> empty-document
-        (new-context-from-source
+        (add-context-from-source
          "test"
          (list (cons '(use "builtins/integers") #f)
                (cons '(subsort foo bar) #f)
@@ -962,9 +1005,9 @@
   (check-equal? (~> test-document2
                     get-document-sxml
                     sxml->document
-                    (get-context-declarations "test")
+                    (get-context "test")
                     (hash-remove 'locs))
-                (~> (get-context-declarations test-document2 "test")
+                (~> (get-context test-document2 "test")
                     (hash-remove 'locs))))
 
 ;; Tests for module "transformations.rkt"
@@ -974,7 +1017,7 @@
 
   (define a-document
     (~> empty-document
-        (new-context-from-source
+        (add-context-from-source
          "template"
          (list (cons '(subsort SQ Q) #f)
                (cons '(var a Q) #f)
@@ -993,12 +1036,12 @@
 
   ;; hide-vars
   (check-equal? (~> a-document
-                    (new-context-from-source
+                    (add-context-from-source
                      "test"
                      (list (cons '(insert "template" hide-vars) #f)))
-                    (get-context-declarations "test"))
+                    (get-context "test"))
                 (~> a-document
-                    (new-context-from-source
+                    (add-context-from-source
                      "test"
                      (list (cons '(subsort SQ Q) #f)
                            (cons '(op foo () SQ) #f)
@@ -1008,30 +1051,33 @@
                                         (term/var b)
                                         ((var a Q) (var b SQ) (var x SQ))) #f)
                            (cons '(asset eq-asset
-                                         (equation (term + ((term/var b) (term/var x)))
+                                         (equation (term + ((term/var b)
+                                                            (term/var x)))
                                                    (term/var b)
-                                                   ((var a Q) (var b SQ) (var x SQ)))) #f)
+                                                   ((var a Q)
+                                                    (var b SQ)
+                                                    (var x SQ)))) #f)
                            (cons '(asset term-asset (term/var foo)) #f)))
-                    (get-context-declarations "test")))
+                    (get-context "test")))
 
   (check-exn exn:fail?
              (thunk (~> a-document
-                        (new-context-from-source
+                        (add-context-from-source
                          "with-var-term"
                          (list (cons '(insert "template") #f)
                                (cons '(asset var-term-asset (term/var b)) #f)))
-                        (new-context-from-source
+                        (add-context-from-source
                          "test"
                          (list (cons '(insert "with-var-term" hide-vars) #f))))))
 
   ;; rename-sort
   (check-equal? (~> a-document
-                    (new-context-from-source
+                    (add-context-from-source
                      "test"
                      (list (cons '(insert "template" (rename-sort SQ M)) #f)))
-                    (get-context-declarations "test"))
+                    (get-context "test"))
                 (~> a-document
-                    (new-context-from-source
+                    (add-context-from-source
                      "test"
                      (list (cons '(subsort M Q) #f)
                            (cons '(var a Q) #f)
@@ -1043,16 +1089,17 @@
                                         (term/var b)
                                         ((var x M))) #f)
                            (cons '(asset eq-asset
-                                         (equation (term + ((term/var b) (term/var x)))
+                                         (equation (term + ((term/var b)
+                                                            (term/var x)))
                                                    (term/var b)
                                                    ((var x M)))) #f)
                            (cons '(asset term-asset (term/var foo)) #f)))
-                    (get-context-declarations "test")))
+                    (get-context "test")))
 
   ;; real->float
   (define heron
     (~> empty-document
-        (new-context-from-source
+        (add-context-from-source
          "using-rational"
          (list (cons '(use "builtins/real-numbers") #f)
                (cons '(op heron ((var x ℝnn) (var ε ℝp) (var e ℝnn)) ℝnn) #f)
@@ -1088,7 +1135,7 @@
                (cons '(asset term-asset
                              (term _× ((rational 1/2)
                                        (term heron ((term/var x) (term/var ε) (term/var e)))))) #f)))
-        (new-context-from-source
+        (add-context-from-source
          "using-float"
          (list (cons '(use "builtins/real-numbers") #f)
                (cons '(use "builtins/IEEE-floating-point") #f)
@@ -1125,10 +1172,10 @@
                (cons '(asset term-asset
                              (term _× ((floating-point 0.5)
                                        (term heron ((term/var x) (term/var ε) (term/var e)))))) #f)))
-        (new-context-from-source
+        (add-context-from-source
          "converted-to-float"
          (list (cons '(insert "using-rational" (real->float FP64)) #f)))))
   (check-equal? (~> heron
-                    (get-context-declarations "converted-to-float"))
+                    (get-context "converted-to-float"))
                 (~> heron
-                    (get-context-declarations "using-float"))))
+                    (get-context "using-float"))))
