@@ -2,45 +2,49 @@
 
 (provide
  (contract-out
-  [truth context?]
-  [integers context?]
-  [rational-numbers context?]
-  [real-numbers context?]
-  [IEEE-floating-point context?]))
+  [truth-signature signature?]
+  [truth-rules rulelist?]
+  [integer-signature signature?]
+  [merged-integer-rules rulelist?]
+  [rational-signature signature?]
+  [merged-rational-rules rulelist?]
+  [real-number-signature signature?]
+  [merged-real-number-rules rulelist?]
+  [IEEE-float-signature signature?]
+  [merged-IEEE-float-rules rulelist?]))
 
 (require "./builtins.rkt"
+         "./operators.rkt"
+         (prefix-in ss: "./signature-syntax.rkt")
          "./terms.rkt"
          "./equations.rkt"
-         (only-in "./contexts.rkt" context? define-context make-context)
+         "./rewrite-syntax.rkt"
          threading)
 
 (module+ test
-  (require chk
-           "./rewrite-syntax.rkt"))
+  (require chk))
 
 ;
 ; Truth
 ;
-(define truth
-  (make-context
-   truth-sorts truth-signature
-   (~> empty-rulelist
-       (add-rule
-        (make-rule truth-signature
-                   (make-term truth-signature
-                              '_== (list (make-uvar truth-sorts 'X)
-                                         (make-uvar truth-sorts 'Y)))
-                   #f
-                   (λ (signature pattern condition substitution)
-                     (let ((x (substitution-value substitution 'X))
-                           (y (substitution-value substitution 'Y)))
-                       (make-term signature
-                                  (if (equal? x y) 'true 'false)
-                                  empty)))
-                   #f #f)))))
+(define truth-rules
+  (~> empty-rulelist
+      (add-rule
+       (make-rule truth-signature
+                  (make-term truth-signature
+                             '_== (list (make-uvar truth-sorts 'X)
+                                        (make-uvar truth-sorts 'Y)))
+                  #f
+                  (λ (signature pattern condition substitution)
+                    (let ((x (substitution-value substitution 'X))
+                          (y (substitution-value substitution 'Y)))
+                      (make-term signature
+                                 (if (equal? x y) 'true 'false)
+                                 empty)))
+                  #f #f))))
 
 (module+ test
-  (with-context truth
+  (with-rules truth-signature truth-rules
     (chk
      #:= (RT (_== true false)) (T false)
      #:= (RT (_== true true)) (T true)
@@ -91,73 +95,71 @@
     (error "expt: undefined for 0 and 0"))
   (expt x y))
 
-(define integer*
-  (make-context integer-sorts integer-signature empty-rulelist))
+(define integer-rules
+  (rules integer-signature
+         (-> #:vars ([X ℤ] [Y zero])
+             (_+ X Y) (return-X))
+         (-> #:vars ([X zero] [Y ℤ])
+             (_+ X Y) (return-Y))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_+ X Y) (binary-op integer? +))
 
-(define-context integers
-  (include integer*)
-  (include truth)
+         (-> #:vars ([X ℤ] [Y zero])
+             (_- X Y) (return-X))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_- X Y) (binary-op integer? -))
 
-  (-> #:vars ([X ℤ] [Y zero])
-      (_+ X Y) (return-X))
-  (-> #:vars ([X zero] [Y ℤ])
-      (_+ X Y) (return-Y))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_+ X Y) (binary-op integer? +))
+         (=> #:vars ([X zero] [Y ℤ])
+             (_× X Y) 0)
+         (=> #:vars ([X ℤ] [Y zero])
+             (_× X Y) 0)
+         (-> #:vars ([X ℤ])
+             (_× 1 X) (return-X))
+         (-> #:vars ([X ℤ])
+             (_× X 1) (return-X))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_× X Y) (binary-op integer? *))
 
-  (-> #:vars ([X ℤ] [Y zero])
-      (_- X Y) (return-X))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_- X Y) (binary-op integer? -))
+         (=> #:vars ([X zero] [Y ℤnz])
+             (_div X Y) 0)
+         (-> #:vars ([X ℤ])
+             (_div X 1) (return-X))
+         (-> #:vars ([X ℤ] [Y ℤnz])
+             (_div X Y) (binary-op integer? quotient))
 
-  (=> #:vars ([X zero] [Y ℤ])
-      (_× X Y) 0)
-  (=> #:vars ([X ℤ] [Y zero])
-      (_× X Y) 0)
-  (-> #:vars ([X ℤ])
-      (_× 1 X) (return-X))
-  (-> #:vars ([X ℤ])
-      (_× X 1) (return-X))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_× X Y) (binary-op integer? *))
+         (=> #:vars ([X zero] [Y ℤnz])
+             (_rem X Y) 0)
+         (=> #:vars ([X ℤ])
+             (_rem X 1) 0)
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_rem X Y) (binary-op integer? remainder))
 
-  (=> #:vars ([X zero] [Y ℤnz])
-      (_div X Y) 0)
-  (-> #:vars ([X ℤ])
-      (_div X 1) (return-X))
-  (-> #:vars ([X ℤ] [Y ℤnz])
-      (_div X Y) (binary-op integer? quotient))
+         (=> #:vars ([X ℤnz] [Y zero])
+             (^ X Y) 1)
+         (=> #:vars ([X ℕnz])
+             (^ 0 X) 0)
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (^ X Y) (binary-op integer? expt-with-fix-for-zero))
 
-  (=> #:vars ([X zero] [Y ℤnz])
-      (_rem X Y) 0)
-  (=> #:vars ([X ℤ])
-      (_rem X 1) 0)
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_rem X Y) (binary-op integer? remainder))
+         (-> #:vars ([X ℤ])
+             (abs X) (unary-op integer? abs))
 
-  (=> #:vars ([X ℤnz] [Y zero])
-      (^ X Y) 1)
-  (=> #:vars ([X ℕnz])
-      (^ 0 X) 0)
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (^ X Y) (binary-op integer? expt-with-fix-for-zero))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_= X Y) (comparison-op integer? =))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_< X Y) (comparison-op integer? <))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_> X Y) (comparison-op integer? >))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_≤ X Y) (comparison-op integer? <=))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_≥ X Y) (comparison-op integer? >=))))
 
-  (-> #:vars ([X ℤ])
-      (abs X) (unary-op integer? abs))
-
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_= X Y) (comparison-op integer? =))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_< X Y) (comparison-op integer? <))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_> X Y) (comparison-op integer? >))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_≤ X Y) (comparison-op integer? <=))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_≥ X Y) (comparison-op integer? >=)))
+(define merged-integer-rules
+  (merge-rulelists truth-rules integer-rules integer-signature))
 
 (module+ test
-  (with-context integers
+  (with-rules integer-signature merged-integer-rules
     (chk
      #:= (RT (_+ 2 3)) (T 5)
      #:= (RT (_- 2 3)) (T -1)
@@ -179,12 +181,13 @@
      #:= (RT (_≥ 3 3)) (T true)
      #:= (RT (_== 3 3)) (T true)
      #:= (RT (_== 3 1)) (T false)))
-  (define-context integers+
-    (include integers)
-    (op an-int ℤ)
-    (op a-nzint ℤnz)
-    (op a-nznat ℕnz))
-  (with-context integers+
+  (define integer-signature+
+    (ss:signature
+     (include integer-signature)
+     (op an-int ℤ)
+     (op a-nzint ℤnz)
+     (op a-nznat ℕnz)))
+  (with-rules integer-signature+ merged-integer-rules
     (chk
      #:= (RT (_+ 0 an-int)) (T an-int)
      #:= (RT (_+ an-int 0)) (T an-int)
@@ -204,77 +207,80 @@
      #:= (RT (^ an-int 0)) (T (^ an-int 0))
      #:= (RT (^ 0 an-int)) (T (^ 0 an-int)))))
 
-(define rationals*
-  (make-context rational-sorts rational-signature empty-rulelist))
+(define rational-rules
+  (rules rational-signature
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_+ X Y) (binary-op exact? +))
 
-(define-context rationals**
-  (include rationals*)
-  (include truth)
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_+ X Y) (binary-op exact? +))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_- X Y) (binary-op exact? -))
 
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_- X Y) (binary-op exact? -))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_× X Y) (binary-op exact? *))
 
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_× X Y) (binary-op exact? *))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_÷ X Y) (binary-op exact? /))
 
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_÷ X Y) (binary-op exact? /))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (^ X Y) (binary-op exact? expt-with-fix-for-zero))
 
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (^ X Y) (binary-op exact? expt-with-fix-for-zero))
+         (-> #:vars ([X ℚ])
+             (abs X) (unary-op exact? abs))
 
-  (-> #:vars ([X ℚ])
-      (abs X) (unary-op exact? abs))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_= X Y) (comparison-op exact? =))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_< X Y) (comparison-op exact? <))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_> X Y) (comparison-op exact? >))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_≤ X Y) (comparison-op exact? <=))
+         (-> #:vars ([X ℚ] [Y ℚ])
+             (_≥ X Y) (comparison-op exact? >=))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_div X Y) (binary-op integer? quotient))
+         (-> #:vars ([X ℤ] [Y ℤ])
+             (_rem X Y) (binary-op integer? remainder))))
 
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_= X Y) (comparison-op exact? =))
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_< X Y) (comparison-op exact? <))
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_> X Y) (comparison-op exact? >))
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_≤ X Y) (comparison-op exact? <=))
-  (-> #:vars ([X ℚ] [Y ℚ])
-      (_≥ X Y) (comparison-op exact? >=))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_div X Y) (binary-op integer? quotient))
-  (-> #:vars ([X ℤ] [Y ℤ])
-      (_rem X Y) (binary-op integer? remainder)))
+(define merged-rational-rules**
+  (merge-rulelists truth-rules rational-rules rational-signature))
 
-(define-context rational-numbers
-  (include rationals**)
+(define rational-special-rules
+  (rules rational-signature
+         (-> #:vars ([X ℚ] [Y zero])
+             (_+ X Y) (return-X))
+         (-> #:vars ([X zero] [Y ℚ])
+             (_+ X Y) (return-Y))
 
-  (-> #:vars ([X ℚ] [Y zero])
-      (_+ X Y) (return-X))
-  (-> #:vars ([X zero] [Y ℚ])
-      (_+ X Y) (return-Y))
+         (-> #:vars ([X ℚ] [Y zero])
+             (_- X Y) (return-X))
 
-  (-> #:vars ([X ℚ] [Y zero])
-      (_- X Y) (return-X))
+         (=> #:vars ([X zero] [Y ℚ])
+             (_× X Y) 0)
+         (=> #:vars ([X ℚ] [Y zero])
+             (_× X Y) 0)
+         (-> #:vars ([X ℚ])
+             (_× 1 X) (return-X))
+         (-> #:vars ([X ℚ])
+             (_× X 1) (return-X))
 
-  (=> #:vars ([X zero] [Y ℚ])
-      (_× X Y) 0)
-  (=> #:vars ([X ℚ] [Y zero])
-      (_× X Y) 0)
-  (-> #:vars ([X ℚ])
-      (_× 1 X) (return-X))
-  (-> #:vars ([X ℚ])
-      (_× X 1) (return-X))
+         (=> #:vars ([X zero] [Y ℚnz])
+             (_÷ X Y) 0)
+         (-> #:vars ([X ℚ])
+             (_÷ X 1) (return-X))
 
-  (=> #:vars ([X zero] [Y ℚnz])
-      (_÷ X Y) 0)
-  (-> #:vars ([X ℚ])
-      (_÷ X 1) (return-X))
+         (=> #:vars ([X ℚnz] [Y zero])
+             (^ X Y) 1)
+         (=> #:vars ([X ℕnz])
+             (^ 0 X) 0)))
 
-  (=> #:vars ([X ℚnz] [Y zero])
-      (^ X Y) 1)
-  (=> #:vars ([X ℕnz])
-      (^ 0 X) 0))
+(define merged-rational-rules
+  (merge-rulelists merged-rational-rules**
+                   rational-special-rules
+                   rational-signature))
 
 (module+ test
-  (with-context rational-numbers
+  (with-rules rational-signature merged-rational-rules
     (chk
      #:= (RT (_+ 2 3)) (T 5)
      #:= (RT (_+ 1/2 -1/2)) (T 0)
@@ -300,12 +306,13 @@
      #:= (RT (_≥ 1/3 1/3)) (T true)
      #:= (RT (_== 1/3 1/3)) (T true)
      #:= (RT (_== 1/3 2/3)) (T false)))
-  (define-context rational-numbers+
-    (include rational-numbers)
-    (op a-rat ℚ)
-    (op a-nzrat ℚnz)
-    (op a-nznat ℕnz))
-  (with-context rational-numbers+
+  (define rational-signature+
+    (ss:signature
+     (include rational-signature)
+     (op a-rat ℚ)
+     (op a-nzrat ℚnz)
+     (op a-nznat ℕnz)))
+  (with-rules rational-signature+ merged-rational-rules
     (chk
      #:= (RT (_+ 0 a-rat)) (T a-rat)
      #:= (RT (_+ a-rat 0)) (T a-rat)
@@ -330,78 +337,86 @@
 ; 'ℝp   positive real
 ; 'ℝnn  non-negative real
 ;
-(define-context real-numbers
-  (include rationals**)
-  (sort ℝ)
-  (subsort ℚ ℝ)
-  (sort ℝnz)
-  (subsort ℝnz ℝ)
-  (subsort ℚnz ℝnz)
-  (sort ℝp)
-  (subsort ℝp ℝnz)
-  (subsort ℚp ℝp)
-  (sort ℝnn)
-  (subsort ℝnn ℝ)
-  (subsort ℝp ℝnn)
-  (subsort ℚnn ℝnn)
-  (op (_+ ℝ ℝ) ℝ)
-  (op (_+ ℝp ℝp) ℝp)
-  (op (_+ ℝnn ℝnn) ℝnn)
-  (op (_- ℝ ℝ) ℝ)
-  (op (_× ℝ ℝ) ℝ)
-  (op (_× ℝp ℝp) ℝp)
-  (op (_× ℝnn ℝnn) ℝnn)
-  (op (_÷ ℝ ℝnz) ℝ)
-  (op (_÷ ℝnz ℝnz) ℝnz)
-  (op (_÷ ℝp ℝp) ℝp)
-  (op (_÷ ℝnn ℝp) ℝnn)
-  (op (^ ℝp ℝnz) ℝp)
-  (op (^ ℝnz ℤnz) ℝnz)
-  (op (^ ℝ ℕnz) ℝ)
-  (op (abs ℝ) ℝnn)
-  (op (abs ℝnz) ℝp)
-  (op (√ ℝnn) ℝnn)
-  (op (√ ℝp) ℝp)
-  (op (_= ℝ ℝ) boolean)
-  (op (_< ℝ ℝ) boolean)
-  (op (_> ℝ ℝ) boolean)
-  (op (_≤ ℝ ℝ) boolean)
-  (op (_≥ ℝ ℝ) boolean)
+(define real-number-signature
+  (ss:signature
+   (include rational-signature)
+   (sort ℝ)
+   (subsort ℚ ℝ)
+   (sort ℝnz)
+   (subsort ℝnz ℝ)
+   (subsort ℚnz ℝnz)
+   (sort ℝp)
+   (subsort ℝp ℝnz)
+   (subsort ℚp ℝp)
+   (sort ℝnn)
+   (subsort ℝnn ℝ)
+   (subsort ℝp ℝnn)
+   (subsort ℚnn ℝnn)
+   (op (_+ ℝ ℝ) ℝ)
+   (op (_+ ℝp ℝp) ℝp)
+   (op (_+ ℝnn ℝnn) ℝnn)
+   (op (_- ℝ ℝ) ℝ)
+   (op (_× ℝ ℝ) ℝ)
+   (op (_× ℝp ℝp) ℝp)
+   (op (_× ℝnn ℝnn) ℝnn)
+   (op (_÷ ℝ ℝnz) ℝ)
+   (op (_÷ ℝnz ℝnz) ℝnz)
+   (op (_÷ ℝp ℝp) ℝp)
+   (op (_÷ ℝnn ℝp) ℝnn)
+   (op (^ ℝp ℝnz) ℝp)
+   (op (^ ℝnz ℤnz) ℝnz)
+   (op (^ ℝ ℕnz) ℝ)
+   (op (abs ℝ) ℝnn)
+   (op (abs ℝnz) ℝp)
+   (op (√ ℝnn) ℝnn)
+   (op (√ ℝp) ℝp)
+   (op (_= ℝ ℝ) boolean)
+   (op (_< ℝ ℝ) boolean)
+   (op (_> ℝ ℝ) boolean)
+   (op (_≤ ℝ ℝ) boolean)
+   (op (_≥ ℝ ℝ) boolean)))
 
-  (-> #:vars ([X ℝ] [Y zero])
-      (_+ X Y) (return-X))
-  (-> #:vars ([X zero] [Y ℝ])
-      (_+ X Y) (return-Y))
+(define real-number-rules
+  (rules real-number-signature
+   (-> #:vars ([X ℝ] [Y zero])
+       (_+ X Y) (return-X))
+   (-> #:vars ([X zero] [Y ℝ])
+       (_+ X Y) (return-Y))
 
-  (-> #:vars ([X ℝ] [Y zero])
-      (_- X Y) (return-X))
+   (-> #:vars ([X ℝ] [Y zero])
+       (_- X Y) (return-X))
 
-  (=> #:vars ([X zero] [Y ℝ])
-      (_× X Y) 0)
-  (=> #:vars ([X ℝ] [Y zero])
-      (_× X Y) 0)
-  (-> #:vars ([X ℝ])
-      (_× 1 X) (return-X))
-  (-> #:vars ([X ℝ])
-      (_× X 1) (return-X))
+   (=> #:vars ([X zero] [Y ℝ])
+       (_× X Y) 0)
+   (=> #:vars ([X ℝ] [Y zero])
+       (_× X Y) 0)
+   (-> #:vars ([X ℝ])
+       (_× 1 X) (return-X))
+   (-> #:vars ([X ℝ])
+       (_× X 1) (return-X))
 
-  (=> #:vars ([X zero] [Y ℝnz])
-      (_÷ X Y) 0)
-  (-> #:vars ([X ℝ])
-      (_÷ X 1) (return-X))
+   (=> #:vars ([X zero] [Y ℝnz])
+       (_÷ X Y) 0)
+   (-> #:vars ([X ℝ])
+       (_÷ X 1) (return-X))
 
-  (=> #:vars ([X ℝnz] [Y zero])
-      (^ X Y) 1)
-  (=> #:vars ([X ℝp])
-      (^ 0 X) 0))
+   (=> #:vars ([X ℝnz] [Y zero])
+       (^ X Y) 1)
+   (=> #:vars ([X ℝp])
+       (^ 0 X) 0)))
+
+(define merged-real-number-rules
+  (merge-rulelists merged-rational-rules** real-number-rules
+                   real-number-signature))
 
 (module+ test
-  (define-context real-numbers+
-    (include real-numbers)
-    (op a-real ℝ)
-    (op a-nzreal ℝnz)
-    (op a-preal ℝp))
-  (with-context real-numbers+
+  (define real-number-signature+
+    (ss:signature
+     (include real-number-signature)
+     (op a-real ℝ)
+     (op a-nzreal ℝnz)
+     (op a-preal ℝp)))
+  (with-rules real-number-signature+ merged-real-number-rules
     (chk
      #:= (RT (_+ 0 a-real)) (T a-real)
      #:= (RT (_+ a-real 0)) (T a-real)
@@ -421,67 +436,66 @@
 ;
 ; Floating-point numbers (IEEE binary32 and binary64)
 ;
-(define IEEE-float*
-  (make-context IEEE-float-sorts IEEE-float-signature empty-rulelist))
+(define IEEE-float-rules
+  (rules IEEE-float-signature
+         (-> #:vars ([X FP32] [Y FP32])
+             (_+ X Y) (binary-op single-flonum? +))
+         (-> #:vars ([X FP32] [Y FP32])
+             (_- X Y) (binary-op single-flonum? -))
+         (-> #:vars ([X FP32] [Y FP32])
+             (_× X Y) (binary-op single-flonum? *))
+         (-> #:vars ([X FP32] [Y FP32])
+             (_÷ X Y) (binary-op single-flonum? /))
+         (-> #:vars ([X FP32] [Y FP32])
+             (^ X Y) (binary-op single-flonum? expt-with-fix-for-zero))
+         (-> #:vars ([X FP32] [Y ℤ])
+             (^ X Y) (binary-op (cons single-flonum? integer?) expt-with-fix-for-zero))
+         (-> #:vars ([X FP32])
+             (abs X) (unary-op single-flonum? abs))
+         (-> #:vars ([X FP32])
+             (√ X) (unary-op single-flonum? sqrt))
+         (-> #:vars ([X FP32] [Y FP32])
+             (_= X Y) (comparison-op single-flonum? =))
+         (-> #:vars ([X FP32] [Y FP32])
+             (_< X Y) (comparison-op single-flonum? <))
+         (-> #:vars ([X FP32] [Y FP32])
+             (_> X Y) (comparison-op single-flonum? >))
+         (-> #:vars ([X FP32] [Y FP32])
+             (_≤ X Y) (comparison-op single-flonum? <=))
+         (-> #:vars ([X FP32] [Y FP32])
+             (_≥ X Y) (comparison-op single-flonum? >=))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_+ X Y) (binary-op double-flonum? +))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_- X Y) (binary-op double-flonum? -))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_× X Y) (binary-op double-flonum? *))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_÷ X Y) (binary-op double-flonum? /))
+         (-> #:vars ([X FP64] [Y FP64])
+             (^ X Y) (binary-op double-flonum? expt-with-fix-for-zero))
+         (-> #:vars ([X FP64] [Y ℤ])
+             (^ X Y) (binary-op (cons double-flonum? integer?) expt-with-fix-for-zero))
+         (-> #:vars ([X FP64])
+             (abs X) (unary-op double-flonum? abs))
+         (-> #:vars ([X FP64])
+             (√ X) (unary-op double-flonum? sqrt))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_= X Y) (comparison-op double-flonum? =))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_< X Y) (comparison-op double-flonum? <))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_> X Y) (comparison-op double-flonum? >))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_≤ X Y) (comparison-op double-flonum? <=))
+         (-> #:vars ([X FP64] [Y FP64])
+             (_≥ X Y) (comparison-op double-flonum? >=))))
 
-(define-context IEEE-floating-point
-  (include IEEE-float*)
-  (include integers)
-  (-> #:vars ([X FP32] [Y FP32])
-      (_+ X Y) (binary-op single-flonum? +))
-  (-> #:vars ([X FP32] [Y FP32])
-      (_- X Y) (binary-op single-flonum? -))
-  (-> #:vars ([X FP32] [Y FP32])
-      (_× X Y) (binary-op single-flonum? *))
-  (-> #:vars ([X FP32] [Y FP32])
-      (_÷ X Y) (binary-op single-flonum? /))
-  (-> #:vars ([X FP32] [Y FP32])
-      (^ X Y) (binary-op single-flonum? expt-with-fix-for-zero))
-  (-> #:vars ([X FP32] [Y ℤ])
-      (^ X Y) (binary-op (cons single-flonum? integer?) expt-with-fix-for-zero))
-  (-> #:vars ([X FP32])
-      (abs X) (unary-op single-flonum? abs))
-  (-> #:vars ([X FP32])
-      (√ X) (unary-op single-flonum? sqrt))
-  (-> #:vars ([X FP32] [Y FP32])
-      (_= X Y) (comparison-op single-flonum? =))
-  (-> #:vars ([X FP32] [Y FP32])
-      (_< X Y) (comparison-op single-flonum? <))
-  (-> #:vars ([X FP32] [Y FP32])
-      (_> X Y) (comparison-op single-flonum? >))
-  (-> #:vars ([X FP32] [Y FP32])
-      (_≤ X Y) (comparison-op single-flonum? <=))
-  (-> #:vars ([X FP32] [Y FP32])
-      (_≥ X Y) (comparison-op single-flonum? >=))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_+ X Y) (binary-op double-flonum? +))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_- X Y) (binary-op double-flonum? -))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_× X Y) (binary-op double-flonum? *))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_÷ X Y) (binary-op double-flonum? /))
-  (-> #:vars ([X FP64] [Y FP64])
-      (^ X Y) (binary-op double-flonum? expt-with-fix-for-zero))
-  (-> #:vars ([X FP64] [Y ℤ])
-      (^ X Y) (binary-op (cons double-flonum? integer?) expt-with-fix-for-zero))
-  (-> #:vars ([X FP64])
-      (abs X) (unary-op double-flonum? abs))
-  (-> #:vars ([X FP64])
-      (√ X) (unary-op double-flonum? sqrt))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_= X Y) (comparison-op double-flonum? =))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_< X Y) (comparison-op double-flonum? <))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_> X Y) (comparison-op double-flonum? >))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_≤ X Y) (comparison-op double-flonum? <=))
-  (-> #:vars ([X FP64] [Y FP64])
-      (_≥ X Y) (comparison-op double-flonum? >=)))
+(define merged-IEEE-float-rules
+  (merge-rulelists merged-integer-rules IEEE-float-rules IEEE-float-signature))
 
 (module+ test
-  (with-context IEEE-floating-point
+  (with-rules IEEE-float-signature merged-IEEE-float-rules
     (chk
      #:= (RT (_+ #x1s0 #x2s0)) (T #x3s0)
      #:= (RT (_- #x1s0 #x2s0)) (T #x-1s0)

@@ -362,19 +362,9 @@
     (document decls order
               (hash-set library name library-document)))
 
-  (define (add-builtin-context name include-decls context)
+  (define (add-builtin-context name include-decls signature rules)
     (define temp-doc (new-context-from-source name include-decls))
     (define inclusion-decls (send temp-doc get-context-declarations name))
-    (define signature
-      (operators:merge-signatures
-       (hash-ref inclusion-decls 'compiled-signature)
-       (contexts:context-signature context)
-       #f))
-    (define rules
-      (equations:merge-rulelists
-       (hash-ref inclusion-decls 'compiled-rules)
-       (contexts:context-rules context)
-       signature))
     (document (hash-set decls name
                         (hash 'includes
                               (hash-ref inclusion-decls 'includes)
@@ -550,9 +540,6 @@
     (define assets (make-assets signature included-context-decls
                                 (hash-ref cdecls 'assets)
                                 locs))
-    (define context (contexts:make-context sorts
-                                           signature
-                                           rules))
     (define compiled (hash 'compiled-signature signature
                            'compiled-rules rules
                            'compiled-assets assets))
@@ -787,19 +774,24 @@
   (~> (document (hash) empty (hash))
       (add-builtin-context "truth"
                    empty
-                   builtins:truth)
+                   builtins:truth-signature
+                   builtins:truth-rules)
       (add-builtin-context "integers"
                    (list (cons '(use "truth") #f))
-                   builtins:integers)
+                   builtins:integer-signature
+                   builtins:merged-integer-rules)
       (add-builtin-context "rational-numbers"
                    (list (cons '(use "truth") #f))
-                   builtins:rational-numbers)
+                   builtins:rational-signature
+                   builtins:merged-rational-rules)
       (add-builtin-context "real-numbers"
                    (list (cons '(use "truth") #f))
-                   builtins:real-numbers)
+                   builtins:real-number-signature
+                   builtins:merged-real-number-rules)
       (add-builtin-context "IEEE-floating-point"
                    (list (cons '(use "integers") #f))
-                   builtins:IEEE-floating-point)))
+                   builtins:IEEE-float-signature
+                   builtins:merged-IEEE-float-rules)))
 
 (define empty-document
   (~> (document (hash) empty  (hash))
