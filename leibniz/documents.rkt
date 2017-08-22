@@ -16,7 +16,6 @@
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
          (prefix-in equations: "./equations.rkt")
-         (prefix-in contexts: "./contexts.rkt")
          (prefix-in rewrite: "./rewrite.rkt")
          (prefix-in tools: "./tools.rkt")
          (prefix-in builtins: "./builtin-contexts.rkt")

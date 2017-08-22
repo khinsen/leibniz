@@ -1,78 +1,19 @@
 #lang racket
 
-(provide with-rules rules
-         R T RT A S eq tr)
+(provide rules with-signature eq tr
+         [rename-out [ts:T T]
+                     [ts:term term]
+                     [ts:pattern pattern]])
 
-(require "./signature-syntax.rkt"
-         "./terms.rkt"
-         "./equations.rkt"
-         (prefix-in rs: "./rule-syntax.rkt")
-         (only-in "./rule-syntax.rkt" T eq tr)
-         "./rewrite.rkt"
+(require "./equations.rkt"
+         (prefix-in ts: "./term-syntax.rkt")
          threading
          racket/stxparam
          (for-syntax syntax/parse
                      racket/stxparam))
 
 (module+ test
-  (require chk)
-  (define test-signature
-    (signature
-     (sort boolean)
-     (op true boolean)
-     (op false boolean)
-     (op (not boolean) boolean)
-     (op foo boolean)
-     (op bar boolean)))
-  (define test-rules
-    (rules test-signature
-           (=> (not true) false)
-           (=> (not false) true)
-           (=> foo (not true) #:if false)
-           (=> foo (not false) #:if true))))
-
-(define (reduce-anything signature rules x)
-  (cond
-    [(term? x)
-     (reduce signature rules x)]
-    [(equation? x)
-     (reduce-equation signature rules x)]
-    [else
-     (error (format "cannot reduce ~s" x))]))
-
-(define (transform-anything signature tr x)
-  (cond
-    [(term? x)
-     (transform signature tr x)]
-    [(equation? x)
-     (transform-equation signature tr x)]
-    [else
-     (error (format "cannot transform ~s" x))]))
-
-(define (substitute-anything signature tr x)
-  (cond
-    [(term? x)
-     (substitute signature tr x)]
-    [(equation? x)
-     (substitute-equation signature tr x)]
-    [else
-     (error (format "cannot substitute ~s" x))]))
-
-(define-syntax-parameter R
-  (λ (stx)
-    (raise-syntax-error 'R "R keyword used outside with-rules" stx)))
-
-(define-syntax-parameter RT
-  (λ (stx)
-    (raise-syntax-error 'RT "RT keyword used outside with-rules" stx)))
-
-(define-syntax-parameter A
-  (λ (stx)
-    (raise-syntax-error 'A "A keyword used outside with-rules" stx)))
-
-(define-syntax-parameter S
-  (λ (stx)
-    (raise-syntax-error 'S "S keyword used outside with-rules" stx)))
+  (require rackunit))
 
 (begin-for-syntax
 
@@ -111,7 +52,7 @@
   (define-splicing-syntax-class (embedded-pattern sig var)
     #:description "embedded pattern in a rule"
     (pattern p:expr
-             #:with expr #`(rs:pattern #,sig #,var p)))
+             #:with expr #`(ts:pattern #,sig #,var p)))
 
   (define-splicing-syntax-class (opt-condition sig vars)
     #:description "optional condition in a rule"
@@ -169,7 +110,9 @@
              #:with vars #'fr.vars)))
 
 (define (local-vars vars var-defs)
-  (foldl (λ (vd vs) (hash-set vs (car vd) (cdr vd))) vars var-defs))
+  (foldl (λ (vd vs) (hash-set vs (car vd) (cdr vd)))
+         vars
+         var-defs))
 
 (define-syntax (rules stx)
   (syntax-parse stx
@@ -181,9 +124,17 @@
               rule-defs.expr))
            ...)]))
 
-(define-syntax (with-rules stx)
+(define-syntax-parameter eq
+  (λ (stx)
+    (raise-syntax-error 'eq "eq keyword used outside with-signature" stx)))
+
+(define-syntax-parameter tr
+  (λ (stx)
+    (raise-syntax-error 'tr "tr keyword used outside with-signature" stx)))
+
+(define-syntax (with-signature stx)
   (syntax-parse stx
-    [(_ signature:expr rules:expr body:expr ...)
+    [(_ signature:expr body:expr ...)
      #'(syntax-parameterize
            ([eq (λ (stx)
                   (syntax-parse stx
@@ -198,52 +149,6 @@
                      #'(let ([vars* (local-vars (hash) pr.vars)])
                          (make-transformation
                           signature
-                          (apply make-rule (append pr.args '(#f)))))]))]
-            [R (λ (stx)
-                 (syntax-parse stx
-                   [(_ arg:expr)
-                    #'(reduce-anything signature rules arg)]))]
-            [RT (λ (stx)
-                  (syntax-parse stx
-                    [(_ term)
-                     #'(reduce signature rules (T term))]))]
-            [A (λ (stx)
-                 (syntax-parse stx
-                   [(_ tr:expr arg:expr)
-                    #'(transform-anything signature tr arg)]))]
-            [S (λ (stx)
-                 (syntax-parse stx
-                   [(_ tr:expr arg:expr)
-                    #'(substitute-anything signature tr arg)]))])
-         (rs:with-signature signature
+                          (apply make-rule (append pr.args '(#f)))))]))])
+         (ts:with-signature signature
            body ...))]))
-
-(module+ test
-  (with-rules test-signature test-rules
-    (chk
-     #:= (RT (not true))         (T false)
-     #:= (RT (not false))        (T true)
-     #:= (RT (not (not false)))  (T false)
-     #:= (R (T foo))             (T true)
-     #:= (R (eq foo true))       (eq true true)
-     #:= (R (eq foo true))
-         (eq true true)
-     #:= (R (eq foo true))
-         (eq true true)
-     #:= (A (tr #:var (X boolean) X (not X)) (T bar))
-         (T (not bar))
-     #:= (A (tr #:var (X boolean) X (not X)) (T foo))
-         (T (not foo))
-     #:= (A (tr #:var (X boolean) X (not X)) (eq bar foo))
-         (eq (not bar) (not foo))
-     #:= (A (tr #:var (X boolean) X (not X)) (eq bar foo))
-         (eq (not bar) (not foo))
-     #:= (S (tr bar (not bar))
-            (T (not bar)))
-         (T (not (not bar)))
-     #:= (S (tr foo (not foo))
-            (T (not foo)))
-         (T (not (not foo)))
-     #:= (S (tr foo (not bar))
-            (eq foo bar))
-         (eq (not bar) bar))))

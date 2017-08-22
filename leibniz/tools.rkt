@@ -6,7 +6,6 @@
 
 (require "./sorts.rkt"
          "./operators.rkt"
-         "./contexts.rkt"
          racket/function
          threading)
 
@@ -23,7 +22,6 @@
     (cond
       [(sort-graph? s-graph) s-graph]
       [(signature? s-graph) (signature-sort-graph s-graph)]
-      [(context? s-graph) (signature-sort-graph (context-signature s-graph))]
       [else (error "illegal input data")]))
   (define subset (if sort-or-kind
                      (kind sorts sort-or-kind)
@@ -50,7 +48,6 @@
   (define signature
     (cond
       [(signature? sig) sig]
-      [(context? sig) (context-signature sig)]
       [else (error "illegal input data")]))
   (define sorts (signature-sort-graph signature))
   (define ranks (for/list ([rank (lookup-op-rank-list signature op-symbol arg-sorts)])
@@ -129,7 +126,6 @@
   (define signature
     (cond
       [(signature? sig) sig]
-      [(context? sig) (context-signature sig)]
       [else (error "illegal input data")]))
   (define sorts (signature-sort-graph signature))
   (define base-path (expand-user-path directory-path))

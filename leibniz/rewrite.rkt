@@ -23,55 +23,67 @@
          racket/trace)
 
 (module+ test
-  (require "./term-syntax.rkt"
-           "./contexts.rkt"
+  (require (prefix-in ss: "./signature-syntax.rkt")
+           "./rule-syntax.rkt"
            "./test-examples.rkt"
            rackunit
            racket/function
            threading)
 
-  (define-context test-context
-    (sort boolean)
-    (op true boolean)
-    (op false boolean)
-    (op (not boolean) boolean)
-    (op foo boolean)
-    (op bar boolean)
-    (=> (not true) false)
-    (=> (not false) true)
-    (=> foo (not true) #:if false)
-    (=> foo (not false) #:if true))
+  (define test-signature
+    (ss:signature
+     (sort boolean)
+     (op true boolean)
+     (op false boolean)
+     (op (not boolean) boolean)
+     (op foo boolean)
+     (op bar boolean)))
 
-  (define-context test-with-var
-    (sort boolean)
-    (sort FooBar)
-    (op true boolean)
-    (op false boolean)
-    (op (not boolean) boolean)
-    (op foo boolean)
-    (op bar boolean)
-    (op foo-bar FooBar)
-    (var X boolean)
-    (=> (not true) false)
-    (=> (not false) true)
-    (=> (not (not X)) X))
+  (define test-rules
+    (rules test-signature
+           (=> (not true) false)
+           (=> (not false) true)
+           (=> foo (not true) #:if false)
+           (=> foo (not false) #:if true)))
 
-  (define-context test-with-procedure
-    (sort boolean)
-    (op true boolean)
-    (op false boolean)
-    (op (not boolean) boolean)
-    (var X boolean)
-    (-> (not X) (λ (signature pattern condition substitution)
-                  (let ([x (substitution-value substitution 'X)])
-                    (define-values (op args) (term.op-and-args x))
-                    (cond
-                      [(equal? op 'true)
-                       (make-term signature 'false empty)]
-                      [(equal? op 'false)
-                       (make-term signature 'true empty)]
-                      [(equal? op 'not)
-                       (first args)]))))))
+  (define test-with-var-signature
+    (ss:signature
+     (sort boolean)
+     (sort FooBar)
+     (op true boolean)
+     (op false boolean)
+     (op (not boolean) boolean)
+     (op foo boolean)
+     (op bar boolean)
+     (op foo-bar FooBar)
+     (var X boolean)))
+
+  (define test-with-var-rules
+    (rules test-with-var-signature
+           (=> (not true) false)
+           (=> (not false) true)
+           (=> (not (not X)) X)))
+
+  (define test-with-procedure-signature
+    (ss:signature
+     (sort boolean)
+     (op true boolean)
+     (op false boolean)
+     (op (not boolean) boolean)
+     (var X boolean)))
+
+  (define test-with-procedure-rules
+    (rules test-with-procedure-signature
+           (-> (not X) (λ (signature pattern condition substitution)
+                         (let ([x (substitution-value substitution 'X)])
+                           (define-values (op args) (term.op-and-args x))
+                           (cond
+                             [(equal? op 'true)
+                              (make-term signature 'false empty)]
+                             [(equal? op 'false)
+                              (make-term signature 'true empty)]
+                             [(equal? op 'not)
+                              (first args)])))))))
 
 ;
 ; Rule matching and basic term rewriting
@@ -101,9 +113,9 @@
     (cons rule substitution)))
 
 (module+ test
-  (with-context test-context
-    (define signature (context-signature test-context))
-    (define rules (context-rules test-context))
+  (with-signature test-signature
+    (define signature test-signature)
+    (define rules test-rules)
     (check-equal? (all-matching-rules signature rules (T (not true)) #f)
                   (list (cons (make-rule signature (T (not true)) #f (T false) #f #t)
                               empty-substitution)))
@@ -143,9 +155,9 @@
 
 (module+ test
 
-  (with-context test-context
-    (define signature (context-signature test-context))
-    (define rules (context-rules test-context))
+  (with-signature test-signature
+    (define signature test-signature)
+    (define rules test-rules)
     (check-equal? (rewrite-head-once signature rules (T (not true)))
                   (T false))
     (check-equal? (rewrite-head-once signature rules (T (not false)))
@@ -156,9 +168,9 @@
                   (T (not false)))
     (check-exn exn:fail? (thunk (rewrite-head-once signature rules (T 42)))))
 
-  (with-context test-with-var
-    (define signature (context-signature test-with-var))
-    (define rules (context-rules test-with-var))
+  (with-signature test-with-var-signature
+    (define signature test-with-var-signature)
+    (define rules test-with-var-rules)
     (check-equal? (rewrite-head-once signature rules (T (not true)))
                   (T false))
     (check-equal? (rewrite-head-once signature rules (T (not false)))
@@ -167,9 +179,9 @@
                   (T false))
     (check-exn exn:fail? (thunk (rewrite-head-once signature rules (T 42)))))
 
-  (with-context test-with-procedure
-    (define signature (context-signature test-with-procedure))
-    (define rules (context-rules test-with-procedure))
+  (with-signature test-with-procedure-signature
+    (define signature test-with-procedure-signature)
+    (define rules test-with-procedure-rules)
     (check-equal? (rewrite-head-once signature rules (T (not true)))
                   (T false))
     (check-equal? (rewrite-head-once signature rules (T (not false)))
@@ -198,9 +210,9 @@
       (rewrite-head-once signature rules term)))
 
 (module+ test
-  (with-context test-context
-    (define signature (context-signature test-context))
-    (define rules (context-rules test-context))
+  (with-signature test-signature
+    (define signature test-signature)
+    (define rules test-rules)
     (check-equal? (rewrite-leftmost-innermost signature rules (T (not true)))
                   (T false))
     (check-equal? (rewrite-leftmost-innermost signature rules (T (not false)))
@@ -226,9 +238,9 @@
         [else                         (loop rewritten-term)]))))
 
 (module+ test
-  (with-context test-context
-    (define signature (context-signature test-context))
-    (define rules (context-rules test-context))
+  (with-signature test-signature
+    (define signature test-signature)
+    (define rules test-rules)
     (check-equal? (reduce signature rules (T (not true)))
                   (T false))
     (check-equal? (reduce signature rules (T (not false)))
@@ -290,9 +302,9 @@
                  (reduce signature rules (equation-right equation))))
 
 (module+ test
-  (with-context test-context
-    (define signature (context-signature test-context))
-    (define rules (context-rules test-context))
+  (with-signature test-signature
+    (define signature test-signature)
+    (define rules test-rules)
     (check-equal? (reduce-equation signature rules (eq foo true))
                   (eq true true))
     (check-equal? (reduce-equation signature rules (eq foo true))
@@ -333,9 +345,9 @@
                  (transform signature  transformation (equation-right equation))))
 
 (module+ test
-  (with-context test-with-var
+  (with-signature test-with-var-signature
+    (define signature test-with-var-signature)
     (define transformation (tr #:var (X boolean) X (not X)))
-    (define signature (context-signature test-with-var))
     (check-equal? (transform signature transformation (T foo))
                   (T (not foo)))
     (check-equal? (transform signature transformation (T X))
@@ -348,15 +360,15 @@
     (check-equal? (transform-equation signature transformation
                                       (eq foo bar))
                   (eq (not foo) (not bar))))
-  (with-context test-with-var
+  (with-signature test-with-var-signature
     (define transformation (tr #:vars ([% boolean] [Y FooBar]) % Y))
-    (define signature (context-signature test-with-var))
+    (define signature test-with-var-signature)
     (check-exn exn:fail?
                (thunk (transform signature transformation
                                  (T #:var (Y boolean) (not Y))))))
-  (with-context test-context
+  (with-signature test-with-var-signature
     (define transformation (tr #:var (X boolean) X (not X)))
-    (define signature (context-signature test-context))
+    (define signature test-with-var-signature)
     (check-equal? (transform-equation signature transformation
                                       (eq foo true))
                   (eq (not foo) (not true)))))
@@ -393,8 +405,8 @@
                  (substitute signature transformation (equation-right equation))))
 
 (module+ test
-  (with-context test-context
-    (define signature (context-signature test-context))
+  (with-signature test-signature
+    (define signature test-signature)
     (check-equal? (substitute signature
                               (tr bar (not bar))
                               (T (not bar)))
