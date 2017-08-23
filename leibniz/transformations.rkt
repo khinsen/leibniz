@@ -47,9 +47,10 @@
        (list 'rule (combined-vars vars) term1 term2 condition)]
       [(list 'equation vars term1 term2 condition)
        (list 'equation (combined-vars vars) term1 term2 condition)]
-      [(hash-table (_ _) ...)
-       (for/hash ([(label value) item])
-         (values label (transform value)))]
+      [(list 'assets assets)
+       (list 'assets
+             (for/hash ([(label value) assets])
+               (values label (transform value))))]
       [(list 'term/var name)
        (when (hash-has-key? var-decls name)
          (error (format "variable ~a has been removed" name)))
@@ -96,8 +97,10 @@
        (list 'rule (transform-vars vars) pattern replacement condition)]
       [(list 'equation vars left right condition)
        (list 'equation (transform-vars vars) left right condition)]
-      [(hash-table (_ _) ...)
-       (transform-assets item)]
+      [(list 'assets assets)
+       (list 'assets
+             (for/hash ([(label value) assets])
+               (values label (transform-item value))))]
       [term
        term]))
 
@@ -105,8 +108,7 @@
     (map transform-item rules))
 
   (define (transform-assets assets)
-    (for/hash ([(label value) assets])
-      (values label (transform-item value))))
+    (second (transform-item (list 'assets assets))))
 
   (~> context
       (hash-remove 'locs)
@@ -204,9 +206,6 @@
               mod-condition)
         (list 'rule vars mod-pattern mod-replacement mod-condition)))
 
-  (define (transform-rules rules)
-    (map transform-rule rules))
-
   (define (transform-equation eq)
     (match-define (list 'equation vars left right condition) eq)
     (define-values (lsort mod-left) (transform-term left vars))
@@ -225,16 +224,18 @@
        (transform-equation item)]
       [(list 'rule args ...)
        (transform-rule item)]
-      [(hash-table (_ _) ...)
-       (for/hash ([(label value) item])
-         (values label (transform-item value)))]
+      [(list 'assets assets)
+       (list 'assets (for/hash ([(label value) assets])
+                       (values label (transform-item value))))]
       [term
        (define-values (t-sort t-term) (transform-term term (hash)))
        t-term]))
 
+  (define (transform-rules rules)
+    (map transform-rule rules))
+
   (define (transform-assets assets)
-    (for/hash ([(label value) assets])
-      (values label (transform-item value))))
+    (second (transform-item (list 'assets assets))))
 
   (~> context
       (hash-update 'rules transform-rules)

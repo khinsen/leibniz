@@ -185,8 +185,8 @@
        (make-rule* signature decl)]
       [(list 'equation arg ...)
        (make-equation* signature decl)]
-      [(hash-table (_ _) ...)
-       (for/hash ([(label value) decl])
+      [(list 'assets assets)
+       (for/hash ([(label value) assets])
          (values label (compile-asset value)))]
       [term
        ((make-term* signature) decl)]))
@@ -242,70 +242,43 @@
            (hash (string->symbol vn) (string->symbol sn))]))
       (hash-union vars new-var #:combine/key combine-varsets)))
 
-  (define (sxml->term sxml-term)
-    (match sxml-term
-      [`(term (@ (op ,op-string)) ,args ...)
-       (list 'term
-             (string->symbol op-string)
-             (map sxml->term args))]
-      [`(term-or-var (@ (name ,name-string)))
-       (list 'term/var (string->symbol name-string))]
-      [`(,number-tag (@ (value ,v)))
-       (list number-tag (read (open-input-string v)))]))
-
-  (define (sxml->rule sxml-rule)
-    (match sxml-rule
-      [`(rule (vars ,rv ...)
-              (pattern ,rp)
-              ,rc
-              (replacement ,rr))
-       (list 'rule
-             (sxml->vars rv)
-             (sxml->term rp)
-             (sxml->term rr)
-             (match rc
-               [`(condition)
-                #f]
-               [`(condition ,term)
-                term]))]))
-
-  (define (sxml->equation sxml-eq)
-    (match sxml-eq
+  (define (sxml->asset sxml-asset)
+    (match sxml-asset
+      [`(assets (asset (@ (id ,label)) ,value) ...)
+       (list 'assets
+             (for/hash ([l label]
+                        [v value])
+               (values (string->symbol l) (sxml->asset v))))]
       [`(equation (vars ,ev ...)
                   (left ,el)
                   ,ec
                   (right ,er))
        (list 'equation
              (sxml->vars ev)
-             (sxml->term el)
-             (sxml->term er)
+             (sxml->asset el)
+             (sxml->asset er)
              (match ec
-               [`(condition)
-                #f]
-               [`(condition ,term) 
-                term]))]))
-
-  (define (sxml->assets sxml-assets)
-    (match sxml-assets
-      [`(assets (asset (@ (id ,label)) ,value) ...)
-       (for/hash ([l label]
-                  [v value])
-         (values (string->symbol l) (sxml->asset v)))]))
-
-  (define (sxml->asset sxml-asset)
-    (define (try-term asset)
-      (with-handlers ([exn:misc:match? (λ (exn) (try-rule sxml-asset))])
-        (sxml->term sxml-asset)))
-    (define (try-rule asset)
-      (with-handlers ([exn:misc:match? (λ (exn) (try-eq sxml-asset))])
-        (sxml->rule sxml-asset)))
-    (define (try-eq asset)
-      (with-handlers ([exn:misc:match? (λ (exn) (try-assets sxml-asset))])
-        (sxml->equation sxml-asset)))
-    (define (try-assets asset)
-      (with-handlers ([exn:misc:match? (λ (exn) #f)])
-        (sxml->assets sxml-asset)))
-    (try-term sxml-asset))
+               [`(condition)       #f]
+               [`(condition ,term) term]))]
+      [`(rule (vars ,rv ...)
+              (pattern ,rp)
+              ,rc
+              (replacement ,rr))
+       (list 'rule
+             (sxml->vars rv)
+             (sxml->asset rp)
+             (sxml->asset rr)
+             (match rc
+               [`(condition)       #f]
+               [`(condition ,term) term]))]
+      [`(term (@ (op ,op-string)) ,args ...)
+       (list 'term
+             (string->symbol op-string)
+             (map sxml->asset args))]
+      [`(term-or-var (@ (name ,name-string)))
+       (list 'term/var (string->symbol name-string))]
+      [`(,number-tag (@ (value ,v)))
+       (list number-tag (read (open-input-string v)))]))
 
   (match-define
     `(context (@ (id, name))
@@ -342,13 +315,8 @@
                          (map sxml->arg oa)
                          (string->symbol os))])))
   (define rules (for/list ([rule sxml-rules])
-                  (sxml->rule rule)))
-  (define assets (for/hash ([asset sxml-assets])
-                   (match asset
-                     [`(asset (@ (id ,alabel))
-                              ,value)
-                      (values (string->symbol alabel)
-                              (sxml->asset value))])))
+                  (sxml->asset rule)))
+  (define assets (second (sxml->asset (cons 'assets sxml-assets))))
 
   (values name
           (hash 'includes includes
@@ -471,9 +439,9 @@
          (define-values (vars condition) (group-clauses clauses loc))
          (list 'equation vars left right condition)]
         [(list 'assets (list label value) ...)
-         (for/hash ([l label]
-                    [v value])
-           (values l (preprocess-asset v loc)))]
+         (list 'assets (for/hash ([l label]
+                                  [v value])
+                         (values l (preprocess-asset v loc))))]
         [term
          term]))
 
@@ -597,17 +565,6 @@
   ;; Return an SXML representation of a context.
   (define (get-context-sxml name)
 
-    (define (term->sxml term)
-      (match term
-        [(list 'term/var name)
-         `(term-or-var (@ (name ,(symbol->string name))))]
-        [(list 'term op args)
-         `(term (@ (op ,(symbol->string op)))
-                ,@(for/list ([arg args])
-                    (term->sxml arg)))]
-        [(list (and number-tag (or 'integer 'rational 'floating-point)) x)
-         `(,number-tag (@ (value ,(format "~a" x))))]))
-
     (define (vars->sxml vars)
       (for/list ([(name sort) vars])
         `(var (@ (id ,(symbol->string name))
@@ -625,38 +582,30 @@
     (define (condition->sxml condition)
       (if (equal? condition #f)
           `(condition)
-          `(condition ,(term->sxml condition))))
-
-    (define (rule->sxml rule)
-      (match-let
-          ([(list 'rule vars pattern replacement condition) rule])
-        `(rule (vars ,@(vars->sxml vars))
-               (pattern ,(term->sxml pattern))
-               ,(condition->sxml condition)
-               (replacement ,(term->sxml replacement)))))
-
-    (define (equation->sxml eq)
-      (match-let
-          ([(list 'equation vars left right condition) eq])
-        `(equation (vars ,@(vars->sxml vars))
-                   (left ,(term->sxml left))
-                   ,(condition->sxml condition)
-                   (right ,(term->sxml right)))))
+          `(condition ,(asset->sxml condition))))
 
     (define (asset->sxml asset)
-      (define (try-term asset)
-        (with-handlers ([exn:misc:match? (λ (exn) (try-rule asset))])
-          (term->sxml asset)))
-      (define (try-rule asset)
-        (with-handlers ([exn:misc:match? (λ (exn) (try-eq asset))])
-          (rule->sxml asset)))
-      (define (try-eq asset)
-        (with-handlers ([exn:misc:match? (λ (exn) (try-assets asset))])
-          (equation->sxml asset)))
-      (define (try-assets asset)
-        (with-handlers ([exn:misc:match? (λ (exn) #f)])
-          (assets->sxml asset)))
-      (try-term asset))
+      (match asset
+        [(list 'assets asset-data)
+         (assets->sxml asset-data)]
+        [(list 'equation vars left right condition)
+         `(equation (vars ,@(vars->sxml vars))
+                    (left ,(asset->sxml left))
+                    ,(condition->sxml condition)
+                    (right ,(asset->sxml right)))]
+        [(list 'rule vars pattern replacement condition)
+         `(rule (vars ,@(vars->sxml vars))
+                (pattern ,(asset->sxml pattern))
+                ,(condition->sxml condition)
+                (replacement ,(asset->sxml replacement)))]
+        [(list 'term/var name)
+         `(term-or-var (@ (name ,(symbol->string name))))]
+        [(list 'term op args)
+         `(term (@ (op ,(symbol->string op)))
+                ,@(for/list ([arg args])
+                    (asset->sxml arg)))]
+        [(list (and number-tag (or 'integer 'rational 'floating-point)) x)
+         `(,number-tag (@ (value ,(format "~a" x))))]))
 
     (define (assets->sxml assets)
       `(assets ,@(for/list ([(label asset) assets])
@@ -676,7 +625,7 @@
               (ops ,@(for/list ([od (hash-ref cdecls 'ops)])
                        (op->sxml od)))
               (rules ,@(for/list ([rd (hash-ref cdecls 'rules)])
-                         (rule->sxml rd)))
+                         (asset->sxml rd)))
               ,(assets->sxml (hash-ref cdecls 'assets))))
 
   ;; Write the document to an XML file.
@@ -687,11 +636,11 @@
         (srl:sxml->xml sxml output-port))
       #:mode 'text #:exists 'replace))
 
-   ;; Import an SXML document to the library.
+  ;; Import an SXML document to the library.
   (define (import-sxml document-name sxml-document)
     (add-to-library document-name (sxml->document sxml-document)))
 
-   ;; Import an document from an XML file to the library.
+  ;; Import an document from an XML file to the library.
   (define (import-xml document-name filename)
     (import-sxml document-name
                  (call-with-input-file filename
@@ -722,10 +671,10 @@
     (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (equations:make-transformation signature
-        (make-rule* signature
-                    (first (hash-ref (preprocess-source-declarations
-                                      (list (cons rule-expr loc)))
-                                     'rules))))))
+                                     (make-rule* signature
+                                                 (first (hash-ref (preprocess-source-declarations
+                                                                   (list (cons rule-expr loc)))
+                                                                  'rules))))))
 
   (define (make-equation context-name equation-expr loc)
     (define context (get-context context-name))
