@@ -37,8 +37,8 @@
          (prefix-in equations: "./equations.rkt")
          (prefix-in rewrite: "./rewrite.rkt"))
 
-; Translate the location information from a syntax object into strings and numbers
-; that can be used at runtime.
+;; Translate the location information from a syntax object into strings and numbers
+;; that can be used at runtime.
 
 (begin-for-syntax
   (define (source-loc stx)
@@ -49,10 +49,11 @@
           (syntax-position stx)
           (syntax-span stx))))
 
+;;
 ; Context definitions
-
-; All Leibniz declarations are collected from the body of a context and used to define
-; the context inside the single "document" object referred to by "leibniz".
+;;
+;; All Leibniz declarations are collected from the body of a context and used to define
+;; the context inside the single "document" object referred to by "leibniz".
 
 (begin-for-syntax
 
@@ -65,6 +66,7 @@
              #:attr decl (attribute arg.decl)))
 
   (define-syntax-class body-item
+    ;; Signature declarations
     (pattern ((~literal sort) sort-decl:str ...)
              #:attr parsed (parse-scribble-text (syntax/p sort-or-subsort/p) #'(sort-decl ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
@@ -77,16 +79,20 @@
              #:attr parsed (parse-scribble-text (syntax/p operator/p) #'(op-decl ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
              #:with expansion #`(parsed-declaration (quote parsed)))
-    (pattern ((~literal term) term-expr:str ...)
-             #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p)) #'(term-expr ...))
-             #:attr decl empty
-             #:with expansion #`(parsed-term leibniz-doc current-context (quote parsed) #,(source-loc (first (syntax->list #'(term-expr ...))))))
+    ;; Rules
     (pattern ((~literal rule) rule-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
              #:with expansion #`(parsed-rule leibniz-doc current-context 
                                              (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
+
+    ;; Terms
+    (pattern ((~literal term) term-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p)) #'(term-expr ...))
+             #:attr decl empty
+             #:with expansion #`(parsed-term leibniz-doc current-context (quote parsed) #,(source-loc (first (syntax->list #'(term-expr ...))))))
+    ;; Equations
     (pattern ((~literal equation) equation-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
              #:attr as-asset (syntax-case #'parsed () [(_ label left right clauses) #'(asset label (equation left right clauses))])
@@ -94,6 +100,7 @@
              #:with expansion #`(parsed-equation leibniz-doc current-context 
                                                  (quote parsed)
                                                  #,(source-loc (first (syntax->list #'(equation-expr ...))))))
+    ;; Commented declarations - not stored in the context
     (pattern ((~literal comment-sort) sort-decl:str ...)
              #:attr parsed (parse-scribble-text (syntax/p sort-or-subsort/p) #'(sort-decl ...))
              #:attr decl empty
@@ -108,6 +115,7 @@
              #:with expansion #`(parsed-test leibniz-doc current-context 
                                              (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
+    ;; Term evaluation
     (pattern ((~literal eval-term) term-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p))
                                                 #'(term-expr ...))
@@ -125,25 +133,29 @@
              #:attr decl empty
              #:with expansion #'(format-context-declarations
                                  (get-context leibniz-doc current-context)))
+
+    ;; Retrieve declarations in nested Scribble elements
     (pattern (element args:arg-or-kw-arg ...)
              #:attr decl (apply append (attribute args.decl))
              #:with expansion
                     #`(element #,@(apply append
                                   (map syntax-e (syntax-e #'(args.arg-in-list ...))))))
+    ;; Anything else: pass through
     (pattern any
              #:attr decl empty
              #:with expansion #'any))
 
+  ;; Three modes for context inclusion: use, extend, insert with optional transformations
   (define-splicing-syntax-class context-ref
-    (pattern (~seq #:insert [name:str tr:expr ...])
-             #:attr ref #`(cons '(insert name tr ...) #,(source-loc #'name))
-             #:attr verb #'"includes transformed")
     (pattern (~seq #:use name:str)
              #:attr ref #`(cons '(use name) #,(source-loc #'name))
              #:attr verb #'"uses")
     (pattern (~seq #:extend name:str)
              #:attr ref #`(cons '(extend name) #,(source-loc #'name))
-             #:attr verb #'"extends")))
+             #:attr verb #'"extends")
+    (pattern (~seq #:insert [name:str tr:expr ...])
+             #:attr ref #`(cons '(insert name tr ...) #,(source-loc #'name))
+             #:attr verb #'"includes transformed")))
 
 (define-syntax (context stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
@@ -152,10 +164,11 @@
           include:context-ref ...
           body:body-item ...)
        #`(begin (set! #,leibniz-ref
-                      (add-context-from-source #,leibniz-ref name
-                                               (append
-                                                (list include.ref ...)
-                                                #,(cons #'list (apply append (attribute body.decl))))))
+                      (add-context-from-source
+                       #,leibniz-ref name
+                       (append
+                        (list include.ref ...)
+                        #,(cons #'list (apply append (attribute body.decl))))))
                 (margin-note "Context " (italic name)
                              (list (linebreak)
                                    include.verb " " (italic include.name)) ...)
@@ -163,13 +176,16 @@
                       [current-context name])
                   (list body.expansion ...)))])))
 
-; Import library modules
-
+;;
+;; Import library modules
+;;
 (define-syntax (import stx)
   (syntax-parse stx
+    ;; XML document by filename
     [(_ name:str source:str)
      (with-syntax ([leibniz-id (datum->syntax #'name 'leibniz)])
        #`(set! leibniz-id (import-xml leibniz-id name source)))]
+    ;; Racket module by module name (likely to be removed in the future)
     [(_ name:str source:expr)
      (with-syntax ([library-id (format-id #'name "library/~a" (syntax-e #'name))]
                    [leibniz-id (datum->syntax #'name 'leibniz)])
@@ -177,6 +193,9 @@
                 (set! leibniz-id
                       (add-to-library leibniz-id name library-id))))]))
 
+;;
+;; Generate the Scribble representation of the various Leibniz context elements
+;;
 (define (parsed-term leibniz-doc current-context parsed-term-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
@@ -239,8 +258,9 @@
 (define (parsed-comment decl)
   (nonbreaking (leibniz-comment (format-declaration decl))))
 
-; Raise errors when Leibniz code is used outside of a context
-
+;;
+;; Raise errors when Leibniz code is used outside of a context
+;;
 (define-syntax (sort stx)
   (raise-syntax-error #f "sort used outside context" stx))
 
@@ -271,15 +291,19 @@
 (define-syntax (eval-term stx)
   (raise-syntax-error #f "eval-term used outside context" stx))
 
-; This syntax transformer is only used outside of a context block.
+;;
+;; show-context is the only Leibniz element that can be used outside of
+;; a context block.
+;;
 (define-syntax (show-context stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
       [(_ name:str)
        #`(format-context-declarations (get-context #,leibniz-ref name))])))
 
-; Support code for nicer formatting
-
+;;
+;; Support code for nicer formatting
+;;
 (define (inset . body)
   (apply nested
          (for/list ([element body])
@@ -288,8 +312,9 @@
                element))
          #:style 'inset))
 
-; XML output
-
+;;
+;;; Generate XML output (not needed with the leibniz script)
+;;
 (define-syntax (xml stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
@@ -297,16 +322,19 @@
        #`(begin (write-xml #,leibniz-ref filename)
                 (margin-note (hyperlink filename "XML")))])))
 
-; Graphviz output
-
+;;
+;; Graphviz output (for debugging)
+;;
 (define-syntax (signature-graphs stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
       [(_ directory:str)
        #`(write-signature-graphs #,leibniz-ref directory)])))
 
-; Support for interactive exploration
-
+;;
+;; Support for interactive exploration
+;; REPL commands for use after loading a Leibniz module
+;;
 (define current-context-name (make-parameter #f))
 (define current-context (make-parameter #f))
 (define current-document (make-parameter #f))
