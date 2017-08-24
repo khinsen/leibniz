@@ -681,7 +681,7 @@
     (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
       (define ad (hash-ref (preprocess-source-declarations
-                            (list (cons (list 'asset (second equation-expr) equation-expr) loc)))
+                            (list (cons (list 'asset 'dummy-label equation-expr) loc)))
                            'assets))
       (unless (equal? (hash-count ad) 1)
         (error "can't happen"))

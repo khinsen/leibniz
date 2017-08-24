@@ -17,8 +17,8 @@ The predator-prey equations, also known as the Lotka-Volterra equations, describ
 The two interacting time-dependent observables are the number of prey, @op{prey : ℝ→ℝ}, and the number of predators, @op{predators : ℝ→ℝ}. Although the number of individuals of a species is really an integer, it is taken to be a real number for the benefit of using differential equations. The two coupled equations for @term{prey} and @term{predators}
 are
 @inset{
-  @equation{pp1: 𝒟(prey) = (prey-growth-rate × prey) - (predation-rate × predators × prey)}
-  @equation{pp2: 𝒟(predators) = (predator-growth-rate × predators × prey) - (predator-loss-rate × predators)}}
+  @equation[pp1]{𝒟(prey) = (prey-growth-rate × prey) - (predation-rate × predators × prey)}
+  @equation[pp2]{𝒟(predators) = (predator-growth-rate × predators × prey) - (predator-loss-rate × predators)}}
 
 These equations are based on a few assumptions:
 @itemlist[

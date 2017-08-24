@@ -1,7 +1,7 @@
 #lang racket
 
-(provide format-context-declarations
-         format-declaration
+(provide format-context
+         format-signature-declaration
          format-term
          format-rule
          format-equation
@@ -121,7 +121,7 @@
               " : "
               (format-sort result-sort))])]))
 
-(define (format-declaration decl)
+(define (format-signature-declaration decl)
   (match decl
     [(list 'sort sort-symbol)
      (format-sort sort-symbol)]
@@ -149,48 +149,55 @@
       (list "(" term-elem ")")
       term-elem))
 
-(define (format-term signature term)
-  (condd
-   [(terms:var? term)                   ; vars: print name in italic
-    (italic (symbol->string (terms:var-name term)))]
-   #:do (define-values (raw-op args) (terms:term.op-and-args term))
-   [(not raw-op)                        ; everything other than an op-term: convert to string
-    (term->string term)]
-   #:do (define-values (op type) (op-symbol-and-type raw-op))
-   [(zero? (length args))               ; no args implies prefix-op
-    op]
-   [(equal? type 'prefix-op)
-    (list op
-          "("
-          (add-between (for/list ([arg args]) (format-term signature arg)) ", ")
-          ")")]
-   #:do (define arg1 (first args))
-   #:do (define f-arg1 (format-term signature arg1))
-   [(equal? op "[]")
-    (list (parenthesize f-arg1 (infix-term? arg1))
-          "["
-          (add-between (for/list ([arg (rest args)]) (format-term signature arg)) ", ")
-          "]")]
-   #:do (define arg2 (second args))
-   #:do (define f-arg2 (format-term signature arg2))
-   [(equal? type 'infix-op)
-    (list (parenthesize f-arg1 (infix-term? arg1 op))
-          " " op  " "
-          (parenthesize f-arg2 (infix-term? arg2)))]
-   [(equal? op "^")
-    (list f-arg1 (superscript f-arg2))]
-   [(equal? op "_")
-    (list f-arg1 (subscript f-arg2))]
-   [else (error (format "operator ~a of type ~a" op type))]))
+(define (format-label label)
+  (if label
+      (list (bold (symbol->string label))
+            ": ")
+      ""))
 
-(define (format-rule rule signature)
+(define (format-term signature label term)
+  (list (format-label label)
+        (condd
+         [(terms:var? term)                   ; vars: print name in italic
+          (italic (symbol->string (terms:var-name term)))]
+         #:do (define-values (raw-op args) (terms:term.op-and-args term))
+         [(not raw-op)                        ; everything other than an op-term: convert to string
+          (term->string term)]
+         #:do (define-values (op type) (op-symbol-and-type raw-op))
+         [(zero? (length args))               ; no args implies prefix-op
+          op]
+         [(equal? type 'prefix-op)
+          (list op
+                "("
+                (add-between (for/list ([arg args]) (format-term signature #f arg)) ", ")
+                ")")]
+         #:do (define arg1 (first args))
+         #:do (define f-arg1 (format-term signature #f arg1))
+         [(equal? op "[]")
+          (list (parenthesize f-arg1 (infix-term? arg1))
+                "["
+                (add-between (for/list ([arg (rest args)]) (format-term signature #f arg)) ", ")
+                "]")]
+         #:do (define arg2 (second args))
+         #:do (define f-arg2 (format-term signature #f arg2))
+         [(equal? type 'infix-op)
+          (list (parenthesize f-arg1 (infix-term? arg1 op))
+                " " op  " "
+                (parenthesize f-arg2 (infix-term? arg2)))]
+         [(equal? op "^")
+          (list f-arg1 (superscript f-arg2))]
+         [(equal? op "_")
+          (list f-arg1 (subscript f-arg2))]
+         [else (error (format "operator ~a of type ~a" op type))])))
+
+(define (format-rule label rule signature)
   (define c-vars (operators:all-vars signature))
   (define proc-rule? (procedure? (equations:rule-replacement rule)))
-  (define pattern-elem (format-term signature (equations:rule-pattern rule)))
+  (define pattern-elem (format-term signature #f (equations:rule-pattern rule)))
   (define replacement-elem
     (if proc-rule? 
         (italic "<procedure>")
-        (format-term signature (equations:rule-replacement rule))))
+        (format-term signature #f (equations:rule-replacement rule))))
   (define vars (terms:term.vars (equations:rule-pattern rule)))
   (define cond (equations:rule-condition rule))
   (define var-elems (for/list ([var (in-set vars)]
@@ -208,9 +215,10 @@
         (elem #:style leibniz-style
               (linebreak) (hspace 2)
               "if "
-              (format-term signature cond))
+              (format-term signature #f cond))
         ""))
-  (list pattern-elem
+  (list (format-label label)
+        pattern-elem
         (if proc-rule? " ↣ "  " ⇒ ")
         replacement-elem
         var-elems
@@ -220,8 +228,8 @@
   (define vars (set-union (terms:term.vars (equations:equation-left equation))
                           (terms:term.vars (equations:equation-right equation))))
   (define cond (equations:equation-condition equation))
-  (define left-elem (format-term signature (equations:equation-left equation)))
-  (define right-elem (format-term signature (equations:equation-right equation)))
+  (define left-elem (format-term signature #f (equations:equation-left equation)))
+  (define right-elem (format-term signature #f (equations:equation-right equation)))
   (define var-elems (for/list ([var (in-set vars)])
                       (list (linebreak ) (hspace 2)
                             "∀ "
@@ -233,21 +241,19 @@
         (elem #:style leibniz-style
               (linebreak) (hspace 2)
               "if "
-              (format-term signature cond))
+              (format-term signature #f cond))
         ""))
-  (list (if label
-            (list (bold (symbol->string label))
-                  ": ")
-            "")
+  (list (format-label label)
         left-elem
         " = "
         right-elem
         var-elems
         cond-elem))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(define (format-context-declarations decls)
+;;
+;; Format a complete context
+;;
+(define (format-context decls)
   (list (format-sort-declarations (hash-ref decls 'sorts))
         (format-subsort-declarations (hash-ref decls 'subsorts))
         (format-op-declarations (hash-ref decls 'ops))
@@ -305,7 +311,7 @@
   (define rules
     (for/list ([rd rule-decls])
       (elem #:style leibniz-output-style
-            (format-rule-declaration rd var-decls signature))))
+            (format-rule-declaration #f rd var-decls signature))))
   (if (empty? rule-decls)
       ""
       (list "Rules:" (linebreak)
@@ -325,7 +331,7 @@
                    (add-between assets (linebreak))
                    #:style 'inset))))
 
-(define (format-rule-declaration decl context-vars signature)
+(define (format-rule-declaration label decl context-vars signature)
   (match-define `(rule ,vars ,pattern ,replacement ,condition) decl)
   (define pattern-elem (format-decl-term pattern signature))
   (define proc-rule? (procedure? replacement))
@@ -347,22 +353,39 @@
                     (format-decl-term condition signature))
               var-elems)
         var-elems))
-  (list* pattern-elem
+  (list* (format-label label)
+         pattern-elem
          (if proc-rule? " → "  " ⇒ ")
          replacement-elem
          clause-elems))
 
-(define (format-asset-declaration label decl context-vars signature)
-  ;; TODO other asset types
+(define (format-equation-declaration label decl context-vars signature)
   (match-define `(equation ,vars ,left ,right ,condition) decl)
   (define left-elem (format-decl-term left signature))
   (define right-elem (format-decl-term right signature))
-  (list* (bold (symbol->string label))
-         ": "
+  (list* (format-label label)
          left-elem
          " = "
          right-elem
          (format-clauses condition vars context-vars signature)))
+
+(define (format-asset-declaration label decl context-vars signature)
+  (match decl
+    [`(equation ,vars ,left ,right ,condition)
+     (format-equation-declaration label decl context-vars signature)]
+    [`(rule ,vars ,pattern ,replacement ,condition)
+     (format-rule-declaration label decl context-vars signature)]
+    [`(assets ,assets)
+     (add-between
+      (for/list ([(label2 value) assets])
+        (define nested-label (string->symbol (string-join (list (symbol->string label)
+                                                                (symbol->string label2))
+                                                          ".")))
+        (format-asset-declaration nested-label value context-vars signature))
+      (linebreak))]
+    [term
+     (list (format-label label)
+           (format-decl-term term signature))]))
 
 (define (format-clauses condition vars context-vars signature)
   (define var-elems
@@ -443,7 +466,9 @@
      (string-append "^{" (plain-text (element-content body)) "}")]
     [(equal? 'subscript (element-style body))
      (string-append "_{" (plain-text (element-content body)) "}")]
-    [(member (element-style body) '(newline hspace))
+    [(equal? (element-style body) 'newline)
+     "\n"]
+    [(equal? (element-style body) 'hspace)
      " "]
     [else
      (plain-text (element-content body))]))
@@ -465,15 +490,30 @@
   (check-equal? (plain-text
                  (format-var 'X 'foo))
                 "X:foo")
-  (check-equal? (plain-text (format-declaration '(subsort foo bar)))
+  (check-equal? (plain-text (format-signature-declaration '(subsort foo bar)))
                 "foo ⊆ bar")
   (check-equal? (plain-text (format-rule-declaration
+                             #f
                              (list 'rule (hash) '(term/var X) '(term/var Y) #f)
                              (hash) #f))
                 "X ⇒ Y")
   (check-equal? (plain-text (format-asset-declaration
                              'eq1
-                             (list 'equation (hash)
-                                   '(term/var X) '(term/var Y) #f)
+                             (list 'equation (hash) '(term/var X) '(term/var Y) #f)
                              (hash) #f))
-                "eq1: X = Y"))
+                "eq1: X = Y")
+  (check-equal? (plain-text (format-asset-declaration
+                             'rule1
+                             (list 'rule (hash) '(term/var X) '(term/var Y) #f)
+                             (hash) #f))
+                "rule1: X ⇒ Y")
+  (check-equal? (plain-text (format-asset-declaration
+                             'a-sum
+                             '(term _+ ((term/var X) (term/var Y)))
+                             (hash) #f))
+                "a-sum: X + Y")
+  (check-equal? (plain-text (format-asset-declaration
+                             'group
+                             (list 'assets (hash 'index '(integer 2) 'value '(term/var X)))
+                             (hash) #f))
+                "group.index: 2\ngroup.value: X"))

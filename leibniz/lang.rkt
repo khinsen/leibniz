@@ -70,45 +70,63 @@
     (pattern ((~literal sort) sort-decl:str ...)
              #:attr parsed (parse-scribble-text (syntax/p sort-or-subsort/p) #'(sort-decl ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
-             #:with expansion  #`(parsed-declaration (quote parsed)))
+             #:with expansion  #`(parsed-signature-declaration (quote parsed)))
     (pattern ((~literal var) var-decl:str ...)
              #:attr parsed (parse-scribble-text (syntax/p (to-eof/p var/p)) #'(var-decl ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
-             #:with expansion  #`(parsed-declaration (quote parsed)))
+             #:with expansion  #`(parsed-signature-declaration (quote parsed)))
     (pattern ((~literal op) op-decl:str ...)
              #:attr parsed (parse-scribble-text (syntax/p operator/p) #'(op-decl ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
-             #:with expansion #`(parsed-declaration (quote parsed)))
+             #:with expansion #`(parsed-signature-declaration (quote parsed)))
+
     ;; Rules
+    (pattern ((~literal rule) label:identifier rule-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
+             #:attr decl (list #`(cons (list 'asset (quote label) (quote parsed)) #,(source-loc this-syntax)))
+             #:with expansion #`(parsed-rule leibniz-doc current-context 
+                                             (quote label) (quote parsed)
+                                             #,(source-loc (first (syntax->list #'(rule-expr ...))))))
     (pattern ((~literal rule) rule-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
              #:with expansion #`(parsed-rule leibniz-doc current-context 
-                                             (quote parsed)
+                                             #f (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
 
     ;; Terms
+    (pattern ((~literal term) label:identifier term-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p)) #'(term-expr ...))
+             #:attr decl (list #`(cons (list 'asset (quote label) (quote parsed)) #,(source-loc this-syntax)))
+             #:with expansion #`(parsed-term leibniz-doc current-context (quote label) (quote parsed) #,(source-loc (first (syntax->list #'(term-expr ...))))))
     (pattern ((~literal term) term-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p)) #'(term-expr ...))
              #:attr decl empty
-             #:with expansion #`(parsed-term leibniz-doc current-context (quote parsed) #,(source-loc (first (syntax->list #'(term-expr ...))))))
+             #:with expansion #`(parsed-term leibniz-doc current-context #f (quote parsed) #,(source-loc (first (syntax->list #'(term-expr ...))))))
+
     ;; Equations
+    (pattern ((~literal equation) label:identifier equation-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
+             #:attr decl (list #`(cons (list 'asset (quote label) (quote parsed)) #,(source-loc this-syntax)))
+             #:with expansion #`(parsed-equation leibniz-doc current-context 
+                                                 (quote label) (quote parsed)
+                                                 #,(source-loc (first (syntax->list #'(equation-expr ...))))))
     (pattern ((~literal equation) equation-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
-             #:attr as-asset (syntax-case #'parsed () [(_ label left right clauses) #'(asset label (equation left right clauses))])
-             #:attr decl (list #`(cons (quote as-asset) #,(source-loc this-syntax)))
+             #:attr decl empty
              #:with expansion #`(parsed-equation leibniz-doc current-context 
-                                                 (quote parsed)
+                                                 #f (quote parsed)
                                                  #,(source-loc (first (syntax->list #'(equation-expr ...))))))
+
     ;; Commented declarations - not stored in the context
     (pattern ((~literal comment-sort) sort-decl:str ...)
              #:attr parsed (parse-scribble-text (syntax/p sort-or-subsort/p) #'(sort-decl ...))
              #:attr decl empty
-             #:with expansion  #`(parsed-comment (quote parsed)))
+             #:with expansion  #`(parsed-signature-comment (quote parsed)))
     (pattern ((~literal comment-op) op-decl:str ...)
              #:attr parsed (parse-scribble-text (syntax/p operator/p) #'(op-decl ...))
              #:attr decl empty
-             #:with expansion #`(parsed-comment (quote parsed)))
+             #:with expansion #`(parsed-signature-comment (quote parsed)))
     (pattern ((~literal test) rule-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
              #:attr decl empty
@@ -127,11 +145,11 @@
                                                              #'(term-expr ...))))))
     (pattern ((~literal show-context) name:str)
              #:attr decl empty
-             #:with expansion #'(format-context-declarations
+             #:with expansion #'(format-context
                                  (get-context leibniz-doc name)))
     (pattern ((~literal show-context))
              #:attr decl empty
-             #:with expansion #'(format-context-declarations
+             #:with expansion #'(format-context
                                  (get-context leibniz-doc current-context)))
 
     ;; Retrieve declarations in nested Scribble elements
@@ -196,26 +214,25 @@
 ;;
 ;; Generate the Scribble representation of the various Leibniz context elements
 ;;
-(define (parsed-term leibniz-doc current-context parsed-term-expr loc)
+(define (parsed-term leibniz-doc current-context label parsed-term-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
   (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
                                             (terms:term.sort term)))
-  (define term-elem (format-term signature term))
+  (define term-elem (format-term signature label term))
   (leibniz-input-with-hover sort-str term-elem))
 
-(define (parsed-rule leibniz-doc current-context parsed-rule-expr loc)
+(define (parsed-rule leibniz-doc current-context label parsed-rule-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define rule (make-rule leibniz-doc current-context parsed-rule-expr loc))
-  (leibniz-input (format-rule rule signature)))
+  (leibniz-input (format-rule label rule signature)))
 
-(define (parsed-equation leibniz-doc current-context parsed-equation-expr loc)
+(define (parsed-equation leibniz-doc current-context label parsed-equation-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
-  (define label (second parsed-equation-expr))
-  (define equation (make-equation leibniz-doc current-context (cons 'equation (rest (rest parsed-equation-expr))) loc))
+  (define equation (make-equation leibniz-doc current-context parsed-equation-expr loc))
   (leibniz-input (format-equation label equation signature)))
 
 (define (parsed-test leibniz-doc current-context parsed-rule-expr loc)
@@ -225,15 +242,15 @@
   (define success (equal? (second test) (third test)))
   (list
    (leibniz-input
-    (format-term signature (first test))
+    (format-term signature #f (first test))
     " ⇒ "
-    (format-term signature (second test)))
+    (format-term signature #f (second test)))
    (nonbreaking (hspace 1))
    (leibniz-output
     (if success
         (elem #:style (style #f (list (color-property "green")))
               "✓")
-        (list "❌ " (format-term signature (third test)))))))
+        (list "❌ " (format-term signature #f (third test)))))))
 
 (define (parsed-eval-term leibniz-doc current-context parsed-term-expr loc)
   (define context (get-context leibniz-doc current-context))
@@ -242,21 +259,21 @@
   (define term (make-term leibniz-doc current-context parsed-term-expr loc))
   (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
                                             (terms:term.sort term)))
-  (define term-elem (format-term signature term))
+  (define term-elem (format-term signature #f term))
   (define rterm (rewrite:reduce signature rules term))
   (define rsort-str(sorts:constraint->string (operators:signature-sort-graph signature)
                                              (terms:term.sort rterm)))
-  (define rterm-elem (format-term signature rterm))
+  (define rterm-elem (format-term signature #f rterm))
   (list
    
    (leibniz-input-with-hover sort-str term-elem)
    (leibniz-output-with-hover rsort-str " ⇒ " rterm-elem)))
 
-(define (parsed-declaration decl)
-  (nonbreaking (leibniz-input (format-declaration decl))))
+(define (parsed-signature-declaration decl)
+  (nonbreaking (leibniz-input (format-signature-declaration decl))))
 
-(define (parsed-comment decl)
-  (nonbreaking (leibniz-comment (format-declaration decl))))
+(define (parsed-aignature-comment decl)
+  (nonbreaking (leibniz-comment (format-signature-declaration decl))))
 
 ;;
 ;; Raise errors when Leibniz code is used outside of a context
@@ -299,7 +316,7 @@
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
       [(_ name:str)
-       #`(format-context-declarations (get-context #,leibniz-ref name))])))
+       #`(format-context (get-context #,leibniz-ref name))])))
 
 ;;
 ;; Support code for nicer formatting
@@ -390,7 +407,7 @@
 
 (define (display-term signature term)
   (when term
-    (displayln (plain-text (format-term signature term)))))
+    (displayln (plain-text (format-term signature #f term)))))
 
 (define (display-equation signature equation)
   (when equation
@@ -420,19 +437,19 @@
       [(equal? level 0)
        (when show-rules
          (displayln (format "--- ~a"
-                            (plain-text (format-rule rule signature)))))
+                            (plain-text (format-rule #f rule signature)))))
        (displayln (format "... ~a"
-                         (plain-text (format-term signature rterm))))]
+                         (plain-text (format-term signature #f rterm))))]
       [(or (not max-level)
            (<= level max-level))
        (when show-rules
          (displayln (format "~a ~a"
                             (make-string (+ level 3) #\-)
-                            (plain-text (format-rule rule signature)))))
+                            (plain-text (format-rule #f rule signature)))))
        (displayln (format "~a ~a ⇒ ~a"
                           (make-string (+ level 3) #\+)
-                          (plain-text (format-term signature term))
-                          (plain-text (format-term signature rterm))))]))
+                          (plain-text (format-term signature #f term))
+                          (plain-text (format-term signature #f rterm))))]))
   (define signature (hash-ref (current-context) 'compiled-signature))
   (define rules (hash-ref (current-context) 'compiled-rules))
   (define term (make-parsed-term term-str))
