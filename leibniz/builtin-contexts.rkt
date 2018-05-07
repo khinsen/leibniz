@@ -108,6 +108,8 @@
              (_- X Y) (return-X))
          (-> #:vars ([X ℤ] [Y ℤ])
              (_- X Y) (binary-op integer? -))
+         (-> #:vars ([X ℤ])
+             (- X) (unary-op integer? -))
 
          (=> #:vars ([X zero] [Y ℤ])
              (_× X Y) 0)
@@ -163,6 +165,7 @@
     (chk
      #:= (RT (_+ 2 3)) (T 5)
      #:= (RT (_- 2 3)) (T -1)
+     #:= (RT (- 3)) (T -3)
      #:= (RT (_× 2 3)) (T 6)
      #:= (RT (_div 2 3)) (T 0)
      #:= (RT (_rem 2 3)) (T 2)
@@ -214,6 +217,8 @@
 
          (-> #:vars ([X ℚ] [Y ℚ])
              (_- X Y) (binary-op exact? -))
+         (-> #:vars ([X ℚ])
+             (- X) (unary-op exact? -))
 
          (-> #:vars ([X ℚ] [Y ℚ])
              (_× X Y) (binary-op exact? *))
@@ -254,6 +259,8 @@
 
          (-> #:vars ([X ℚ] [Y zero])
              (_- X Y) (return-X))
+         (-> #:vars ([X zero])
+             (- X) 0)
 
          (=> #:vars ([X zero] [Y ℚ])
              (_× X Y) 0)
@@ -286,6 +293,7 @@
      #:= (RT (_+ 1/2 -1/2)) (T 0)
      #:= (RT (_- 2 3)) (T -1)
      #:= (RT (_- 1/2 1/2)) (T 0)
+     #:= (RT (- 2/3)) (T -2/3)
      #:= (RT (_× 2 3)) (T 6)
      #:= (RT (_× 1/2 1/2)) (T 1/4)
      #:= (RT (_÷ 2 3)) (T 2/3)
@@ -356,6 +364,7 @@
    (op (_+ ℝp ℝp) ℝp)
    (op (_+ ℝnn ℝnn) ℝnn)
    (op (_- ℝ ℝ) ℝ)
+   (op (- ℝ) ℝ)
    (op (_× ℝ ℝ) ℝ)
    (op (_× ℝp ℝp) ℝp)
    (op (_× ℝnn ℝnn) ℝnn)
@@ -385,6 +394,8 @@
 
    (-> #:vars ([X ℝ] [Y zero])
        (_- X Y) (return-X))
+   (-> #:vars ([X zero])
+       (- X) (return-X))
 
    (=> #:vars ([X zero] [Y ℝ])
        (_× X Y) 0)
@@ -442,6 +453,8 @@
              (_+ X Y) (binary-op single-flonum? +))
          (-> #:vars ([X FP32] [Y FP32])
              (_- X Y) (binary-op single-flonum? -))
+         (-> #:vars ([X FP32])
+             (- X) (unary-op single-flonum? -))
          (-> #:vars ([X FP32] [Y FP32])
              (_× X Y) (binary-op single-flonum? *))
          (-> #:vars ([X FP32] [Y FP32])
@@ -468,6 +481,8 @@
              (_+ X Y) (binary-op double-flonum? +))
          (-> #:vars ([X FP64] [Y FP64])
              (_- X Y) (binary-op double-flonum? -))
+         (-> #:vars ([X FP64])
+             (- X) (unary-op double-flonum? -))
          (-> #:vars ([X FP64] [Y FP64])
              (_× X Y) (binary-op double-flonum? *))
          (-> #:vars ([X FP64] [Y FP64])
@@ -499,6 +514,7 @@
     (chk
      #:= (RT (_+ #x1s0 #x2s0)) (T #x3s0)
      #:= (RT (_- #x1s0 #x2s0)) (T #x-1s0)
+     #:= (RT (- #x1s0)) (T #x-1s0)
      #:= (RT (_× #x1s0 #x2s0)) (T #x2s0)
      #:= (RT (_÷ #x1s0 #x2s0)) (T #x8s-1)
      #:= (RT (^ #x2s0 #x1s0)) (T #x2s0)
@@ -507,6 +523,7 @@
      #:= (RT (√ #x4s0)) (T #x2s0)
      #:= (RT (_+ #x1l0 #x2l0)) (T #x3l0)
      #:= (RT (_- #x1l0 #x2l0)) (T #x-1l0)
+     #:= (RT (- #x1l0)) (T #x-1l0)
      #:= (RT (_× #x1l0 #x2l0)) (T #x2l0)
      #:= (RT (_÷ #x1l0 #x2l0)) (T #x8l-1)
      #:= (RT (^ #x2l0 #x1l0)) (T #x2l0)

@@ -232,9 +232,9 @@
       (pure (read (open-input-string (apply string digits))))))
 
 (define integer/p
-  (or/p (do (char/p #\-)
-            [v <- nn-integer/p]
-            (pure  (list 'integer (- v))))
+  (or/p (try/p (do (char/p #\-)
+                   [v <- nn-integer/p]
+                 (pure  (list 'integer (- v)))))
         (do [v <- nn-integer/p]
             (pure (list 'integer v)))))
 
@@ -375,6 +375,7 @@
   (check-parse term/p "foo + (bar + baz)" '(term _+ ((term/var foo) (term _+ ((term/var bar) (term/var baz))))))
   (check-parse term/p "(foo + bar) + baz" '(term _+ ((term _+ ((term/var foo) (term/var bar))) (term/var baz) )))
   (check-parse term/p "(foo + 2) - 3⁄4" '(term _- ((term _+ ((term/var foo) (integer 2))) (rational 3/4))))
+  (check-parse term/p "-(a + b)" '(term - ((term _+ ((term/var a) (term/var b))))))
   (check-parse-failure term/p "foo + bar × baz"))
 
 (define var-clause/p

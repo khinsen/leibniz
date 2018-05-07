@@ -103,6 +103,7 @@
       (add-op '_+ (list 'ℕnz 'ℕ) 'ℕnz)
       (add-op '_+ (list 'ℕ 'ℕnz) 'ℕnz)
       (add-op '_- (list 'ℤ 'ℤ) 'ℤ)
+      (add-op '- (list 'ℤ) 'ℤ)
       (add-op '_× (list 'ℤ 'ℤ) 'ℤ)
       (add-op '_× (list 'ℕ 'ℕ) 'ℕ)
       (add-op '_× (list 'ℕnz 'ℕnz) 'ℕnz)
@@ -130,6 +131,7 @@
   (check-equal? (sort-of-numarg-term integer-signature '_+ (list 0 0)) 'ℕ)
   (check-equal? (sort-of-numarg-term integer-signature '_+ (list -1 0)) 'ℤ)
   (check-equal? (sort-of-numarg-term integer-signature '_- (list 0 0)) 'ℤ)
+  (check-equal? (sort-of-numarg-term integer-signature '- (list 1)) 'ℤ)
   (check-equal? (sort-of-numarg-term integer-signature '_× (list 1 2)) 'ℕnz)
   (check-equal? (sort-of-numarg-term integer-signature '_× (list 0 2)) 'ℕ)
   (check-equal? (sort-of-numarg-term integer-signature '_× (list -2 0)) 'ℤ)
@@ -185,6 +187,7 @@
       (add-op '_+ (list 'ℚp 'ℚp) 'ℚp)
       (add-op '_+ (list 'ℚnn 'ℚnn) 'ℚnn)
       (add-op '_- (list 'ℚ 'ℚ) 'ℚ)
+      (add-op '- (list 'ℚ) 'ℚ)
       (add-op '_× (list 'ℚ 'ℚ) 'ℚ)
       (add-op '_× (list 'ℚp 'ℚp) 'ℚp)
       (add-op '_× (list 'ℚnn 'ℚnn) 'ℚnn)
@@ -211,6 +214,8 @@
                                      '_+ (list 1/2 -2/3)) 'ℚ)
   (check-equal? (sort-of-numarg-term rational-signature
                                      '_- (list 1/2 -2/3)) 'ℚ)
+  (check-equal? (sort-of-numarg-term rational-signature
+                                     '- (list -2/3)) 'ℚ)
   (check-equal? (sort-of-numarg-term rational-signature
                                      '_× (list 1/2 2/3)) 'ℚp)
   (check-equal? (sort-of-numarg-term rational-signature
@@ -290,6 +295,7 @@
       (merge-signatures integer-signature #f)
       (add-op '_+ (list 'FP32 'FP32) 'FP32)
       (add-op '_- (list 'FP32 'FP32) 'FP32)
+      (add-op '- (list 'FP32) 'FP32)
       (add-op '_× (list 'FP32 'FP32) 'FP32)
       (add-op '_÷ (list 'FP32 'FP32) 'FP32)
       (add-op '^ (list 'FP32 'FP32) 'FP32)
@@ -303,6 +309,7 @@
       (add-op '_≥ (list 'FP32 'FP32) 'boolean)
       (add-op '_+ (list 'FP64 'FP64) 'FP64)
       (add-op '_- (list 'FP64 'FP64) 'FP64)
+      (add-op '- (list 'FP64) 'FP64)
       (add-op '_× (list 'FP64 'FP64) 'FP64)
       (add-op '_÷ (list 'FP64 'FP64) 'FP64)
       (add-op '^ (list 'FP64 'FP64) 'FP64)
@@ -326,7 +333,11 @@
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '_- (list #x1s1 #x3s1)) 'FP32)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '- (list #x3s1)) 'FP32)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '_- (list #x1l1 #x3l1)) 'FP64)
+  (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                     '- (list #x3l1)) 'FP64)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '_- (list #x1s1 #x3l1))
                 (kind IEEE-float-sorts 'FP32))
