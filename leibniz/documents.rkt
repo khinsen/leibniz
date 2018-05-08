@@ -214,12 +214,19 @@
 
 (define (sxml->document sxml-document)
   (match-define
-    (list '*TOP* (list 'leibniz-document sxml-contexts ...))
+    (list '*TOP* (list 'leibniz-document
+                       (list 'library document-refs ...)
+                       sxml-contexts ...))
     sxml-document)
-  (for/fold ([doc empty-document])
-            ([sxml-context sxml-contexts])
-    (define-values (name context-decls) (sxml->context sxml-context))
-    (send doc add-context name (hash-set context-decls 'locs (λ (x) #f)))))
+  (let ([doc-with-library
+         (for/fold ([doc empty-document])
+                   ([dref document-refs])
+           (match-define `(document-ref (@ (id ,name)) ,ref) dref)
+           (send doc import-xml name ref))])
+    (for/fold ([doc doc-with-library])
+              ([sxml-context sxml-contexts])
+      (define-values (namespace context-decls) (sxml->context sxml-context))
+      (send doc add-context namespace (hash-set context-decls 'locs (λ (x) #f))))))
 
 (define (sxml->context sxml-context)
 
@@ -335,18 +342,21 @@
 ;;
 (define-class document
 
-  (field contexts order library)
+  (field contexts order library library-refs)
   ;; contexts: a hash mapping context names to hashes with keys
   ;;           'includes 'sorts 'ops 'vars 'rules 'assets,
   ;;           values are lists/sets/hashes of the declarations in
   ;;            each category
   ;; order: a list of context names in the inverse order of definition
   ;; library: a hash mapping document names to documents
+  ;; library-refs: a hash mapping document names to external references
+  ;;               (filenames for now, later maybe DOIs or hashes)
 
   ;; Add another document to the library.
-  (define (add-to-library name library-document)
+  (define (add-to-library name library-document external-ref)
     (document contexts order
-              (hash-set library name library-document)))
+              (hash-set library name library-document)
+              (hash-set library-refs name external-ref)))
 
   ;; Add a built-in context. Used only for preparing a single document
   ;; called "builtins", which is automatically added to every other
@@ -364,7 +374,8 @@
                               'compiled-assets
                               (hash)))
               (cons name order)
-              library))
+              library
+              library-refs))
 
   ;; Take context declarations parsed by Leibniz' extensions to Scribble
   ;; and convert them to the internal context data structure.
@@ -538,7 +549,8 @@
                            'compiled-assets assets))
     (document (hash-set contexts name (hash-union context compiled))
               (cons name order)
-              library))
+              library
+              library-refs))
 
   ;; Retrieve a context by name
   (define (get-context name)
@@ -559,6 +571,10 @@
   ;; Return an SXML representation of the document
   (define (get-document-sxml)
     `(*TOP* (leibniz-document
+             (library
+                 ,@(for/list ([(name ref) library-refs]
+                              #:unless (equal? name "builtins"))
+                     `(document-ref (@ (id ,name)) ,ref)))
              ,@(for/list ([name (reverse order)])
                  (get-context-sxml name)))))
 
@@ -637,8 +653,10 @@
       #:mode 'text #:exists 'replace))
 
   ;; Import an SXML document to the library.
-  (define (import-sxml document-name sxml-document)
-    (add-to-library document-name (sxml->document sxml-document)))
+  (define (import-sxml document-name sxml-document external-ref)
+    (add-to-library document-name
+                    (sxml->document sxml-document)
+                    external-ref))
 
   ;; Import an document from an XML file to the library.
   (define (import-xml document-name filename)
@@ -646,7 +664,8 @@
                  (call-with-input-file filename
                    (λ (input-port)
                      (ssax:xml->sxml input-port empty))
-                   #:mode 'text)))
+                   #:mode 'text)
+                 filename))
 
   ;; Create internal data structures from source declarations
   ;; for various asset types.
@@ -756,7 +775,7 @@
 ;; A document containing the builtin contexts
 
 (define builtins
-  (~> (document (hash) empty (hash))
+  (~> (document (hash) empty (hash) (hash))
       (add-builtin-context "truth"
                    empty
                    builtins:truth-signature
@@ -782,8 +801,8 @@
 ;; it is always available.
 
 (define empty-document
-  (~> (document (hash) empty  (hash))
-      (add-to-library "builtins" builtins)))
+  (~> (document (hash) empty  (hash) (hash))
+      (add-to-library "builtins" builtins #f)))
 
 ;; Tests
 
