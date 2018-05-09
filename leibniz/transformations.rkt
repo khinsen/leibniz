@@ -32,15 +32,11 @@
     [(list 'real->float fp-sort)
      (real->float decls fp-sort)]))
 
-(define (combine-varsets name sort1 sort2)
-  (unless (equal? sort1 sort2)
-    (error (format "Var ~a of sort ~a redefined with sort ~a"
-                   name sort1 sort2)))
-  sort1)
-
 (define ((add-context-vars var-decls) item-decl)
   (define (combined-vars local-vars)
-    (hash-union local-vars var-decls #:combine/key combine-varsets))
+    ;; The context var is added only if no local var of the same name
+    ;; already exists.
+    (hash-union local-vars var-decls #:combine (λ (a b) a)))
   (define (transform item)
     (match item
       [(list 'rule vars term1 term2 condition)

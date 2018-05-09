@@ -406,10 +406,10 @@
   [(define write-proc display-term-with-vars)])
 
 
-(define (make-var signature symbol [extra-vars #f])
-  (define sort (or (lookup-var signature symbol)
-                   (and extra-vars
-                        (hash-ref extra-vars symbol #f))))
+(define (make-var signature symbol [local-vars #f])
+  (define sort (or (and local-vars
+                        (hash-ref local-vars symbol #f))
+                   (lookup-var signature symbol)))
   (and sort
        (var (signature-sort-graph signature) symbol sort)))
 
@@ -617,8 +617,8 @@
                  (format "no operator definition for ~s~s"
                          name (map term.sort args))))))
 
-(define (make-var-or-term signature name [extra-vars #f])
-  (or (make-var signature name extra-vars)
+(define (make-var-or-term signature name [local-vars #f])
+  (or (make-var signature name local-vars)
       (make-term signature name empty)))
 
 ; Adapt a term to a larger signature. Used for merging contexts.
