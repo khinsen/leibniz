@@ -187,7 +187,8 @@
         (term.sort right)))
   (unless (or (conforms-to? sort-graph left-sort-or-kind right-sort-or-kind)
               (conforms-to? sort-graph right-sort-or-kind left-sort-or-kind))
-    (error "Left and right terms have incompatible sorts"))
+    (error (format "Left and right terms have incompatible sorts ~a, ~a"
+                   left-sort-or-kind right-sort-or-kind)))
   (equation left condition right))
 
 (define (valid-equation? signature equation)

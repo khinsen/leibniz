@@ -332,8 +332,12 @@
     (define k-sort (kind sort-graph sort))
     (define (update ranks)
       (unless (check-kinds ranks k-arity k-sort)
-        (error (format "adding rank ~s -> ~a makes operator non-monotonic"
-                       arity sort)))
+        (define formatted-ranks
+          (for/list ([triple (all-ranks-for-k-arity ranks)])
+            (format "  ~s -> ~a" (first triple) (second triple))))
+        (error (format "adding rank ~s -> ~a makes operator non-monotonic\nPreviously defined ranks:\n~a"
+                       arity sort
+                       (string-join formatted-ranks "\n"))))
       (add ranks arity sort meta))
     (operator sort-graph
               (hash-update ranks-by-k-arity k-arity update
