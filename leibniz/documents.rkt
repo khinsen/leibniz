@@ -464,6 +464,17 @@
                                                        #:combine/key combine-assets)))
           (add-loc new-asset loc)))
 
+    (define (add-include-prefix inserted-context cname)
+      (define elements (map string-trim (string-split cname "/")))
+      (if (equal? (length elements) 1)
+          inserted-context
+          (let ([prefix (first elements)])
+            (hash-update inserted-context 'includes
+                         (λ (is)
+                           (for/list ([mode/name is])
+                             (cons (car mode/name)
+                                   (string-append prefix "/" (cdr mode/name)))))))))
+
     (define (merge context inserted-context loc)
       (define (merge* key v1 v2)
         (case key
@@ -497,9 +508,11 @@
              (add-include context 'extend cname loc)]
             [(list 'insert cname tr ...)
              (define insertion
-               (~> (with-handlers ([exn:fail? (re-raise-exn loc)])
-                     (transform-context-declarations (get-context cname) tr))
-                   clean-declarations))
+               (with-handlers ([exn:fail? (re-raise-exn loc)])
+                 (~> (get-context cname)
+                     (add-include-prefix cname)
+                     (transform-context-declarations tr)
+                     clean-declarations)))
              (merge context insertion loc)]
             [(list 'sort s)
              (add-sort context s loc)]
