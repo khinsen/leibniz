@@ -507,12 +507,14 @@
             [(list 'extend cname)
              (add-include context 'extend cname loc)]
             [(list 'insert cname tr ...)
-             (define insertion
+             (define (apply-transformations context tr)
                (with-handlers ([exn:fail? (re-raise-exn loc)])
-                 (~> (get-context cname)
-                     (add-include-prefix cname)
-                     (transform-context-declarations tr)
-                     clean-declarations)))
+                 (transform-context-declarations context tr)))
+             (define insertion
+               (~> (get-context cname)
+                   (add-include-prefix cname)
+                   (apply-transformations tr)
+                   clean-declarations))
              (merge context insertion loc)]
             [(list 'sort s)
              (add-sort context s loc)]
