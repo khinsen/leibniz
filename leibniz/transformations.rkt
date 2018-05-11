@@ -107,7 +107,7 @@
     (second (transform-item (list 'assets assets))))
 
   (~> context
-      (hash-remove 'locs)
+      (hash-set 'locs (hash))
       (hash-update 'sorts transform-sorts)
       (hash-update 'subsorts transform-subsorts)
       (hash-update 'vars transform-vars)

@@ -165,7 +165,8 @@
                ; The new arity is already present in the list.
                (if (equal? sort s)
                    this
-                   (error "conflicting value sorts"))]
+                   (error (format "new value sort ~a differs from ~a in previous declaration"
+                                  sort s)))]
               [(is-subarity? arity a)
                ; We hit a higher arity, so we must insert the new
                ; one before it. We must also check the sorts

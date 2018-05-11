@@ -31,19 +31,20 @@
 ;;
 ;; Re-raise exceptions with the source location information from the document
 ;;
-(define-struct (exn:fail:leibniz exn:fail) (a-srcloc)
+(define-struct (exn:fail:leibniz exn:fail) (a-srcloc-list)
   #:property prop:exn:srclocs
   (λ (a-struct)
     (match a-struct
-      [(struct exn:fail:leibniz (msg marks a-srcloc))
-       (list a-srcloc)])))
+      [(struct exn:fail:leibniz (msg marks a-srcloc-list))
+       a-srcloc-list])))
 
 (define ((re-raise-exn loc) e)
   (if loc 
       (raise (make-exn:fail:leibniz
               (exn-message e)
               (current-continuation-marks)
-              (apply srcloc loc)))
+              (for/list ([l loc])
+                (apply srcloc l))))
       (raise e)))
 
 ;;
@@ -385,7 +386,7 @@
       (hash-update context 'locs
                    (λ (ls)
                      (if (and loc (not (hash-has-key? ls decl)))
-                         (hash-set ls decl loc)
+                         (hash-set ls decl (list loc))
                          ls))))
 
     (define (add-include context mode cname loc)
@@ -463,7 +464,7 @@
                                                        #:combine/key combine-assets)))
           (add-loc new-asset loc)))
 
-    (define (merge context1 context2 loc)
+    (define (merge context inserted-context loc)
       (define (merge* key v1 v2)
         (case key
           [(includes rules) (remove-duplicates (append v1 v2))]
@@ -471,9 +472,13 @@
           [(vars) (hash-union v1 v2 #:combine/key combine-varsets)]
           [(assets) (hash-union v1 v2 #:combine/key combine-assets)]
           [(locs) (hash-union v1 v2 #:combine (λ (a b) a))]))
-      (with-handlers ([exn:fail? (re-raise-exn loc)])
-        (hash-union context1 context2
-                    #:combine/key merge*)))
+      (define (add-loc-prefix context loc)
+        (hash-update context 'locs
+                     (λ (ls)
+                       (for/hash ([(d l) ls])
+                         (values d (cons loc l))))))
+      (hash-union context (add-loc-prefix inserted-context loc)
+                  #:combine/key merge*))
 
     (~> (for/fold ([context (hash 'includes empty
                                   'sorts (set)
@@ -491,11 +496,11 @@
             [(list 'extend cname)
              (add-include context 'extend cname loc)]
             [(list 'insert cname tr ...)
-             (merge context
-                    (clean-declarations
-                     (with-handlers ([exn:fail? (re-raise-exn loc)])
-                         (transform-context-declarations (get-context cname) tr)))
-                    loc)]
+             (define insertion
+               (~> (with-handlers ([exn:fail? (re-raise-exn loc)])
+                     (transform-context-declarations (get-context cname) tr))
+                   clean-declarations))
+             (merge context insertion loc)]
             [(list 'sort s)
              (add-sort context s loc)]
             [(list 'subsort s1 s2)
@@ -573,9 +578,9 @@
   (define (get-document-sxml)
     `(*TOP* (leibniz-document
              (library
-                 ,@(for/list ([(name ref) library-refs]
-                              #:unless (equal? name "builtins"))
-                     `(document-ref (@ (id ,name)) ,ref)))
+              ,@(for/list ([(name ref) library-refs]
+                           #:unless (equal? name "builtins"))
+                  `(document-ref (@ (id ,name)) ,ref)))
              ,@(for/list ([name (reverse order)])
                  (get-context-sxml name)))))
 
