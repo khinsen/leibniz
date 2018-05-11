@@ -493,7 +493,8 @@
             [(list 'insert cname tr ...)
              (merge context
                     (clean-declarations
-                     (transform-context-declarations (get-context cname) tr))
+                     (with-handlers ([exn:fail? (re-raise-exn loc)])
+                         (transform-context-declarations (get-context cname) tr)))
                     loc)]
             [(list 'sort s)
              (add-sort context s loc)]
