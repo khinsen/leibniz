@@ -125,7 +125,9 @@
 
 (define (display-term signature term)
   (when term
-    (displayln (plain-text (format-term signature #f term)))))
+    (displayln (format "~a : ~a"
+                       (terms:term.sort term)
+                       (plain-text (format-term signature #f term))))))
 
 (define (display-equation signature equation)
   (when equation
