@@ -64,6 +64,7 @@ of the same kind:
 Multiplication and division by numbers also yields same-kind quantities:
   @inset{@op{ℝ × SQ : SQ}
          @op{ℝnz × SQnz : SQnz}
+         @op{-(SQ) : SQ}
          @op{SQ ÷ SQnz : ℝ}
          @op{SQnz ÷ SQnz : ℝnz}
          @op{SQ ÷ ℝnz : SQ}
@@ -168,54 +169,81 @@ Replace SQ by A and SQnz by Anz in the template (result not shown).
 
 }
 
-@context["kinematics" #:use "length"   #:use "time"
-                      #:use "velocity" #:use "acceleration"]{
+@context["force"
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ F)
+                   (rename-sort SQnz Fnz)]]{
 
-@section{Kinematics}
+@section{Force}
 
-The derived quantities @sort{V} and @sort{A} are obtained as quotients
-of the fundamental quantities @sort{L} and @sort{T}.
-
-Velocities are obtained by dividing a length by a time:
-  @inset{@op{L ÷ Tnz : V}
-         @op{Lnz ÷ Tnz : Vnz}}
-
-Accelerations are the result of dividing a velocity by a time:
-  @inset{@op{V ÷ Tnz : A}
-         @op{Vnz ÷ Tnz : Anz}}
+Replace SQ by F and SQnz by Fnz in the template (result not shown).
 
 }
 
-@context["kinematics-example" #:extend "kinematics"]{
+@context["function-template" #:insert ["template"
+                                       hide-vars
+                                       (rename-sort SQ SQD)
+                                       (rename-sort SQnz SQDnz)]
+                             #:insert ["template"
+                                       hide-vars
+                                       (rename-sort SQ SQI)
+                                       (rename-sort SQnz SQInz)]]{
 
-@subsection{Example}
+@section{A template for functions from one quantity to another}
 
-We consider a point that moves on a straight line starting at time 0 from the origin.
-At time @op{t1 : Tnz} it has distance @op{d1 : L} from the origin, at
-time @op{t2 : Tnz}, @term{t2 > t1} the distance is @op{d2 : L}.
+This template defines functions from a domain quantity @sort{SQD} to an
+image quantity @sort{SQI}. The sort for such functions is @sort{SQD→SQI ⊆ Q→Q},
+function application is defined by @op{SQD→SQI[SQD] : SQI}.
 
-The average velocity from time 0 to @term{t1} is then
-  @inset{@op{v1 : V}
-         @rule{v1 ⇒ d1 ÷ t1}.}
-and the average velocity between 0 and @term{t2} is
-  @inset{@op{v2 : V}
-         @rule{v2 ⇒ d2 ÷ t2}.}
-The average acceleration is given by
-  @inset{@op{a : A}
-         @rule{a ⇒ 2 × ((v2 - v1) ÷ (t2 - t1))}
-         @eval-term{a}.}
-
+It is convenient to provide some arithmetic:
+@itemlist[#:style 'ordered
+  @item{Addition and subtraction of functions:
+        @itemlist[
+          @item{@op{f:SQD→SQI + g:SQD→SQI : SQD→SQI} with @linebreak[]
+                @rule{(f + g)[x] ⇒ f[x] + g[x] ∀ x:SQD}}
+          @item{@op{f:SQD→SQI - g:SQD→SQI : SQD→SQI} with @linebreak[]
+                @rule{(f - g)[x] ⇒ f[x] - g[x] ∀ x:SQD}}
+        ]}
+  @item{Addition and subtraction of constants:
+        @itemlist[
+          @item{@op{f:SQD→SQI + q:SQI : SQD→SQI} with @linebreak[]
+                @rule{(f + q)[x] ⇒ f[x] + q ∀ x:SQD}}
+          @item{@op{f:SQD→SQI - q:SQI : SQD→SQI} with @linebreak[]
+                @rule{(f - q)[x] ⇒ f[x] + q ∀ x:SQD}}
+          @item{@op{q:SQI + f:SQD→SQI : SQD→SQI} with @linebreak[]
+                @rule{(q + f)[x] ⇒ q + f[x] ∀ x:SQD}}
+          @item{@op{q:SQI - f:SQD→SQI : SQD→SQI} with @linebreak[]
+                @rule{(q - f)[x] ⇒ q - f[x] ∀ x:SQD}}
+        ]}
+  @item{Multiplication with scalars:
+        @itemlist[
+          @item{@op{s:ℝ × f:SQD→SQI : SQD→SQI} with @linebreak[]
+                @rule{(s × f)[x] ⇒ s × f[x] ∀ x:SQD}}
+          @item{@op{-(f:SQD→SQI) : SQD→SQI} with @linebreak[]
+                @rule{-(f)[x] ⇒ -(f[x])  ∀ x:SQD}}]}
+]
 }
 
-@context["kinematics-nummerical-example" #:extend "kinematics-example"]{
+@context["function-with-derivative-template"
+         #:insert ["function-template"
+                   hide-vars]
+         #:insert ["function-template"
+                   hide-vars
+                   (rename-sort SQI SQID)
+                   (rename-sort SQInz SQIDnz)
+                   (rename-sort SQD→SQI SQD→SQID)]]{
 
-Introducing a time unit @op{s : Tnz} and a length unit @op{m : Lnz}, we
-can assign numerical values:
-  @inset{@rule{t1 ⇒ 3 × s},  @rule{d1 ⇒ 20 × m}
-         @rule{t2 ⇒ 6 × s},  @rule{d2 ⇒ 50 × m}
-         @eval-term{v1}
-         @eval-term{v2}
-         @eval-term{a}.}
+@section{A template for functions with derivatives}
+
+The derivative of a function is given by @op{𝒟(SQD→SQI) : SQD→SQID},
+where @sort{SQID ⊆ Qℝ} is the quotient of @sort{SQI} and @sort{SQD}.
+
+It is a linear operator, i.e. for @var{f:SQD→SQI}, @var{g:SQD→SQI},
+and @var{s:ℝ} we have
+  @inset{@rule{𝒟(f + g) ⇒ 𝒟(f) + 𝒟(g)}
+         @rule{𝒟(f - g) ⇒ 𝒟(f) - 𝒟(g)}
+         @rule{𝒟(s × f) ⇒ s × 𝒟(f)}}
 
 }
 
