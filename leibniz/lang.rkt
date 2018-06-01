@@ -13,6 +13,7 @@
                      [cs:comment-op comment-op]
                      [cs:test test]
                      [cs:eval-term eval-term]
+                     [cs:asset-ref asset-ref]
                      [cs:show-context show-context])
          inset
          xml signature-graphs

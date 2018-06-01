@@ -4,6 +4,7 @@
          sort var op term rule equation
          comment-sort comment-op
          test eval-term
+         asset-ref
          show-context)
 
 (require "./documents.rkt"
@@ -132,6 +133,13 @@
                                                   #,(source-loc
                                                      (first (syntax->list
                                                              #'(term-expr ...))))))
+    ;; References to assets
+    (pattern ((~literal asset-ref) label:identifier)
+             #:attr decl empty
+             #:with expansion #`(asset-reference leibniz-doc current-context
+                                                 (quote label)))
+
+    ;; Rendered contexts
     (pattern ((~literal show-context) name:str)
              #:attr decl empty
              #:with expansion #'(format-context
@@ -233,6 +241,9 @@
 (define-syntax (eval-term stx)
   (raise-syntax-error #f "eval-term used outside context" stx))
 
+(define-syntax (asset-ref stx)
+  (raise-syntax-error #f "asset-ref used outside context" stx))
+
 ;;
 ;; show-context is the only Leibniz element that can be used outside of
 ;; a context block.
@@ -297,7 +308,6 @@
                                              (terms:term.sort rterm)))
   (define rterm-elem (format-term signature #f rterm))
   (list
-   
    (leibniz-input-with-hover sort-str term-elem)
    (leibniz-output-with-hover rsort-str " ⇒ " rterm-elem)))
 
@@ -306,6 +316,14 @@
 
 (define (parsed-aignature-comment decl)
   (nonbreaking (leibniz-comment (format-signature-declaration decl))))
+
+(define (asset-reference leibniz-doc current-context label)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
+  (define assets (hash-ref context 'compiled-assets))
+  (define asset (hash-ref assets label))
+  (leibniz-input-with-hover (plain-text (format-asset label asset signature))
+                            (format-asset-reference label asset)))
 
 ;;
 ;; Tests

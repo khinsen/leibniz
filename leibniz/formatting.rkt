@@ -5,6 +5,8 @@
          format-term
          format-rule
          format-equation
+         format-asset
+         format-asset-reference
          leibniz-input leibniz-input-with-hover
          leibniz-output leibniz-output-with-hover
          leibniz-comment
@@ -149,10 +151,10 @@
       (list "(" term-elem ")")
       term-elem))
 
-(define (format-label label)
+(define (format-label label [as-prefix? #t])
   (if label
       (list (bold (symbol->string label))
-            ": ")
+            (if as-prefix?  ": " ""))
       ""))
 
 (define (format-term signature label term)
@@ -249,6 +251,23 @@
         right-elem
         var-elems
         cond-elem))
+
+;;
+;; Format assets and asset references
+;;
+(define (format-asset label asset signature)
+  (cond
+    [(equations:equation? asset) (format-equation label asset signature)]
+    [(equations:rule? asset) (format-rule label asset signature)]
+    [(terms:term? asset) (format-term signature label asset)]
+    [else (error "illegal asset type")]))
+
+(define (format-asset-reference label asset)
+  (define prefix (cond
+                   [(equations:equation? asset) "=."]
+                   [(equations:rule? asset) "⇒."]
+                   [else ""]))
+  (list prefix (format-label label #f)))
 
 ;;
 ;; Format a complete context
