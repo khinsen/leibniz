@@ -175,9 +175,23 @@
     [_ #f]))
 
 (define (combine-assets label asset1 asset2)
-  (unless (equal? asset1 asset2)
-    (error (format "Asset label ~a already used for value ~a" label asset1)))
-  asset1)
+  (cond
+    [(equal? asset1 asset2)
+     asset1]
+    [(and (equal? (first asset1) 'assets) (equal? (first asset1) 'assets))
+     (list 'assets
+           (hash-union (second asset1) (second asset2) #:combine/key combine-assets))]
+    [else
+     (error (format "Asset label ~a already used for value ~a" label asset1))]))
+
+(define (combine-compiled-assets label asset1 asset2)
+  (cond
+    [(equal? asset1 asset2)
+     asset1]
+    [(and (hash? asset1) (hash? asset2))
+     (hash-union asset1 asset2 #:combine/key combine-compiled-assets)]
+    [else
+     (error (format "Asset label ~a already used for value ~a" label asset1))]))
 
 (define (compile-assets signature includes asset-decls locs)
   ;; Helper function for compiling a single asset.
@@ -197,13 +211,13 @@
     (for/fold ([merged-assets (hash)])
               ([m/c includes])
       (hash-union merged-assets (hash-ref (cdr m/c) 'compiled-assets (hash))
-                  #:combine/key combine-assets)))
+                  #:combine/key combine-compiled-assets)))
   ;; Process the asset declarations
   (for/fold ([assets after-includes])
             ([(label ad) asset-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash label ad)))])
       (hash-union assets (hash label (compile-asset ad))
-                  #:combine/key combine-assets))))
+                  #:combine/key combine-compiled-assets))))
 
 ;;
 ;; Convert an SXML document to the internal document data structure.
