@@ -320,8 +320,7 @@
 (define (asset-reference leibniz-doc current-context label)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
-  (define assets (hash-ref context 'compiled-assets))
-  (define asset (hash-ref assets label))
+  (define asset (get-asset context label))
   (leibniz-input-with-hover (plain-text (format-asset label asset signature))
                             (format-asset-reference label asset)))
 
@@ -345,6 +344,7 @@
      (rule "a:A ⇒ foo(a, a)")
      (rule a-rule "a:A ⇒ bar(a, a)")
      (term a-term "bar(x, x)")
+     (term a.nested.asset "bar(x, x)")
      (equation an-equation "bar(x, x) = foo(a, a) ∀ x:A ∀ a:A")))
 
   ;; The same context in the input syntax of documents.rkt
@@ -364,6 +364,7 @@
                               (term bar ((term/var a) (term/var a)))
                               ((var a A)))) #f)
           (cons '(asset a-term (term bar ((term/var x) (term/var x)))) #f)
+          (cons '(asset a.nested.asset (term bar ((term/var x) (term/var x)))) #f)
           (cons '(asset an-equation
                         (equation (term bar ((term/var x) (term/var x)))
                                   (term foo ((term/var a) (term/var a)))
@@ -381,4 +382,4 @@
                     (get-context "test-context")
                     (clean-declarations)
                     (hash-remove 'locs)))
-  (check-equal? context1 context2 ))
+  (check-equal? context1 context2))

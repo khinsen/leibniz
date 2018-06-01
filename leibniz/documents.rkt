@@ -3,6 +3,7 @@
 (provide empty-document
          add-to-library
          add-context-from-source
+         get-asset
          get-context
          make-term make-rule make-transformation make-equation
          make-test
@@ -458,7 +459,14 @@
          term]))
 
     (define (add-asset context label value loc)
-      (define new-asset (hash label (preprocess-asset value loc)))
+      (define preprocessed-value (preprocess-asset value loc))
+      (define nested-labels (~> (symbol->string label)
+                                (string-split ".")
+                                (map string->symbol _)))
+      (define new-asset (hash (first nested-labels)
+                              (for/fold ([v preprocessed-value])
+                                        ([l (reverse (rest nested-labels))])
+                                (list 'assets (hash l v)))))
       (~> context
           (hash-update 'assets (λ (assets) (hash-union assets new-asset
                                                        #:combine/key combine-assets)))
@@ -785,6 +793,16 @@
         (thunk (system* dot "-Tpng" dot-file)))
       (delete-file dot-file))))
 
+;; Retrieve an asset
+(define (get-asset context label)
+  (define nested-labels (~> (symbol->string label)
+                            (string-split ".")
+                            (map string->symbol _)))
+  (define assets (hash-ref context 'compiled-assets))
+  (for/fold ([a assets])
+            ([l nested-labels])
+    (hash-ref a l)))
+
 ;; Utility functions for processing context declarations
 
 (define (clean-declarations cdecls)
@@ -874,7 +892,9 @@
                                          (equation (term/var a-foo)
                                                    (term a-foo
                                                          ((term/var a-foo)))
-                                                   ())) #f)))
+                                                   ())) #f)
+                           (cons '(asset nested.asset (term/var a-foo)) #f)
+                           (cons '(asset deeply.nested.asset (term/var a-foo)) #f)))
                     (get-context "test")
                     (clean-declarations))
                 (hash 'includes empty
@@ -896,7 +916,13 @@
                                                (hash)
                                                '(term/var a-foo)
                                                '(term a-foo ((term/var a-foo)))
-                                               #f))))
+                                               #f)
+                                    'nested (list 'assets (hash 'asset
+                                                                '(term/var a-foo)))
+                                    'deeply (list 'assets (hash 'nested
+                                                                (list 'assets
+                                                                      (hash 'asset
+                                                                            '(term/var a-foo))))))))
 
   (let ([decls (list (cons '(sort foo) #f)
                      (cons '(sort bar) #f)
@@ -997,7 +1023,12 @@
                     (get-context "test")
                     (hash-remove 'locs))
                 (~> (get-context test-document2 "test")
-                    (hash-remove 'locs))))
+                    (hash-remove 'locs)))
+
+  (check-equal? (~> test-document2
+                    (get-context "test")
+                    (get-asset 'more-assets.int1))
+                2))
 
 ;; Tests for module "transformations.rkt"
 ;; Put here to avoid cyclic dependencies.
