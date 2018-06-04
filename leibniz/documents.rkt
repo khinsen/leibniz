@@ -150,6 +150,24 @@
                             #f #t))]
     [_ #f]))
 
+(define (as-rule* signature value flip?)
+  (cond
+    [(equations:rule? value)
+     value]
+    [(equations:equation? value)
+     (define-values (left right)
+       (if flip?
+           (values (equations:equation-right value)
+                   (equations:equation-left value))
+           (values (equations:equation-left value)
+                   (equations:equation-right value))))
+     (equations:make-rule signature
+                          left
+                          (equations:equation-condition value)
+                          right
+                          #f #t)]
+    [else (error (format "cannot convert ~a to a rule" value))]))
+
 (define (compile-rules signature includes rule-decls locs)
   ;; Merge the rule lists of the included contexts.
   (define after-includes
@@ -174,6 +192,17 @@
                                 (mp right)))]
     [_ #f]))
 
+(define (as-equation* signature value)
+  (cond
+    [(equations:equation? value)
+     value]
+    [(equations:rule? value)
+     (equations:make-equation signature
+                              (equations:rule-pattern value)
+                              (equations:rule-condition value)
+                              (equations:rule-replacement value))]
+    [else (error (format "cannot convert ~a to an equation" value))]))
+
 (define (combine-assets label asset1 asset2)
   (cond
     [(equal? asset1 asset2)
@@ -190,22 +219,57 @@
      asset1]
     [(and (hash? asset1) (hash? asset2))
      (hash-union asset1 asset2 #:combine/key combine-compiled-assets)]
+    [(and (box? asset1) (not (unbox asset1)))
+     asset2]
+    [(and (box? asset2) (not (unbox asset2)))
+     asset1]
     [else
      (error (format "Asset label ~a already used for value ~a" label asset1))]))
 
 (define (compile-assets signature includes asset-decls locs)
+  (define unevaluated empty)
   ;; Helper function for compiling a single asset.
   (define (compile-asset decl)
     (match decl
       [(list 'rule arg ...)
-       (make-rule* signature decl)]
+       (box (make-rule* signature decl))]
       [(list 'equation arg ...)
-       (make-equation* signature decl)]
+       (box (make-equation* signature decl))]
+      [(or (list 'as-equation label)
+           (list 'as-rule label _))
+       (let ([no-value (box #f)])
+         (set! unevaluated (cons (list no-value decl) unevaluated))
+         no-value)]
       [(list 'assets assets)
        (for/hash ([(label value) assets])
          (values label (compile-asset value)))]
+      ;; TODO Should test for valid term declarations, rather than suppose
+      ;; that it must be a term since it's no other valid declaration.
       [term
-       ((make-term* signature) decl)]))
+       (box ((make-term* signature) decl))]))
+  ;; Helper functions for computing dependent assets
+  (define (compute-asset assets decl)
+    (match decl
+      [(list 'as-equation label)
+       (and~> (lookup-asset assets label)
+              (as-equation* signature _))]
+      [(list 'as-rule label flip?)
+       (and~> (lookup-asset assets label)
+              (as-rule* signature _ flip?))]))
+  (define (compute-assets unevaluated)
+    (for/fold ([remaining empty])
+              ([box+decl unevaluated])
+      (match-define (list box decl) box+decl)
+      (define value (compute-asset assets decl))
+      (if value
+          (begin (set-box! box value)
+                 remaining)
+          (cons (box decl) remaining))))
+  (define (compute-assets-iteratively unevaluated)
+    (let ([remaining (compute-assets unevaluated)])
+      (if (equal? (length remaining) (length unevaluated))
+          remaining
+          (compute-assets-iteratively remaining))))
   ;; Merge the assets of the included contexts.
   (define after-includes
     (for/fold ([merged-assets (hash)])
@@ -213,11 +277,18 @@
       (hash-union merged-assets (hash-ref (cdr m/c) 'compiled-assets (hash))
                   #:combine/key combine-compiled-assets)))
   ;; Process the asset declarations
-  (for/fold ([assets after-includes])
-            ([(label ad) asset-decls])
-    (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash label ad)))])
-      (hash-union assets (hash label (compile-asset ad))
-                  #:combine/key combine-compiled-assets))))
+  (define assets
+    (for/fold ([assets after-includes])
+              ([(label ad) asset-decls])
+      (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash label ad)))])
+        (hash-union assets (hash label (compile-asset ad))
+                    #:combine/key combine-compiled-assets))))
+  ;; Compute unevaluated assets
+  (define remaining (compute-assets-iteratively unevaluated))
+  (unless (empty? remaining)
+    (error (format "~a remaining unevaluated assets" (length remaining))))
+  ;; Return compiled assets, guaranteed without unevaluated boxes
+  assets)
 
 ;;
 ;; Convert an SXML document to the internal document data structure.
@@ -301,7 +372,11 @@
       [`(term-or-var (@ (name ,name-string)))
        (list 'term/var (string->symbol name-string))]
       [`(,number-tag (@ (value ,v)))
-       (list number-tag (read (open-input-string v)))]))
+       (list number-tag (read (open-input-string v)))]
+      [`(as-equation (@ (ref ,asset-ref)))
+       (list 'as-equation (string->symbol asset-ref))]
+      [`(as-rule (@ (ref ,asset-ref) (flip ,flip?)))
+       (list 'as-rule (string->symbol asset-ref) (equal? flip? "true"))]))
 
   (match-define
     `(context (@ (id, name))
@@ -350,6 +425,13 @@
                 'rules rules
                 'assets assets
                 'locs (hash))))
+
+;; Decompose an compound asset label into a list of nested simple asset labels
+
+(define (nested-labels compound-label)
+  (~> (symbol->string compound-label)
+      (string-split ".")
+      (map string->symbol _)))
 
 ;;
 ;; A document is a collection of contexts that can refer to each other by name.
@@ -469,17 +551,19 @@
          (list 'assets (for/hash ([l label]
                                   [v value])
                          (values l (preprocess-asset v loc))))]
+        [(list 'as-rule label flip?)
+         value]
+        [(list 'as-equation label)
+         value]
         [term
          term]))
 
     (define (add-asset context label value loc)
       (define preprocessed-value (preprocess-asset value loc))
-      (define nested-labels (~> (symbol->string label)
-                                (string-split ".")
-                                (map string->symbol _)))
-      (define new-asset (hash (first nested-labels)
+      (define nested (nested-labels label))
+      (define new-asset (hash (first nested)
                               (for/fold ([v preprocessed-value])
-                                        ([l (reverse (rest nested-labels))])
+                                        ([l (reverse (rest nested))])
                                 (list 'assets (hash l v)))))
       (~> context
           (hash-update 'assets (λ (assets) (hash-union assets new-asset
@@ -664,7 +748,12 @@
                 ,@(for/list ([arg args])
                     (asset->sxml arg)))]
         [(list (and number-tag (or 'integer 'rational 'floating-point)) x)
-         `(,number-tag (@ (value ,(format "~a" x))))]))
+         `(,number-tag (@ (value ,(format "~a" x))))]
+        [(list 'as-equation asset-ref)
+         `(as-equation (@ (ref ,(symbol->string asset-ref))))]
+        [(list 'as-rule asset-ref flip?)
+         `(as-rule (@ (ref ,(symbol->string asset-ref))
+                      (flip ,(if flip? "true" "false"))))]))
 
     (define (assets->sxml assets)
       `(assets ,@(for/list ([(label asset) assets])
@@ -808,14 +897,17 @@
       (delete-file dot-file))))
 
 ;; Retrieve an asset
+(define (lookup-asset assets label)
+  (define value
+    (for/fold ([a assets])
+              ([l (nested-labels label)])
+      (hash-ref a l)))
+  (if (box? value)
+      (unbox value)
+      value))
+
 (define (get-asset context label)
-  (define nested-labels (~> (symbol->string label)
-                            (string-split ".")
-                            (map string->symbol _)))
-  (define assets (hash-ref context 'compiled-assets))
-  (for/fold ([a assets])
-            ([l nested-labels])
-    (hash-ref a l)))
+  (lookup-asset (hash-ref context 'compiled-assets) label))
 
 ;; Utility functions for processing context declarations
 
@@ -1016,7 +1108,9 @@
                                        ())) #f)
                (cons '(asset more-assets
                              (assets [int1 (integer 2)]
-                                     [int2 (integer 3)])) #f)))))
+                                     [int2 (integer 3)])) #f)
+               (cons '(asset equation-from-rule (as-equation a-rule)) #f)
+               (cons '(asset rule-from-equation (as-rule eq1 #f)) #f)))))
 
   (check-true (~> test-document2
                   (make-test "test"
@@ -1066,7 +1160,8 @@
                              (equation (term + ((term/var b) (term/var x)))
                                        (term/var b)
                                        ((var x SQ)))) #f)
-               (cons '(asset term-asset (term/var foo)) #f)))))
+               (cons '(asset term-asset (term/var foo)) #f)
+               (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)))))
 
   ;; hide-vars
   (check-equal? (~> a-document
@@ -1091,7 +1186,8 @@
                                                    ((var a Q)
                                                     (var b SQ)
                                                     (var x SQ)))) #f)
-                           (cons '(asset term-asset (term/var foo)) #f)))
+                           (cons '(asset term-asset (term/var foo)) #f)
+                           (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)))
                     (get-context "test")))
 
   (check-exn exn:fail?
@@ -1127,7 +1223,8 @@
                                                             (term/var x)))
                                                    (term/var b)
                                                    ((var x M)))) #f)
-                           (cons '(asset term-asset (term/var foo)) #f)))
+                           (cons '(asset term-asset (term/var foo)) #f)
+                           (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)))
                     (get-context "test")))
 
   ;; real->float

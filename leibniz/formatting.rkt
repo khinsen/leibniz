@@ -3,6 +3,7 @@
 (provide format-context
          format-signature-declaration
          format-term
+         format-label
          format-rule
          format-equation
          format-asset

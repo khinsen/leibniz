@@ -77,6 +77,14 @@
              #:with expansion #`(parsed-rule leibniz-doc current-context 
                                              (quote label) (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
+    (pattern ((~literal rule) label:identifier asset-ref:identifier
+                              (~optional (~seq #:flip flip?:boolean) #:defaults ([flip? #'#f])))
+             #:attr decl (list #`(cons (list 'asset (quote label)
+                                             (list 'as-rule (quote asset-ref) flip?))
+                                       #,(source-loc this-syntax)))
+             #:with expansion #`(computed-rule leibniz-doc current-context
+                                                   (quote label) (quote asset-ref) flip?
+                                                   #,(source-loc #'label)))
     (pattern ((~literal rule) rule-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
@@ -97,10 +105,18 @@
     ;; Equations
     (pattern ((~literal equation) label:identifier equation-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
-             #:attr decl (list #`(cons (list 'asset (quote label) (quote parsed)) #,(source-loc this-syntax)))
+             #:attr decl (list #`(cons (list 'asset (quote label) (quote parsed))
+                                       #,(source-loc this-syntax)))
              #:with expansion #`(parsed-equation leibniz-doc current-context 
                                                  (quote label) (quote parsed)
                                                  #,(source-loc (first (syntax->list #'(equation-expr ...))))))
+    (pattern ((~literal equation) label:identifier asset-ref:identifier)
+             #:attr decl (list #`(cons (list 'asset (quote label)
+                                             (list 'as-equation (quote asset-ref)))
+                                       #,(source-loc this-syntax)))
+             #:with expansion #`(computed-equation leibniz-doc current-context
+                                                   (quote label) (quote asset-ref)
+                                                   #,(source-loc #'label)))
     (pattern ((~literal equation) equation-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p equation/p) #'(equation-expr ...))
              #:attr decl empty
@@ -323,6 +339,28 @@
   (define asset (get-asset context label))
   (leibniz-input-with-hover (plain-text (format-asset label asset signature))
                             (format-asset-reference label asset)))
+
+(define (computed-equation leibniz-doc current-context label asset-ref loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
+  (define asset (get-asset context asset-ref))
+  (define equation (get-asset context label))
+  (list
+   (leibniz-input (format-label label))
+   (leibniz-input-with-hover (plain-text (format-asset asset-ref asset signature))
+                             (list "=(" (format-label asset-ref #f) ") "))
+   (leibniz-output (format-equation #f equation signature))))
+
+(define (computed-rule leibniz-doc current-context label asset-ref flip? loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
+  (define asset (get-asset context asset-ref))
+  (define rule (get-asset context label))
+  (list
+   (leibniz-input (format-label label))
+   (leibniz-input-with-hover (plain-text (format-asset asset-ref asset signature))
+                             (list (if flip? "⇐(" "⇒(") (format-label asset-ref #f) ") "))
+   (leibniz-output (format-rule #f rule signature))))
 
 ;;
 ;; Tests

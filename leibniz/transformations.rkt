@@ -47,6 +47,9 @@
        (list 'assets
              (for/hash ([(label value) assets])
                (values label (transform value))))]
+      [(or (list 'as-equation _)
+           (list 'as-rule _ _))
+       item]
       [(list 'term/var name)
        (when (hash-has-key? var-decls name)
          (error (format "variable ~a has been removed" name)))
@@ -97,6 +100,9 @@
        (list 'assets
              (for/hash ([(label value) assets])
                (values label (transform-item value))))]
+      [(or (list 'as-equation _)
+           (list 'as-rule _ _))
+       item]
       [term
        term]))
 
@@ -223,6 +229,9 @@
       [(list 'assets assets)
        (list 'assets (for/hash ([(label value) assets])
                        (values label (transform-item value))))]
+      [(or (list 'as-equation _)
+           (list 'as-rule _ _))
+       item]
       [term
        (define-values (t-sort t-term) (transform-term term (hash)))
        t-term]))
