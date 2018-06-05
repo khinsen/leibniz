@@ -203,6 +203,18 @@
                               (equations:rule-replacement value))]
     [else (error (format "cannot convert ~a to an equation" value))]))
 
+(define (substitution* signature rule value)
+  (unless (equations:rule? rule)
+    (error (format "not a rule: ~a" rule)))
+  (define transformation (equations:make-transformation signature rule))
+  (cond
+    [(terms:term? value)
+     (rewrite:substitute signature transformation value)]
+    [(equations:equation? value)
+     (rewrite:substitute-equation signature transformation value)]
+    [else
+     (error (format "not a term or equation: ~a" value))]))
+
 (define (combine-assets label asset1 asset2)
   (cond
     [(equal? asset1 asset2)
@@ -235,8 +247,9 @@
        (box (make-rule* signature decl))]
       [(list 'equation arg ...)
        (box (make-equation* signature decl))]
-      [(or (list 'as-equation label)
-           (list 'as-rule label _))
+      [(or (list 'as-equation _)
+           (list 'as-rule _ _)
+           (list 'substitution _ _))
        (let ([no-value (box #f)])
          (set! unevaluated (cons (list no-value decl) unevaluated))
          no-value)]
@@ -255,7 +268,13 @@
               (as-equation* signature _))]
       [(list 'as-rule label flip?)
        (and~> (lookup-asset assets label)
-              (as-rule* signature _ flip?))]))
+              (as-rule* signature _ flip?))]
+      [(list 'substitution substitution-label asset-label)
+       (let ([rule (lookup-asset assets substitution-label)]
+             [asset (lookup-asset assets asset-label)])
+         (and rule
+              asset
+              (substitution* signature rule asset)))]))
   (define (compute-assets unevaluated)
     (for/fold ([remaining empty])
               ([box+decl unevaluated])
@@ -264,7 +283,7 @@
       (if value
           (begin (set-box! box value)
                  remaining)
-          (cons (box decl) remaining))))
+          (cons (list box decl) remaining))))
   (define (compute-assets-iteratively unevaluated)
     (let ([remaining (compute-assets unevaluated)])
       (if (equal? (length remaining) (length unevaluated))
@@ -376,7 +395,9 @@
       [`(as-equation (@ (ref ,asset-ref)))
        (list 'as-equation (string->symbol asset-ref))]
       [`(as-rule (@ (ref ,asset-ref) (flip ,flip?)))
-       (list 'as-rule (string->symbol asset-ref) (equal? flip? "true"))]))
+       (list 'as-rule (string->symbol asset-ref) (equal? flip? "true"))]
+      [`(substitution (@ (substitution ,substitution-ref) (ref ,asset-ref)))
+       (list 'substitution (string->symbol substitution-ref) (string->symbol asset-ref))]))
 
   (match-define
     `(context (@ (id, name))
@@ -554,6 +575,8 @@
         [(list 'as-rule label flip?)
          value]
         [(list 'as-equation label)
+         value]
+        [(list 'substitution label rule value)
          value]
         [term
          term]))
@@ -753,7 +776,10 @@
          `(as-equation (@ (ref ,(symbol->string asset-ref))))]
         [(list 'as-rule asset-ref flip?)
          `(as-rule (@ (ref ,(symbol->string asset-ref))
-                      (flip ,(if flip? "true" "false"))))]))
+                      (flip ,(if flip? "true" "false"))))]
+        [(list 'substitution substitution-ref asset-ref)
+         `(substitution (@ (substitution ,(symbol->string substitution-ref))
+                           (ref ,(symbol->string asset-ref))))]))
 
     (define (assets->sxml assets)
       `(assets ,@(for/list ([(label asset) assets])
@@ -1110,7 +1136,8 @@
                              (assets [int1 (integer 2)]
                                      [int2 (integer 3)])) #f)
                (cons '(asset equation-from-rule (as-equation a-rule)) #f)
-               (cons '(asset rule-from-equation (as-rule eq1 #f)) #f)))))
+               (cons '(asset rule-from-equation (as-rule eq1 #f)) #f)
+               (cons '(asset substituted-term (substitution a-rule a-term)) #f)))))
 
   (check-true (~> test-document2
                   (make-test "test"
@@ -1161,7 +1188,8 @@
                                        (term/var b)
                                        ((var x SQ)))) #f)
                (cons '(asset term-asset (term/var foo)) #f)
-               (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)))))
+               (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
+               (cons '(asset subst-term (substitution rule-from-eq term-asset)) #f)))))
 
   ;; hide-vars
   (check-equal? (~> a-document
@@ -1187,7 +1215,9 @@
                                                     (var b SQ)
                                                     (var x SQ)))) #f)
                            (cons '(asset term-asset (term/var foo)) #f)
-                           (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)))
+                           (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
+                           (cons '(asset subst-term (substitution rule-from-eq term-asset))
+                                 #f)))
                     (get-context "test")))
 
   (check-exn exn:fail?
@@ -1224,7 +1254,9 @@
                                                    (term/var b)
                                                    ((var x M)))) #f)
                            (cons '(asset term-asset (term/var foo)) #f)
-                           (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)))
+                           (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
+                           (cons '(asset subst-term (substitution rule-from-eq term-asset))
+                                 #f)))
                     (get-context "test")))
 
   ;; real->float

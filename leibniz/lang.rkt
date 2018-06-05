@@ -14,6 +14,7 @@
                      [cs:test test]
                      [cs:eval-term eval-term]
                      [cs:asset-ref asset-ref]
+                     [cs:substitution substitution]
                      [cs:show-context show-context])
          inset
          xml signature-graphs
@@ -102,6 +103,9 @@
 (define (parse-transformation tr-str)
   (parse-string transformation/p tr-str))
 
+;; (define (parse-substitution tr-str)
+;;   (parse-string substitution/p tr-str))
+
 (define (make-parsed-term term-str)
   (match (parse-term term-str)
     [(success parsed-term)
@@ -123,6 +127,13 @@
                            parse-transformation
                            parse-result!)
                        #f))
+
+;; (define (make-parsed-substitution transformation-str)
+;;   (make-substitution (current-document) (current-context-name)
+;;                        (~> transformation-str
+;;                            parse-substitution
+;;                            parse-result!)
+;;                        #f))
 
 (define (display-term signature term)
   (when term

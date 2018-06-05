@@ -5,6 +5,7 @@
          comment-sort comment-op
          test eval-term
          asset-ref
+         substitution
          show-context)
 
 (require "./documents.rkt"
@@ -83,8 +84,8 @@
                                              (list 'as-rule (quote asset-ref) flip?))
                                        #,(source-loc this-syntax)))
              #:with expansion #`(computed-rule leibniz-doc current-context
-                                                   (quote label) (quote asset-ref) flip?
-                                                   #,(source-loc #'label)))
+                                               (quote label) (quote asset-ref) flip?
+                                               #,(source-loc #'label)))
     (pattern ((~literal rule) rule-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p rule/p) #'(rule-expr ...))
              #:attr decl (list #`(cons (quote parsed) #,(source-loc this-syntax)))
@@ -139,6 +140,7 @@
              #:with expansion #`(parsed-test leibniz-doc current-context 
                                              (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
+
     ;; Term evaluation
     (pattern ((~literal eval-term) term-expr:str ...)
              #:attr parsed (parse-scribble-text (syntax/p (to-eof/p term/p))
@@ -149,6 +151,21 @@
                                                   #,(source-loc
                                                      (first (syntax->list
                                                              #'(term-expr ...))))))
+
+    ;; Substitutions
+    (pattern ((~literal substitution) label:identifier
+                                      substitution-ref:identifier
+                                      asset-ref:identifier)
+             #:attr decl (list #`(cons (list 'asset (quote label)
+                                             (list 'substitution
+                                                   (quote substitution-ref)
+                                                   (quote asset-ref)))
+                                       #,(source-loc this-syntax)))
+             #:with expansion #`(asset-substitution leibniz-doc current-context
+                                                    (quote label) (quote substitution-ref)
+                                                    (quote asset-ref)
+                                                    #,(source-loc #'label)))
+
     ;; References to assets
     (pattern ((~literal asset-ref) label:identifier)
              #:attr decl empty
@@ -169,7 +186,7 @@
     (pattern (element args:arg-or-kw-arg ...)
              #:attr decl (apply append (attribute args.decl))
              #:with expansion
-                    #`(element #,@(apply append
+             #`(element #,@(apply append
                                   (map syntax-e (syntax-e #'(args.arg-in-list ...))))))
     ;; Anything else: pass through
     (pattern any
@@ -259,6 +276,9 @@
 
 (define-syntax (asset-ref stx)
   (raise-syntax-error #f "asset-ref used outside context" stx))
+
+(define-syntax (substitution stx)
+  (raise-syntax-error #f "substitution used outside context" stx))
 
 ;;
 ;; show-context is the only Leibniz element that can be used outside of
@@ -361,6 +381,22 @@
    (leibniz-input-with-hover (plain-text (format-asset asset-ref asset signature))
                              (list (if flip? "⇐(" "⇒(") (format-label asset-ref #f) ") "))
    (leibniz-output (format-rule #f rule signature))))
+
+(define (asset-substitution leibniz-doc current-context label rule-ref asset-ref loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
+  (define substituted-asset (get-asset context label))
+  (define rule (get-asset context rule-ref))
+  (define asset (get-asset context asset-ref))
+  (list
+   (leibniz-input (format-label label))
+   (leibniz-input-with-hover (plain-text (format-asset rule-ref rule signature))
+                             (format-label rule-ref #f))
+   (leibniz-input "(")
+   (leibniz-input-with-hover (plain-text (format-asset asset-ref asset signature))
+                             (format-label asset-ref #f))
+   (leibniz-input ") ")
+   (leibniz-output (format-asset #f substituted-asset signature))))
 
 ;;
 ;; Tests
