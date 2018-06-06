@@ -637,7 +637,7 @@
              (add-include context 'extend cname loc)]
             [(list 'insert cname tr ...)
              (define (apply-transformations context tr)
-               (with-handlers ([exn:fail? (re-raise-exn loc)])
+               (with-handlers ([exn:fail? (re-raise-exn (list loc))])
                  (transform-context-declarations context tr)))
              (define insertion
                (~> (get-context cname)
