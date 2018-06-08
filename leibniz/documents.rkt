@@ -1259,6 +1259,35 @@
                                  #f)))
                     (get-context "test")))
 
+  ;; asset-prefix
+  (check-equal? (~> a-document
+                    (add-context-from-source
+                     "test"
+                     (list (cons '(insert "template" (asset-prefix foo)) #f)))
+                    (get-context "test"))
+                (~> a-document
+                    (add-context-from-source
+                     "test"
+                     (list (cons '(subsort SQ Q) #f)
+                           (cons '(var a Q) #f)
+                           (cons '(var b SQ) #f)
+                           (cons '(op foo () SQ) #f)
+                           (cons '(op + ((sort SQ) (sort SQ)) SQ) #f)
+                           (cons '(op * ((sort SQ) (sort SQ)) Q) #f)
+                           (cons '(rule (term + ((term/var b) (term/var x)))
+                                        (term/var b)
+                                        ((var x SQ))) #f)
+                           (cons '(asset foo.eq-asset
+                                         (equation (term + ((term/var b)
+                                                            (term/var x)))
+                                                   (term/var b)
+                                                   ((var x SQ)))) #f)
+                           (cons '(asset foo.term-asset (term/var foo)) #f)
+                           (cons '(asset foo.rule-from-eq (as-rule foo.eq-asset #f)) #f)
+                           (cons '(asset foo.subst-term (substitution foo.rule-from-eq foo.term-asset))
+                                 #f)))
+                    (get-context "test")))
+
   ;; real->float
   (define heron
     (~> empty-document

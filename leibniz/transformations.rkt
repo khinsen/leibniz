@@ -29,6 +29,8 @@
      (replace-sorts decls (λ (s) (if (equal? s sort1) sort2 s)))]
     [(list 'add-include mode cname)
      (add-include decls mode cname)]
+    [(list 'asset-prefix prefix)
+     (asset-prefix decls prefix)]
     [(list 'real->float fp-sort)
      (real->float decls fp-sort)]))
 
@@ -61,7 +63,7 @@
        other-term]))
   (transform item-decl))
 
-; Replace sorts by applying sort-transformer to every sort in a context
+;; Replace sorts by applying sort-transformer to every sort in a context
 
 (define (replace-sorts context sort-transformer)
 
@@ -123,21 +125,51 @@
       (hash-update 'rules transform-rules)
       (hash-update 'assets transform-assets)))
 
-; Add include (use/extend)
+;; Add include (use/extend)
 
 (define (add-include context mode cname)
   (hash-update context 'includes
                (λ (crefs) (append crefs (list (cons mode cname))))))
 
-; Convert exact arithmetic on reals to inexact arithmetic on floats
-;
-; The principle is to replace all subsorts of ℝ that are not subsorts of ℤ
-; by FP32 or FP64. Two additional modifications are required:
-;
-;  1. Rational constants are converted to float. Integer constants are converted
-;     to float if they take the place of a rational value that just happens to be an integer.
-;  2. Rewrite rules that replace a float expression by an integer expression
-;     are converted by adding an int->float conversion on the replacement term.
+;; Add a prefix to all asset labels
+
+(define (asset-prefix context prefix)
+
+  (define (prefixed-label label)
+    (string->symbol
+     (string-append
+      (symbol->string prefix)
+      "."
+      (symbol->string label))))
+
+  (define (transform-item item)
+    (match item
+      [(list 'as-equation asset-ref)
+       (list 'as-equation (prefixed-label asset-ref))]
+      [(list 'as-rule asset-ref flip?)
+       (list 'as-rule (prefixed-label asset-ref) flip?)]
+      [(list 'substitution rule-ref asset-ref)
+       (list 'substitution (prefixed-label rule-ref) (prefixed-label asset-ref))]
+      [(list 'assets assets)
+       (list 'assets
+             (for/hash ([(label value) assets])
+               (values label (transform-item value))))]
+      [other
+       other]))
+
+  (hash-update context 'assets
+               (λ (assets) (hash prefix (transform-item (list 'assets assets))))))
+
+;; Convert exact arithmetic on reals to inexact arithmetic on floats
+;;
+;; The principle is to replace all subsorts of ℝ that are not subsorts of ℤ
+;; by FP32 or FP64. Two additional modifications are required:
+;;
+;;  1. Rational constants are converted to float. Integer constants are converted
+;;     to float if they take the place of a rational value that just happens to be
+;;     an integer.
+;;  2. Rewrite rules that replace a float expression by an integer expression
+;;     are converted by adding an int->float conversion on the replacement term.
 
 (define (real->float context float-sort)
 
