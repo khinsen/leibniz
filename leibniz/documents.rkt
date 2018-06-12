@@ -221,6 +221,28 @@
     [else
      (error (format "not a term or equation: ~a" value))]))
 
+(define (transformation* signature transformation value)
+  (unless (equations:transformation? transformation)
+    (error (format "not a transformation: ~a" transformation)))
+  (cond
+    [(terms:term? value)
+     (rewrite:transform signature transformation value)]
+    [(equations:equation? value)
+     (rewrite:transform-equation signature transformation value)]
+    [else
+     (error (format "not a term or equation: ~a" value))]))
+
+(define (reduce* signature rulelist value)
+  (unless (equations:rulelist? rulelist)
+    (error (format "not a rulelist: ~a" rulelist)))
+  (cond
+    [(terms:term? value)
+     (rewrite:reduce signature rulelist value)]
+    [(equations:equation? value)
+     (rewrite:reduce-equation signature rulelist value)]
+    [else
+     (error (format "not a term or equation: ~a" value))]))
+
 (define (combine-assets label asset1 asset2)
   (cond
     [(equal? asset1 asset2)
@@ -244,7 +266,7 @@
     [else
      (error (format "Asset label ~a already used for value ~a" label asset1))]))
 
-(define (compile-assets signature includes asset-decls locs)
+(define (compile-assets signature rulelist includes asset-decls locs)
   (define unevaluated empty)
   ;; Helper function for compiling a single asset.
   (define (compile-asset decl)
@@ -257,7 +279,8 @@
        (box (make-transformation* signature decl))]
       [(or (list 'as-equation _)
            (list 'as-rule _ _)
-           (list 'substitution _ _))
+           (list 'substitution _ _ _)
+           (list 'transform _ _ _))
        (let ([no-value (box #f)])
          (set! unevaluated (cons (list no-value decl) unevaluated))
          no-value)]
@@ -277,12 +300,25 @@
       [(list 'as-rule label flip?)
        (and~> (lookup-asset assets label)
               (as-rule* signature _ flip?))]
-      [(list 'substitution substitution-label asset-label)
-       (let ([rule (lookup-asset assets substitution-label)]
-             [asset (lookup-asset assets asset-label)])
-         (and rule
-              asset
-              (substitution* signature rule asset)))]))
+      [(list 'substitution rule-label asset-label reduce?)
+       (let* ([rule (lookup-asset assets rule-label)]
+              [asset (lookup-asset assets asset-label)]
+              [substituted (and rule
+                                asset
+                                (substitution* signature rule asset))])
+         (if reduce?
+             (and substituted (reduce* signature rulelist substituted))
+             substituted))]
+      [(list 'transform tr-label asset-label reduce?)
+       (let* ([tr (lookup-asset assets tr-label)]
+              [asset (lookup-asset assets asset-label)]
+              [transformed (and tr
+                                asset
+                                (transformation* signature tr asset))])
+         (if reduce?
+             (and transformed (reduce* signature rulelist transformed))
+             transformed))]))
+
   (define (compute-assets unevaluated)
     (for/fold ([remaining empty])
               ([box+decl unevaluated])
@@ -415,8 +451,18 @@
        (list 'as-equation (string->symbol asset-ref))]
       [`(as-rule (@ (ref ,asset-ref) (flip ,flip?)))
        (list 'as-rule (string->symbol asset-ref) (equal? flip? "true"))]
-      [`(substitution (@ (substitution ,substitution-ref) (ref ,asset-ref)))
-       (list 'substitution (string->symbol substitution-ref) (string->symbol asset-ref))]))
+      [`(substitution (@ (substitution ,substitution-ref)
+                         (ref ,asset-ref)
+                         (reduce ,reduce?)))
+       (list 'substitution (string->symbol substitution-ref)
+                           (string->symbol asset-ref)
+                           (equal? reduce? "true"))]
+      [`(transform (@ (transformation ,transformation-ref)
+                      (ref ,asset-ref)
+                      (reduce ,reduce?)))
+       (list 'transform (string->symbol transformation-ref)
+                        (string->symbol asset-ref)
+                        (equal? reduce? "true"))]))
 
   (match-define
     `(context (@ (id, name))
@@ -598,7 +644,7 @@
          value]
         [(list 'as-equation label)
          value]
-        [(list 'substitution label rule value)
+        [(list (or'substitution 'transform) label rule value reduce?)
          value]
         [term
          term]))
@@ -713,7 +759,7 @@
     (define rules (compile-rules signature included-contexts
                                  (hash-ref context 'rules)
                                  locs))
-    (define assets (compile-assets signature included-contexts
+    (define assets (compile-assets signature rules included-contexts
                                    (hash-ref context 'assets)
                                    locs))
     (define compiled (hash 'compiled-signature signature
@@ -804,9 +850,14 @@
         [(list 'as-rule asset-ref flip?)
          `(as-rule (@ (ref ,(symbol->string asset-ref))
                       (flip ,(if flip? "true" "false"))))]
-        [(list 'substitution substitution-ref asset-ref)
+        [(list 'substitution substitution-ref asset-ref reduce?)
          `(substitution (@ (substitution ,(symbol->string substitution-ref))
-                           (ref ,(symbol->string asset-ref))))]))
+                           (ref ,(symbol->string asset-ref))
+                           (reduce ,(if reduce? "true" "false"))))]
+        [(list 'transform transformation-ref asset-ref reduce?)
+         `(transform (@ (transformation ,(symbol->string transformation-ref))
+                        (ref ,(symbol->string asset-ref))
+                        (reduce ,(if reduce? "true" "false"))))]))
 
     (define (assets->sxml assets)
       `(assets ,@(for/list ([(label asset) assets])

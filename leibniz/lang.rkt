@@ -16,6 +16,7 @@
                      [cs:eval-term eval-term]
                      [cs:asset-ref asset-ref]
                      [cs:substitution substitution]
+                     [cs:apply-transformation apply-transformation]
                      [cs:show-context show-context])
          inset
          html view xml signature-graphs

@@ -5,7 +5,7 @@
          comment-sort comment-op
          test eval-term
          asset-ref
-         substitution
+         substitution apply-transformation
          show-context)
 
 (require "./documents.rkt"
@@ -160,19 +160,40 @@
                                                      (first (syntax->list
                                                              #'(term-expr ...))))))
 
-    ;; Substitutions
+    ;; Substite or transform assets
     (pattern ((~literal substitution) label:identifier
                                       substitution-ref:identifier
-                                      asset-ref:identifier)
+                                      asset-ref:identifier
+                                      (~optional (~seq #:reduce reduce?:boolean)
+                                                 #:defaults ([reduce? #'#f])))
              #:attr decl (list #`(cons (list 'asset (quote label)
                                              (list 'substitution
                                                    (quote substitution-ref)
-                                                   (quote asset-ref)))
+                                                   (quote asset-ref)
+                                                   reduce?))
                                        #,(source-loc this-syntax)))
              #:with expansion #`(asset-substitution leibniz-doc current-context
                                                     (quote label) (quote substitution-ref)
                                                     (quote asset-ref)
+                                                    reduce?
                                                     #,(source-loc #'label)))
+
+    (pattern ((~literal apply-transformation) label:identifier
+                                              transformation-ref:identifier
+                                              asset-ref:identifier
+                                              (~optional (~seq #:reduce reduce?:boolean)
+                                                         #:defaults ([reduce? #'#f])))
+             #:attr decl (list #`(cons (list 'asset (quote label)
+                                             (list 'transform
+                                                   (quote transformation-ref)
+                                                   (quote asset-ref)
+                                                   reduce?))
+                                       #,(source-loc this-syntax)))
+             #:with expansion #`(asset-transformation leibniz-doc current-context
+                                                      (quote label) (quote transformation-ref)
+                                                      (quote asset-ref)
+                                                      reduce?
+                                                      #,(source-loc #'label)))
 
     ;; References to assets
     (pattern ((~literal asset-ref) label:identifier)
@@ -270,6 +291,9 @@
 (define-syntax (equation stx)
   (raise-syntax-error #f "equation used outside context" stx))
 
+(define-syntax (transformation stx)
+  (raise-syntax-error #f "transformation used outside context" stx))
+
 (define-syntax (comment-sort stx)
   (raise-syntax-error #f "comment-sort used outside context" stx))
 
@@ -288,8 +312,8 @@
 (define-syntax (substitution stx)
   (raise-syntax-error #f "substitution used outside context" stx))
 
-(define-syntax (transformation stx)
-  (raise-syntax-error #f "transformation used outside context" stx))
+(define-syntax (apply-transformation stx)
+  (raise-syntax-error #f "apply-transformation used outside context" stx))
 
 ;;
 ;; show-context is the only Leibniz element that can be used outside of
@@ -399,7 +423,7 @@
                              (list (if flip? "⇐(" "⇒(") (format-label asset-ref #f) ") "))
    (leibniz-output (format-rule #f rule signature))))
 
-(define (asset-substitution leibniz-doc current-context label rule-ref asset-ref loc)
+(define (asset-substitution leibniz-doc current-context label rule-ref asset-ref reduce? loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define substituted-asset (get-asset context label))
@@ -412,8 +436,28 @@
    (leibniz-input "(")
    (leibniz-input-with-hover (plain-text (format-asset asset-ref asset signature))
                              (format-label asset-ref #f))
-   (leibniz-input ") ")
+   (if reduce?
+       (leibniz-input ") ⇩ ")
+       (leibniz-input ") "))
    (leibniz-output (format-asset #f substituted-asset signature))))
+
+(define (asset-transformation leibniz-doc current-context label tr-ref asset-ref reduce? loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
+  (define transformed-asset (get-asset context label))
+  (define tr (get-asset context tr-ref))
+  (define asset (get-asset context asset-ref))
+  (list
+   (leibniz-input (format-label label))
+   (leibniz-input-with-hover (plain-text (format-asset asset-ref asset signature))
+                             (format-label asset-ref #f))
+   (leibniz-input " ⁞ ")
+   (leibniz-input-with-hover (plain-text (format-asset tr-ref tr signature))
+                             (format-label tr-ref #f))
+   (if reduce?
+       (leibniz-input " ⇩ ")
+       (leibniz-input " "))
+   (leibniz-output (format-asset #f transformed-asset signature))))
 
 ;;
 ;; Tests

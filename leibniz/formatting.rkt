@@ -269,6 +269,7 @@
   (cond
     [(equations:equation? asset) (format-equation label asset signature)]
     [(equations:rule? asset) (format-rule label asset signature)]
+    [(equations:transformation? asset) (format-transformation label asset signature)]
     [(terms:term? asset) (format-term signature label asset)]
     [(hash? asset) "formatting of nested assets not yet implemented"]
     [else (error (format "illegal asset type: ~a" asset))]))
