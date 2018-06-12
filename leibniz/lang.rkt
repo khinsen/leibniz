@@ -18,13 +18,15 @@
                      [cs:substitution substitution]
                      [cs:show-context show-context])
          inset
-         xml signature-graphs
+         html view xml signature-graphs
          use show reduce trace transform substitute
          (all-from-out scribble/base
                        scribble/doclang))
 
 (require (except-in scribble/doclang sort)
          scribble/base
+         (only-in scribble/render render)
+         browser/external
          (for-syntax syntax/parse)
          (prefix-in cs: "./context-syntax.rkt")
          "./documents.rkt"
@@ -51,8 +53,21 @@
          #:style 'inset))
 
 ;;
-;;; Generate XML output (not needed with the leibniz script)
+;;; Generate HTML and XML output (not needed with the leibniz script)
 ;;
+(define-syntax (html stx)
+  (let* ([doc-ref (datum->syntax stx 'doc)])
+    (syntax-parse stx
+      [(_ filename:str)
+       #`(render (list #,doc-ref) (list filename))])))
+
+(define-syntax (view stx)
+  (let* ([doc-ref (datum->syntax stx 'doc)])
+    (syntax-parse stx
+      [(_ filename:str)
+       #`(begin (render (list #,doc-ref) (list filename))
+                (send-url (format "file://~a" (path->string (path->complete-path filename)))))])))
+
 (define-syntax (xml stx)
   (let* ([leibniz-ref (datum->syntax stx 'leibniz)])
     (syntax-parse stx
