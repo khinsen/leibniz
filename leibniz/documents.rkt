@@ -45,7 +45,8 @@
               (exn-message e)
               (current-continuation-marks)
               (for/list ([l loc])
-                (apply srcloc l))))
+                (and l
+                     (apply srcloc l)))))
       (raise e)))
 
 ;;
