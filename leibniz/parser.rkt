@@ -392,17 +392,7 @@
   (do (many+/p space/p)
       (or/p var-clause/p condition-clause/p)))
 
-;; (define (rule-or-transformation/p separator)
-;;   (do [pattern <- term/p]
-;;       (many+/p space/p)
-;;       separator
-;;       (many+/p space/p)
-;;       [replacement <- term/p]
-;;       [clauses <- (many/p clause/p)]
-;;       eof/p
-;;       (pure `(rule ,pattern ,replacement ,clauses))))
-
-(define (rule-or-transformation/p separator)
+(define (rule-or-transformation/p separator type-label)
   (do [pattern <- (or/p (try/p var/p) term/p)]
       (many+/p space/p)
       separator
@@ -410,18 +400,18 @@
       [replacement <- term/p]
       [clauses <- (many/p clause/p)]
       eof/p
-      (pure (make-rule pattern replacement clauses))))
+      (pure (make-rule pattern replacement clauses type-label))))
 
-(define (make-rule pattern replacement clauses)
+(define (make-rule pattern replacement clauses type-label)
   (match pattern
     [`(var ,name ,sort)
-     `(rule (term/var ,name) ,replacement ,(cons pattern clauses))]
+     `(,type-label (term/var ,name) ,replacement ,(cons pattern clauses))]
     [_
-     `(rule ,pattern ,replacement ,clauses)]))
+     `(,type-label ,pattern ,replacement ,clauses)]))
 
-(define rule/p (rule-or-transformation/p (char/p #\⇒)))
+(define rule/p (rule-or-transformation/p (char/p #\⇒) 'rule))
 
-(define transformation/p (rule-or-transformation/p (char/p #\→)))
+(define transformation/p (rule-or-transformation/p (char/p #\→) 'transformation))
 
 (define equation/p
   (do [left <- term/p]
@@ -463,13 +453,13 @@
                       (term _+ ((term/var b) (term/var c))) 
                       ((term _> ((term/var a) (integer 0))))))
   (check-parse transformation/p "a → b + c if a > 0"
-               '(rule (term/var a)
-                      (term _+ ((term/var b) (term/var c))) 
-                      ((term _> ((term/var a) (integer 0))))))
+               '(transformation (term/var a)
+                                (term _+ ((term/var b) (term/var c))) 
+                                ((term _> ((term/var a) (integer 0))))))
   (check-parse transformation/p "a:foo → b + c if a > 0"
-               '(rule (term/var a)
-                      (term _+ ((term/var b) (term/var c))) 
-                      ((var a foo) (term _> ((term/var a) (integer 0))))))
+               '(transformation (term/var a)
+                                (term _+ ((term/var b) (term/var c))) 
+                                ((var a foo) (term _> ((term/var a) (integer 0))))))
   (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz"
                '(equation (term/var a)
                           (term/var b)

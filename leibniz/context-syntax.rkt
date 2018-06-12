@@ -1,7 +1,7 @@
 #lang racket
 
 (provide context import
-         sort var op term rule equation
+         sort var op term rule equation transformation
          comment-sort comment-op
          test eval-term
          asset-ref
@@ -92,6 +92,14 @@
              #:with expansion #`(parsed-rule leibniz-doc current-context 
                                              #f (quote parsed)
                                              #,(source-loc (first (syntax->list #'(rule-expr ...))))))
+
+    ;; Transformations
+    (pattern ((~literal transformation) label:identifier tr-expr:str ...)
+             #:attr parsed (parse-scribble-text (syntax/p transformation/p) #'(tr-expr ...))
+             #:attr decl (list #`(cons (list 'asset (quote label) (quote parsed)) #,(source-loc this-syntax)))
+             #:with expansion #`(parsed-transformation leibniz-doc current-context 
+                                                       (quote label) (quote parsed)
+                                                       #,(source-loc (first (syntax->list #'(tr-expr ...))))))
 
     ;; Terms
     (pattern ((~literal term) label:identifier term-expr:str ...)
@@ -280,6 +288,9 @@
 (define-syntax (substitution stx)
   (raise-syntax-error #f "substitution used outside context" stx))
 
+(define-syntax (transformation stx)
+  (raise-syntax-error #f "transformation used outside context" stx))
+
 ;;
 ;; show-context is the only Leibniz element that can be used outside of
 ;; a context block.
@@ -307,6 +318,12 @@
   (define signature (hash-ref context 'compiled-signature))
   (define rule (make-rule leibniz-doc current-context parsed-rule-expr (list loc)))
   (leibniz-input (format-rule label rule signature)))
+
+(define (parsed-transformation leibniz-doc current-context label parsed-tr-expr loc)
+  (define context (get-context leibniz-doc current-context))
+  (define signature (hash-ref context 'compiled-signature))
+  (define tr (make-transformation leibniz-doc current-context label parsed-tr-expr (list loc)))
+  (leibniz-input (format-transformation label tr signature)))
 
 (define (parsed-equation leibniz-doc current-context label parsed-equation-expr loc)
   (define context (get-context leibniz-doc current-context))

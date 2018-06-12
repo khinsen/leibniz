@@ -9,6 +9,7 @@
                      [cs:term term]
                      [cs:rule rule]
                      [cs:equation equation]
+                     [cs:transformation transformation]
                      [cs:comment-sort comment-sort]
                      [cs:comment-op comment-op]
                      [cs:test test]

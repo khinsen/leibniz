@@ -6,6 +6,7 @@
          format-label
          format-rule
          format-equation
+         format-transformation
          format-asset
          format-asset-reference
          leibniz-input leibniz-input-with-hover
@@ -193,7 +194,7 @@
           (list f-arg1 (subscript f-arg2))]
          [else (error (format "operator ~a of type ~a" op type))])))
 
-(define (format-rule label rule signature)
+(define (format-rule-or-transformation label rule signature separator)
   (define c-vars (operators:all-vars signature))
   (define proc-rule? (procedure? (equations:rule-replacement rule)))
   (define pattern-elem (format-term signature #f (equations:rule-pattern rule)))
@@ -222,10 +223,18 @@
         ""))
   (list (format-label label)
         pattern-elem
-        (if proc-rule? " ↣ "  " ⇒ ")
+        (if proc-rule? " ↣ "  separator)
         replacement-elem
         var-elems
         cond-elem))
+
+(define (format-rule label rule signature)
+  (format-rule-or-transformation label rule signature " ⇒ "))
+
+(define (format-transformation label transformation signature)
+  (format-rule-or-transformation label
+                                 (equations:transformation-rule transformation)
+                                 signature " → "))
 
 (define (format-equation label equation signature)
   (define vars (set-union (terms:term.vars (equations:equation-left equation))
@@ -261,7 +270,8 @@
     [(equations:equation? asset) (format-equation label asset signature)]
     [(equations:rule? asset) (format-rule label asset signature)]
     [(terms:term? asset) (format-term signature label asset)]
-    [else (error "illegal asset type")]))
+    [(hash? asset) "formatting of nested assets not yet implemented"]
+    [else (error (format "illegal asset type: ~a" asset))]))
 
 (define (format-asset-reference label asset)
   (define prefix (cond
@@ -395,6 +405,20 @@
      (format-equation-declaration label decl context-vars signature)]
     [`(rule ,vars ,pattern ,replacement ,condition)
      (format-rule-declaration label decl context-vars signature)]
+    [`(as-equation ,asset-ref)
+     (list (format-label label)
+           "=("
+           (format-label asset-ref #f)
+           ") ")]
+    [`(as-rule ,asset-ref,flip?)
+     (list (format-label label)
+           (if flip? "⇐(" "⇒(")
+           (format-label asset-ref #f)
+           ") ")]
+    [`(substitution ,rule-ref ,asset-ref)
+     (list (format-label label)
+           (format-label rule-ref #f)
+           "(" (format-label asset-ref #f) ")")]
     [`(assets ,assets)
      (add-between
       (for/list ([(label2 value) assets])

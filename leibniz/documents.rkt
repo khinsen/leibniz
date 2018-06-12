@@ -140,15 +140,20 @@
                  [(list 'floating-point fp) fp])])
     fn))
 
-(define (make-rule* signature rule-expr)
+(define (make-rule* signature rule-expr check-equationality?)
   (match rule-expr
     [(list 'rule vars pattern replacement condition)
      (let* ([mp (make-pattern* signature vars)])
        (equations:make-rule signature (mp pattern)
                             (mp condition)
                             (mp replacement)
-                            #f #t))]
+                            #f
+                            check-equationality?))]
     [_ #f]))
+
+(define (make-transformation* signature rule-expr)
+  (and~> (make-rule* signature (cons 'rule (rest rule-expr)) #f)
+         (equations:make-transformation signature _)))
 
 (define (as-rule* signature value flip?)
   (cond
@@ -180,7 +185,7 @@
   (for/fold ([rl after-includes])
             ([rd rule-decls])
     (with-handlers ([exn:fail? (re-raise-exn (get-loc locs rd))])
-      (equations:add-rule rl (make-rule* signature rd)))))
+      (equations:add-rule rl (make-rule* signature rd #t)))))
 
 (define (make-equation* signature equation-expr)
   (match equation-expr
@@ -244,9 +249,11 @@
   (define (compile-asset decl)
     (match decl
       [(list 'rule arg ...)
-       (box (make-rule* signature decl))]
+       (box (make-rule* signature decl #f))]
       [(list 'equation arg ...)
        (box (make-equation* signature decl))]
+      [(list 'transformation arg ...)
+       (box (make-transformation* signature decl))]
       [(or (list 'as-equation _)
            (list 'as-rule _ _)
            (list 'substitution _ _))
@@ -378,6 +385,17 @@
               ,rc
               (replacement ,rr))
        (list 'rule
+             (sxml->vars rv)
+             (sxml->asset rp)
+             (sxml->asset rr)
+             (match rc
+               [`(condition)       #f]
+               [`(condition ,term) term]))]
+      [`(transformation (vars ,rv ...)
+                        (pattern ,rp)
+                        ,rc
+                        (replacement ,rr))
+       (list 'transformation
              (sxml->vars rv)
              (sxml->asset rp)
              (sxml->asset rr)
@@ -568,6 +586,9 @@
         [(list 'equation left right clauses)
          (define-values (vars condition) (group-clauses clauses loc))
          (list 'equation vars left right condition)]
+        [(list 'transformation pattern replacement clauses)
+         (define-values (vars condition) (group-clauses clauses loc))
+         (list 'transformation vars pattern replacement condition)]
         [(list 'assets (list label value) ...)
          (list 'assets (for/hash ([l label]
                                   [v value])
@@ -764,6 +785,11 @@
                 (pattern ,(asset->sxml pattern))
                 ,(condition->sxml condition)
                 (replacement ,(asset->sxml replacement)))]
+        [(list 'transformation vars pattern replacement condition)
+         `(transformation (vars ,@(vars->sxml vars))
+                          (pattern ,(asset->sxml pattern))
+                          ,(condition->sxml condition)
+                          (replacement ,(asset->sxml replacement)))]
         [(list 'term/var name)
          `(term-or-var (@ (name ,(symbol->string name))))]
         [(list 'term op args)
@@ -841,17 +867,17 @@
       (make-rule* signature
                   (first (hash-ref (preprocess-source-declarations
                                     (list (cons rule-expr loc)))
-                                   'rules)))))
+                                   'rules))
+                  #f)))
 
-  (define (make-transformation context-name rule-expr loc)
+  (define (make-transformation context-name label rule-expr loc)
     (define context (get-context context-name))
     (define signature (hash-ref context 'compiled-signature))
     (with-handlers ([exn:fail? (re-raise-exn loc)])
-      (equations:make-transformation signature
-                                     (make-rule* signature
-                                                 (first (hash-ref (preprocess-source-declarations
-                                                                   (list (cons rule-expr loc)))
-                                                                  'rules))))))
+      (make-transformation* signature
+                            (hash-ref (hash-ref (preprocess-source-declarations
+                                                 (list (cons (list 'asset label rule-expr) loc)))
+                                                'assets) label))))
 
   (define (make-equation context-name equation-expr loc)
     (define context (get-context context-name))
@@ -1025,6 +1051,11 @@
                                                    (term a-foo
                                                          ((term/var a-foo)))
                                                    ())) #f)
+                           (cons '(asset tr1
+                                         (transformation (term/var a-foo)
+                                                         (term a-foo
+                                                               ((term/var a-foo)))
+                                                         ())) #f)
                            (cons '(asset nested.asset (term/var a-foo)) #f)
                            (cons '(asset deeply.nested.asset (term/var a-foo)) #f)))
                     (get-context "test")
@@ -1045,6 +1076,11 @@
                                     '(term/var a-foo)
                                     #f))
                       'assets (hash 'eq1 (list 'equation
+                                               (hash)
+                                               '(term/var a-foo)
+                                               '(term a-foo ((term/var a-foo)))
+                                               #f)
+                                    'tr1 (list 'transformation
                                                (hash)
                                                '(term/var a-foo)
                                                '(term a-foo ((term/var a-foo)))
@@ -1132,6 +1168,10 @@
                              (equation (integer 2)
                                        (integer 3)
                                        ())) #f)
+               (cons '(asset tr
+                             (transformation (term a-foo ((term/var X)))
+                                             (term/var a-foo)
+                                             ((var X foo)))) #f)
                (cons '(asset more-assets
                              (assets [int1 (integer 2)]
                                      [int2 (integer 3)])) #f)
