@@ -321,7 +321,14 @@
 (struct transformation (rule converted-rule)
         #:transparent
         #:methods gen:custom-write
-        [(define write-proc display-transformation)])
+        [(define write-proc display-transformation)]
+        #:methods gen:equal+hash
+        [(define (equal-proc t1 t2 _)
+           (equal? (transformation-rule t1) (transformation-rule t2)))
+         (define (hash-proc t _)
+           (equal-hash-code (transformation-rule t)))
+         (define (hash2-proc t _)
+           (equal-secondary-hash-code (transformation-rule t)))])
 
 (define (make-transformation signature rule)
   (define sorts (signature-sort-graph signature))
