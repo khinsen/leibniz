@@ -285,5 +285,24 @@ and @var{s:ℝ} we have
 
 }
 
+@context["function-with-finite-difference-template"
+         #:use "function-with-derivative-template"]{
+
+In numerical approximations, the derivative operator
+@op{𝒟(SQD→SQI) : SQD→SQID} is replaced by the finite-difference
+operator @op{Δ(f:SQD→SQI, h:SQD) : SQD→SQID}. A finite-difference
+approximation is characterized by a parameter @var{h:SQD}, assumed
+to be a sufficiently small quantity.
+
+Like the derivative operators, the finite-difference operator is linear, i.e.
+for two functions @var{f:SQD→SQI} and @var{g:SQD→SQI}, and a
+numerical scaling factor @var{s:ℝ}, we have
+  @inset{@rule{Δ(f + g, h) ⇒ Δ(f, h) + Δ(g, h)}
+         @rule{Δ(f - g, h) ⇒ Δ(f, h) - Δ(g, h)}
+         @rule{Δ(s × f, h) ⇒ s × Δ(f, h)}}
+
+}
+
+
 @;signature-graphs["quantities.sig"]
 
