@@ -376,7 +376,7 @@
     (for/fold ([doc doc-with-library])
               ([sxml-context sxml-contexts])
       (define-values (namespace context-decls) (sxml->context sxml-context))
-      (send doc add-context namespace (hash-set context-decls 'locs (λ (x) #f))))))
+      (send doc add-context namespace (hash-set context-decls 'locs (hash))))))
 
 (define (sxml->context sxml-context)
 
@@ -1221,8 +1221,8 @@
                                        (integer 3)
                                        ())) #f)
                (cons '(asset tr
-                             (transformation (term a-foo ((term/var X)))
-                                             (term/var a-foo)
+                             (transformation (term/var X)
+                                             (term a-foo ((term/var X)))
                                              ((var X foo)))) #f)
                (cons '(asset more-assets
                              (assets [int1 (integer 2)]
@@ -1230,6 +1230,7 @@
                (cons '(asset equation-from-rule (as-equation a-rule)) #f)
                (cons '(asset rule-from-equation (as-rule eq1 #f)) #f)
                (cons '(asset substituted-term (substitute a-rule a-term #f)) #f)
+               (cons '(asset transformed-term (transform tr a-term #t)) #f)))))
 
   (check-true (~> test-document2
                   (make-test "test"

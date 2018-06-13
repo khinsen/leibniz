@@ -41,17 +41,17 @@
     (hash-union local-vars var-decls #:combine (λ (a b) a)))
   (define (transform item)
     (match item
-      [(list 'rule vars term1 term2 condition)
-       (list 'rule (combined-vars vars) term1 term2 condition)]
-      [(list 'equation vars term1 term2 condition)
-       (list 'equation (combined-vars vars) term1 term2 condition)]
+      [(list (and type-tag (or 'equation 'rule 'transformation))
+             vars term1 term2 condition)
+       (list type-tag (combined-vars vars) term1 term2 condition)]
       [(list 'assets assets)
        (list 'assets
              (for/hash ([(label value) assets])
                (values label (transform value))))]
       [(or (list 'as-equation _)
            (list 'as-rule _ _)
-           (list 'substitution _ _))
+           (list 'substitute _ _)
+           (list 'transform _ _))
        item]
       [(list 'term/var name)
        (when (hash-has-key? var-decls name)
@@ -95,17 +95,17 @@
 
   (define (transform-item item)
     (match item
-      [(list 'rule vars pattern replacement condition)
-       (list 'rule (transform-vars vars) pattern replacement condition)]
-      [(list 'equation vars left right condition)
-       (list 'equation (transform-vars vars) left right condition)]
+      [(list (and type-tag (or 'equation 'rule 'transformation))
+             vars term1 term2 condition)
+       (list type-tag (transform-vars vars) term1 term2 condition)]
       [(list 'assets assets)
        (list 'assets
              (for/hash ([(label value) assets])
                (values label (transform-item value))))]
       [(or (list 'as-equation _)
            (list 'as-rule _ _)
-           (list 'substitution _ _))
+           (list 'substitute _ _)
+           (list 'transform _ _))
        item]
       [term
        term]))
@@ -148,8 +148,9 @@
        (list 'as-equation (prefixed-label asset-ref))]
       [(list 'as-rule asset-ref flip?)
        (list 'as-rule (prefixed-label asset-ref) flip?)]
-      [(list 'substitution rule-ref asset-ref)
-       (list 'substitution (prefixed-label rule-ref) (prefixed-label asset-ref))]
+      [(list (and type-tag (or 'substitute 'transform))
+             rule-ref asset-ref reduce?)
+       (list type-tag (prefixed-label rule-ref) (prefixed-label asset-ref) reduce?)]
       [(list 'assets assets)
        (list 'assets
              (for/hash ([(label value) assets])
@@ -230,55 +231,37 @@
       [#f
        (values #f #f)]))
 
-  (define (transform-rule rule)
-    (match-define (list 'rule vars pattern replacement condition) rule)
-    (define-values (psort mod-pattern) (transform-term pattern vars))
-    (define-values (rsort mod-replacement) (transform-term replacement vars))
-    (define-values (csort mod-condition) (transform-term condition vars))
-    (if (or (real-sort? rsort) (real-sort? psort))
-        (list 'rule vars
-              (transform-literal mod-pattern rsort)
-              (transform-literal mod-replacement psort)
-              mod-condition)
-        (list 'rule vars mod-pattern mod-replacement mod-condition)))
-
   (define (transform-equation eq)
-    (match-define (list 'equation vars left right condition) eq)
+    (match-define (list (and type-tag (or 'equation 'rule 'transformation))
+                        vars left right condition) eq)
     (define-values (lsort mod-left) (transform-term left vars))
     (define-values (rsort mod-right) (transform-term right vars))
     (define-values (csort mod-condition) (transform-term condition vars))
     (if (or (real-sort? lsort) (real-sort? rsort))
-        (list 'equation vars
+        (list type-tag vars
               (transform-literal mod-left rsort)
               (transform-literal mod-right lsort)
               mod-condition)
-        (list 'equation vars mod-left mod-right mod-condition)))
+        (list type-tag vars mod-left mod-right mod-condition)))
 
   (define (transform-item item)
     (match item
-      [(list 'equation args ...)
+      [(list (or 'equation 'rule 'transformation) args ...)
        (transform-equation item)]
-      [(list 'rule args ...)
-       (transform-rule item)]
       [(list 'assets assets)
        (list 'assets (for/hash ([(label value) assets])
                        (values label (transform-item value))))]
       [(or (list 'as-equation _)
            (list 'as-rule _ _)
-           (list 'substitution _ _))
+           (list 'substitute _ _)
+           (list 'transform _ _))
        item]
       [term
        (define-values (t-sort t-term) (transform-term term (hash)))
        t-term]))
 
-  (define (transform-rules rules)
-    (map transform-rule rules))
-
-  (define (transform-assets assets)
-    (second (transform-item (list 'assets assets))))
-
   (~> context
-      (hash-update 'rules transform-rules)
-      (hash-update 'assets transform-assets)
+      (hash-update 'rules (λ (rules) (map transform-equation rules)))
+      (hash-update 'assets (λ (assets) (second (transform-item (list 'assets assets)))))
       (replace-sorts transform-sort)
       (add-include 'use "builtins/IEEE-floating-point")))
