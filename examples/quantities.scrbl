@@ -181,6 +181,44 @@ Replace SQ by F and SQnz by Fnz in the template (result not shown).
 
 }
 
+@context["angle"
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ angle)
+                   (rename-sort SQnz angle-nz)]]{
+
+@sort{angle}
+@op{π : angle}
+
+}
+
+@context["frequency"
+         #:use "time"
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ frequency)
+                   (rename-sort SQnz frequency-nz)]]{
+
+@op{frequency × T : ℝ}
+@op{frequency-nz × Tnz : ℝnz}
+@op{T × frequency : ℝ}
+@op{Tnz × frequency-nz : ℝnz}
+}
+
+@context["angular-frequency"
+         #:use "time"
+         #:use "angle"
+         #:insert ["template"
+                   hide-vars
+                   (rename-sort SQ angular-frequency)
+                   (rename-sort SQnz angular-frequency-nz)]]{
+
+@op{angular-frequency × T : angle}
+@op{angular-frequency-nz × Tnz : angle-nz}
+@op{T × angular-frequency : angle}
+@op{Tnz × angular-frequency-nz : angle-nz}
+}
+
 @context["function-template" #:insert ["template"
                                        hide-vars
                                        (rename-sort SQ SQD)
