@@ -279,7 +279,7 @@
        (box (make-transformation* signature decl))]
       [(or (list 'as-equation _)
            (list 'as-rule _ _)
-           (list 'substitution _ _ _)
+           (list 'substitute _ _ _)
            (list 'transform _ _ _))
        (let ([no-value (box #f)])
          (set! unevaluated (cons (list no-value decl) unevaluated))
@@ -300,7 +300,7 @@
       [(list 'as-rule label flip?)
        (and~> (lookup-asset assets label)
               (as-rule* signature _ flip?))]
-      [(list 'substitution rule-label asset-label reduce?)
+      [(list 'substitute rule-label asset-label reduce?)
        (let* ([rule (lookup-asset assets rule-label)]
               [asset (lookup-asset assets asset-label)]
               [substituted (and rule
@@ -451,12 +451,12 @@
        (list 'as-equation (string->symbol asset-ref))]
       [`(as-rule (@ (ref ,asset-ref) (flip ,flip?)))
        (list 'as-rule (string->symbol asset-ref) (equal? flip? "true"))]
-      [`(substitution (@ (substitution ,substitution-ref)
-                         (ref ,asset-ref)
-                         (reduce ,reduce?)))
-       (list 'substitution (string->symbol substitution-ref)
-                           (string->symbol asset-ref)
-                           (equal? reduce? "true"))]
+      [`(substitute (@ (substitute ,substitution-ref)
+                       (ref ,asset-ref)
+                       (reduce ,reduce?)))
+       (list 'substitute (string->symbol substitution-ref)
+                         (string->symbol asset-ref)
+                         (equal? reduce? "true"))]
       [`(transform (@ (transformation ,transformation-ref)
                       (ref ,asset-ref)
                       (reduce ,reduce?)))
@@ -644,7 +644,7 @@
          value]
         [(list 'as-equation label)
          value]
-        [(list (or'substitution 'transform) label rule value reduce?)
+        [(list (or'substitute 'transform) label rule value reduce?)
          value]
         [term
          term]))
@@ -850,10 +850,10 @@
         [(list 'as-rule asset-ref flip?)
          `(as-rule (@ (ref ,(symbol->string asset-ref))
                       (flip ,(if flip? "true" "false"))))]
-        [(list 'substitution substitution-ref asset-ref reduce?)
-         `(substitution (@ (substitution ,(symbol->string substitution-ref))
-                           (ref ,(symbol->string asset-ref))
-                           (reduce ,(if reduce? "true" "false"))))]
+        [(list 'substitute substitution-ref asset-ref reduce?)
+         `(substitute (@ (substitute ,(symbol->string substitution-ref))
+                         (ref ,(symbol->string asset-ref))
+                         (reduce ,(if reduce? "true" "false"))))]
         [(list 'transform transformation-ref asset-ref reduce?)
          `(transform (@ (transformation ,(symbol->string transformation-ref))
                         (ref ,(symbol->string asset-ref))
@@ -1229,7 +1229,7 @@
                                      [int2 (integer 3)])) #f)
                (cons '(asset equation-from-rule (as-equation a-rule)) #f)
                (cons '(asset rule-from-equation (as-rule eq1 #f)) #f)
-               (cons '(asset substituted-term (substitution a-rule a-term)) #f)))))
+               (cons '(asset substituted-term (substitute a-rule a-term #f)) #f)
 
   (check-true (~> test-document2
                   (make-test "test"
@@ -1281,7 +1281,7 @@
                                        ((var x SQ)))) #f)
                (cons '(asset term-asset (term/var foo)) #f)
                (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
-               (cons '(asset subst-term (substitution rule-from-eq term-asset)) #f)))))
+               (cons '(asset subst-term (substitute rule-from-eq term-asset #f)) #f)))))
 
   ;; hide-vars
   (check-equal? (~> a-document
@@ -1308,7 +1308,7 @@
                                                     (var x SQ)))) #f)
                            (cons '(asset term-asset (term/var foo)) #f)
                            (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
-                           (cons '(asset subst-term (substitution rule-from-eq term-asset))
+                           (cons '(asset subst-term (substitute rule-from-eq term-asset #f))
                                  #f)))
                     (get-context "test")))
 
@@ -1347,7 +1347,7 @@
                                                    ((var x M)))) #f)
                            (cons '(asset term-asset (term/var foo)) #f)
                            (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
-                           (cons '(asset subst-term (substitution rule-from-eq term-asset))
+                           (cons '(asset subst-term (substitute rule-from-eq term-asset #f))
                                  #f)))
                     (get-context "test")))
 
@@ -1376,7 +1376,7 @@
                                                    ((var x SQ)))) #f)
                            (cons '(asset foo.term-asset (term/var foo)) #f)
                            (cons '(asset foo.rule-from-eq (as-rule foo.eq-asset #f)) #f)
-                           (cons '(asset foo.subst-term (substitution foo.rule-from-eq foo.term-asset))
+                           (cons '(asset foo.subst-term (substitute foo.rule-from-eq foo.term-asset #f))
                                  #f)))
                     (get-context "test")))
 

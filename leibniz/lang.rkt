@@ -14,13 +14,13 @@
                      [cs:comment-op comment-op]
                      [cs:test test]
                      [cs:eval-term eval-term]
-                     [cs:asset-ref asset-ref]
-                     [cs:substitution substitution]
-                     [cs:apply-transformation apply-transformation]
+                     [cs:ref ref]
+                     [cs:substitute substitute]
+                     [cs:transform transform]
                      [cs:show-context show-context])
          inset
          html view xml signature-graphs
-         use show reduce trace transform substitute
+         use show reduce trace trans subs
          (all-from-out scribble/base
                        scribble/doclang))
 
@@ -206,7 +206,7 @@
     (rewrite:trace-reduce signature rules term display-trace))
   (void))
 
-(define (transform term-or-eq-str transformation-str)
+(define (trans term-or-eq-str transformation-str)
   (define signature (hash-ref (current-context) 'compiled-signature))
   (define sort-graph (operators:signature-sort-graph signature))
   (define term-or-eq (make-parsed-term-or-eq term-or-eq-str))
@@ -219,7 +219,7 @@
      (display-equation signature
       (rewrite:transform-equation signature transformation term-or-eq))]))
 
-(define (substitute term-or-eq-str transformation-str)
+(define (subs term-or-eq-str transformation-str)
   (define signature (hash-ref (current-context) 'compiled-signature))
   (define sort-graph (operators:signature-sort-graph signature))
   (define term-or-eq (make-parsed-term-or-eq term-or-eq-str))

@@ -4,8 +4,8 @@
          sort var op term rule equation transformation
          comment-sort comment-op
          test eval-term
-         asset-ref
-         substitution apply-transformation
+         ref
+         substitute transform
          show-context)
 
 (require "./documents.rkt"
@@ -161,13 +161,13 @@
                                                              #'(term-expr ...))))))
 
     ;; Substite or transform assets
-    (pattern ((~literal substitution) label:identifier
-                                      substitution-ref:identifier
-                                      asset-ref:identifier
-                                      (~optional (~seq #:reduce reduce?:boolean)
-                                                 #:defaults ([reduce? #'#f])))
+    (pattern ((~literal substitute) label:identifier
+                                    substitution-ref:identifier
+                                    asset-ref:identifier
+                                    (~optional (~seq #:reduce reduce?:boolean)
+                                               #:defaults ([reduce? #'#f])))
              #:attr decl (list #`(cons (list 'asset (quote label)
-                                             (list 'substitution
+                                             (list 'substitute
                                                    (quote substitution-ref)
                                                    (quote asset-ref)
                                                    reduce?))
@@ -178,11 +178,11 @@
                                                     reduce?
                                                     #,(source-loc #'label)))
 
-    (pattern ((~literal apply-transformation) label:identifier
-                                              transformation-ref:identifier
-                                              asset-ref:identifier
-                                              (~optional (~seq #:reduce reduce?:boolean)
-                                                         #:defaults ([reduce? #'#f])))
+    (pattern ((~literal transform) label:identifier
+                                   transformation-ref:identifier
+                                   asset-ref:identifier
+                                   (~optional (~seq #:reduce reduce?:boolean)
+                                              #:defaults ([reduce? #'#f])))
              #:attr decl (list #`(cons (list 'asset (quote label)
                                              (list 'transform
                                                    (quote transformation-ref)
@@ -196,7 +196,7 @@
                                                       #,(source-loc #'label)))
 
     ;; References to assets
-    (pattern ((~literal asset-ref) label:identifier)
+    (pattern ((~literal ref) label:identifier)
              #:attr decl empty
              #:with expansion #`(asset-reference leibniz-doc current-context
                                                  (quote label)))
@@ -306,14 +306,14 @@
 (define-syntax (eval-term stx)
   (raise-syntax-error #f "eval-term used outside context" stx))
 
-(define-syntax (asset-ref stx)
-  (raise-syntax-error #f "asset-ref used outside context" stx))
+(define-syntax (ref stx)
+  (raise-syntax-error #f "ref used outside context" stx))
 
-(define-syntax (substitution stx)
-  (raise-syntax-error #f "substitution used outside context" stx))
+(define-syntax (substitute stx)
+  (raise-syntax-error #f "substitute used outside context" stx))
 
-(define-syntax (apply-transformation stx)
-  (raise-syntax-error #f "apply-transformation used outside context" stx))
+(define-syntax (transform stx)
+  (raise-syntax-error #f "transform used outside context" stx))
 
 ;;
 ;; show-context is the only Leibniz element that can be used outside of
