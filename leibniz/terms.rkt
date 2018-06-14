@@ -219,8 +219,10 @@
 
 (define (one-match signature pattern term)
   (define matches (all-matches signature pattern term))
+  (when (empty? matches)
+    (error "no match"))
   (unless (equal? (length matches) 1)
-    (error "number of matches != 1"))
+    (error (format "more than one match: ~a" matches)))
   (first matches))
 
 (module+ test
