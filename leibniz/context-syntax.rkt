@@ -13,6 +13,7 @@
          (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
+         (prefix-in equations: "./equations.rkt")
          (prefix-in rewrite: "./rewrite.rkt")
          scribble/core
          scribble/base
@@ -313,7 +314,7 @@
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define term (make-term leibniz-doc current-context parsed-term-expr (list loc)))
-  (define sort-str(sorts:constraint->string (operators:signature-sort-graph signature)
+  (define sort-str (sorts:constraint->string (operators:signature-sort-graph signature)
                                             (terms:term.sort term)))
   (define term-elem (format-term signature label term))
   (leibniz-input-with-hover sort-str term-elem))
@@ -322,19 +323,25 @@
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define rule (make-rule leibniz-doc current-context parsed-rule-expr (list loc)))
-  (leibniz-input (format-rule label rule signature)))
+  (define sorts-str (equations:rule-sorts-str signature rule))
+  (leibniz-input-with-hover sorts-str
+                            (format-rule label rule signature)))
 
 (define (parsed-transformation leibniz-doc current-context label parsed-tr-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define tr (make-transformation leibniz-doc current-context label parsed-tr-expr (list loc)))
-  (leibniz-input (format-transformation label tr signature)))
+  (define sorts-str (equations:transformation-sorts-str signature tr))
+  (leibniz-input-with-hover sorts-str
+                            (format-transformation label tr signature)))
 
 (define (parsed-equation leibniz-doc current-context label parsed-equation-expr loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define equation (make-equation leibniz-doc current-context parsed-equation-expr (list loc)))
-  (leibniz-input (format-equation label equation signature)))
+  (define sorts-str (equations:equation-sorts-str signature equation))
+  (leibniz-input-with-hover sorts-str
+                            (format-equation label equation signature)))
 
 (define (parsed-test leibniz-doc current-context parsed-rule-expr loc)
   (define context (get-context leibniz-doc current-context))
@@ -387,22 +394,40 @@
   (define signature (hash-ref context 'compiled-signature))
   (define asset (get-asset context asset-ref))
   (define equation (get-asset context label))
+  (define sorts-str (equations:equation-sorts-str signature equation))
   (list
    (leibniz-input (format-label label))
    (leibniz-input-with-hover (plain-text (format-asset asset-ref asset signature))
                              (list "=(" (format-label asset-ref #f) ") "))
-   (leibniz-output (format-equation #f equation signature))))
+   (leibniz-output-with-hover sorts-str
+                              (format-equation #f equation signature))))
 
 (define (computed-rule leibniz-doc current-context label asset-ref flip? loc)
   (define context (get-context leibniz-doc current-context))
   (define signature (hash-ref context 'compiled-signature))
   (define asset (get-asset context asset-ref))
   (define rule (get-asset context label))
+  (define sorts-str (equations:rule-sorts-str signature rule))
   (list
    (leibniz-input (format-label label))
    (leibniz-input-with-hover (plain-text (format-asset asset-ref asset signature))
                              (list (if flip? "⇐(" "⇒(") (format-label asset-ref #f) ") "))
-   (leibniz-output (format-rule #f rule signature))))
+   (leibniz-output-with-hover sorts-str
+                              (format-rule #f rule signature))))
+
+(define (asset-sort-str signature asset)
+  (cond
+    [(equations:equation? asset)
+     (equations:equation-sorts-str signature asset)]
+    [(equations:rule? asset)
+     (equations:rule-sorts-str signature asset)]
+    [(equations:transformation? asset)
+     (equations:transformation-sorts-str signature asset)]
+    [(terms:term? asset)
+     (sorts:constraint->string (operators:signature-sort-graph signature)
+                               (terms:term.sort asset))]
+    [else
+     (error (format "unknown asset type: ~a" asset))]))
 
 (define (asset-substitution leibniz-doc current-context label rule-ref asset-ref reduce? loc)
   (define context (get-context leibniz-doc current-context))
@@ -420,7 +445,8 @@
    (if reduce?
        (leibniz-input ") ⇩ ")
        (leibniz-input ") "))
-   (leibniz-output (format-asset #f substituted-asset signature))))
+   (leibniz-output-with-hover (asset-sort-str signature substituted-asset)
+                              (format-asset #f substituted-asset signature))))
 
 (define (asset-transformation leibniz-doc current-context label tr-ref asset-ref reduce? loc)
   (define context (get-context leibniz-doc current-context))
@@ -438,7 +464,8 @@
    (if reduce?
        (leibniz-input " ⇩ ")
        (leibniz-input " "))
-   (leibniz-output (format-asset #f transformed-asset signature))))
+   (leibniz-output-with-hover (asset-sort-str signature transformed-asset)
+                              (format-asset #f transformed-asset signature))))
 
 ;;
 ;; Tests

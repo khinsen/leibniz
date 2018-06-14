@@ -342,7 +342,7 @@
   (define rules
     (for/list ([rd rule-decls])
       (elem #:style leibniz-output-style
-            (format-rule-declaration #f rd var-decls signature))))
+            (format-rule/tr-declaration #f rd var-decls signature))))
   (if (empty? rule-decls)
       ""
       (list "Rules:" (linebreak)
@@ -362,33 +362,22 @@
                    (add-between assets (linebreak))
                    #:style 'inset))))
 
-(define (format-rule-declaration label decl context-vars signature)
-  (match-define `(rule ,vars ,pattern ,replacement ,condition) decl)
+(define (format-rule/tr-declaration label decl context-vars signature)
+  (match-define `(,type-tag ,vars ,pattern ,replacement ,condition) decl)
   (define pattern-elem (format-decl-term pattern signature))
   (define proc-rule? (procedure? replacement))
   (define replacement-elem
     (if proc-rule?
         (italic "<procedure>")
         (format-decl-term replacement signature)))
-  (define var-elems
-    (for/list ([(name sort) vars])
-      (if (equal? (hash-ref context-vars name #f) sort)
-          ""
-          (list (linebreak) (hspace 2)
-                "∀ "
-                (format-var name sort)))))
-  (define clause-elems
-    (if condition
-        (cons (list (linebreak) (hspace 2)
-                    "if "
-                    (format-decl-term condition signature))
-              var-elems)
-        var-elems))
   (list* (format-label label)
          pattern-elem
-         (if proc-rule? " → "  " ⇒ ")
+         (cond
+           [(equal? type-tag 'transformation) " → "]
+           [proc-rule? " ↣ "]
+           [else " ⇒ "])
          replacement-elem
-         clause-elems))
+         (format-clauses condition vars context-vars signature)))
 
 (define (format-equation-declaration label decl context-vars signature)
   (match-define `(equation ,vars ,left ,right ,condition) decl)
@@ -405,7 +394,9 @@
     [`(equation ,vars ,left ,right ,condition)
      (format-equation-declaration label decl context-vars signature)]
     [`(rule ,vars ,pattern ,replacement ,condition)
-     (format-rule-declaration label decl context-vars signature)]
+     (format-rule/tr-declaration label decl context-vars signature)]
+    [`(transformation ,vars ,pattern ,replacement ,condition)
+     (format-rule/tr-declaration label decl context-vars signature)]
     [`(as-equation ,asset-ref)
      (list (format-label label)
            "=("
@@ -416,10 +407,18 @@
            (if flip? "⇐(" "⇒(")
            (format-label asset-ref #f)
            ") ")]
-    [`(substitution ,rule-ref ,asset-ref)
+    [`(substitute ,rule-ref ,asset-ref ,reduce?)
      (list (format-label label)
            (format-label rule-ref #f)
-           "(" (format-label asset-ref #f) ")")]
+           "("
+           (format-label asset-ref #f)
+           (if reduce? ") ⇩"  ")"))]
+    [`(transform ,tr-ref ,asset-ref ,reduce?)
+     (list (format-label label)
+           (format-label asset-ref #f)
+           " ⁞ "
+           (format-label tr-ref #f)
+           (if reduce? " ⇩" ""))]
     [`(assets ,assets)
      (add-between
       (for/list ([(label2 value) assets])
@@ -537,11 +536,16 @@
                 "X:foo")
   (check-equal? (plain-text (format-signature-declaration '(subsort foo bar)))
                 "foo ⊆ bar")
-  (check-equal? (plain-text (format-rule-declaration
+  (check-equal? (plain-text (format-rule/tr-declaration
                              #f
                              (list 'rule (hash) '(term/var X) '(term/var Y) #f)
                              (hash) #f))
                 "X ⇒ Y")
+  (check-equal? (plain-text (format-rule/tr-declaration
+                             #f
+                             (list 'transformation (hash) '(term/var X) '(term/var Y) #f)
+                             (hash) #f))
+                "X → Y")
   (check-equal? (plain-text (format-asset-declaration
                              'eq1
                              (list 'equation (hash) '(term/var X) '(term/var Y) #f)

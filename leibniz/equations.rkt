@@ -16,11 +16,14 @@
   [lookup-rules (rulelist? term? . -> . list?)]
   [merge-rulelists (rulelist? rulelist? signature? . -> . rulelist?)]
   [display-rule (rule? output-port? . -> . void?)]
+  [rule-sorts-str (signature? rule? . -> . string?)]
   [make-equation (signature? term? (or/c #f term?) term? . -> . equation?)]
   [valid-equation? (signature? any/c . -> . boolean?)]
   [in-signature (rule? signature? . -> . rule?)]
   [display-equation (equation? output-port? . -> . void?)]
-  [make-transformation (signature? rule? . -> . transformation?)]))
+  [equation-sorts-str (signature? equation? . -> . string?)]
+  [make-transformation (signature? rule? . -> . transformation?)]
+  [transformation-sorts-str (signature? transformation? . -> . string?)]))
 
 (require "./sorts.rkt"
          "./operators.rkt"
@@ -36,6 +39,12 @@
 ;
 ; Rules and equations
 ;
+
+(define (term-sort-or-kind signature term)
+  (define sort (term.sort term))
+  (if (term.has-vars? term)
+        (kind (signature-sort-graph signature) sort)
+        sort))
 
 (define (display-label label port)
   (when label
@@ -147,6 +156,14 @@
        (or (not (rule-label rule))
            (symbol? (rule-label rule)))))
 
+(define (rule-sorts-str signature rule)
+  (define pattern-sort (term-sort-or-kind signature (rule-pattern rule)))
+  (define replacement-sort (term-sort-or-kind signature (rule-replacement rule)))
+  (string-append
+   (constraint->string (signature-sort-graph signature) pattern-sort)
+   " ⇒ "
+   (constraint->string (signature-sort-graph signature) replacement-sort)))
+
 (module+ test
   (with-signature a-signature
     (check-equal? (make-rule a-signature (T IntVar) #f (T 2) #f #t)
@@ -155,6 +172,9 @@
                   (rule (T IntVar) (T true) (T 2) #f))
     (check-true (valid-rule? a-signature (rule (T IntVar) #f (T 2) #f)))
     (check-true (valid-rule? a-signature (rule (T IntVar) (T true) (T 2) #f)))
+    (check-equal? (rule-sorts-str a-signature
+                                  (make-rule a-signature (T IntVar) #f (T 2) #f #t))
+                  "[ℚ] ⇒ ℕnz")
     ; Term 'bar not allowed in signature
     (check-exn exn:fail? (thunk (make-rule a-signature 'bar #f (T 2) #f #t)))
     (check-exn exn:fail? (thunk (make-rule a-signature (T Avar) 'bar (T 2) #f #t)))
@@ -177,14 +197,8 @@
   (check-term signature right)
   (check-condition signature condition
                    (set-union (term.vars left) (term.vars right)))
-  (define left-sort-or-kind
-    (if (term.has-vars? left)
-        (kind sort-graph (term.sort left))
-        (term.sort left)))
-  (define right-sort-or-kind
-    (if (term.has-vars? right)
-        (kind sort-graph (term.sort right))
-        (term.sort right)))
+  (define left-sort-or-kind (term-sort-or-kind signature left))
+  (define right-sort-or-kind (term-sort-or-kind signature right))
   (unless (or (conforms-to? sort-graph left-sort-or-kind right-sort-or-kind)
               (conforms-to? sort-graph right-sort-or-kind left-sort-or-kind))
     (error (format "Left and right terms have incompatible sorts ~a, ~a"
@@ -198,6 +212,14 @@
        (or (not (equation-condition equation))
            (valid-term? signature (equation-condition equation)))))
 
+(define (equation-sorts-str signature equation)
+  (define left-sort (term-sort-or-kind signature (equation-left equation)))
+  (define right-sort (term-sort-or-kind signature (equation-right equation)))
+  (string-append
+   (constraint->string (signature-sort-graph signature) left-sort)
+   " = "
+   (constraint->string (signature-sort-graph signature) right-sort)))
+
 (module+ test
   (with-signature a-signature
     (check-equal? (make-equation a-signature (T IntVar) #f (T 2))
@@ -206,6 +228,9 @@
                   (equation (T IntVar) (T true) (T 2)))
     (check-true (valid-equation? a-signature (equation (T IntVar) #f (T 2))))
     (check-true (valid-equation? a-signature (equation (T IntVar) (T true) (T 2))))
+    (check-equal? (equation-sorts-str a-signature
+                                      (make-equation a-signature (T IntVar) #f (T 2)))
+                  "[ℚ] = ℕnz")
     ; Term 'bar not allowed in signature
     (check-exn exn:fail? (thunk (make-equation a-signature 'bar #f (T 2))))
     (check-exn exn:fail? (thunk (make-equation a-signature (T Avar) 'bar (T 2))))
@@ -352,3 +377,12 @@
               (term.substitute signature replacement var-substitution)
               #f
               #f)))
+
+(define (transformation-sorts-str signature transformation)
+  (define rule (transformation-rule transformation))
+  (define pattern-sort (term-sort-or-kind signature (rule-pattern rule)))
+  (define replacement-sort (term-sort-or-kind signature (rule-replacement rule)))
+  (string-append
+   (constraint->string (signature-sort-graph signature) pattern-sort)
+   " → "
+   (constraint->string (signature-sort-graph signature) replacement-sort)))
