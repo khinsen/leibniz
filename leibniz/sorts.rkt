@@ -227,7 +227,7 @@
       [(equal? c1 #f)
        #f]
       [(set? c1)
-       (equal? c1 c2)]
+       (equal? c1 (conforming-sorts c2))]
       [(symbol? c2)
        (is-subsort? c1 c2)]
       [else
