@@ -273,47 +273,28 @@
 ;;
 ;; Raise errors when Leibniz code is used outside of a context
 ;;
-(define-syntax (sort stx)
-  (raise-syntax-error #f "sort used outside context" stx))
+(define-syntax (context-syntax-error-handler stx)
+  (syntax-parse stx
+    [(_ name arg ...)
+     #'(define-syntax (name stxx)
+         (raise-syntax-error #f
+                             "illegal syntax or used outside of a context definition"
+                             stxx))]))
 
-(define-syntax (var stx)
-  (raise-syntax-error #f "var used outside context" stx))
-
-(define-syntax (op stx)
-  (raise-syntax-error #f "op used outside context" stx))
-
-(define-syntax (term stx)
-  (raise-syntax-error #f "term used outside context" stx))
-
-(define-syntax (rule stx)
-  (raise-syntax-error #f "rule used outside context" stx))
-
-(define-syntax (equation stx)
-  (raise-syntax-error #f "equation used outside context" stx))
-
-(define-syntax (transformation stx)
-  (raise-syntax-error #f "transformation used outside context" stx))
-
-(define-syntax (comment-sort stx)
-  (raise-syntax-error #f "comment-sort used outside context" stx))
-
-(define-syntax (comment-op stx)
-  (raise-syntax-error #f "comment-op used outside context" stx))
-
-(define-syntax (test stx)
-  (raise-syntax-error #f "test used outside context" stx))
-
-(define-syntax (eval-term stx)
-  (raise-syntax-error #f "eval-term used outside context" stx))
-
-(define-syntax (ref stx)
-  (raise-syntax-error #f "ref used outside context" stx))
-
-(define-syntax (substitute stx)
-  (raise-syntax-error #f "substitute used outside context" stx))
-
-(define-syntax (transform stx)
-  (raise-syntax-error #f "transform used outside context" stx))
+(context-syntax-error-handler sort)
+(context-syntax-error-handler var)
+(context-syntax-error-handler op)
+(context-syntax-error-handler term)
+(context-syntax-error-handler rule)
+(context-syntax-error-handler equation)
+(context-syntax-error-handler transformation)
+(context-syntax-error-handler comment-sort)
+(context-syntax-error-handler comment-op)
+(context-syntax-error-handler test)
+(context-syntax-error-handler eval-term)
+(context-syntax-error-handler ref)
+(context-syntax-error-handler substitute)
+(context-syntax-error-handler transform)
 
 ;;
 ;; show-context is the only Leibniz element that can be used outside of
