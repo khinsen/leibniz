@@ -63,7 +63,7 @@ can assign numerical values:
 
 @context["time-dependent-kinematics"
          #:extend "kinematics"
-         #:insert ["quantities/function-with-derivative-template"
+         #:insert ["quantities/function-with-finite-difference-template"
                    hide-vars
                    (rename-sort SQD T)
                    (rename-sort SQDnz Tnz)
@@ -73,7 +73,7 @@ can assign numerical values:
                    (rename-sort SQIDnz Vnz)
                    (rename-sort SQD→SQI T→L)
                    (rename-sort SQD→SQID T→V)]
-         #:insert ["quantities/function-with-derivative-template"
+         #:insert ["quantities/function-with-finite-difference-template"
                    hide-vars
                    (rename-sort SQD T)
                    (rename-sort SQDnz Tnz)
@@ -87,10 +87,10 @@ can assign numerical values:
 @section{Time-dependent kinematics}
 
 When describing motion, quantities @sort{L}, @sort{V}, and @sort{A}
-become functions of time @sort{T}. These time-dependent quantities
-are written as @sort{T→L}, @sort{T→V}, and @sort{T→A}, with each
-one being the time derivative of its predecessor.
-
+become functions of @sort{T}. These time-dependent quantities
+are written as @sort{T→L ⊆ T→Q}, @sort{T→V ⊆ T→Q}, and @sort{T→A ⊆ T→Q},
+with each one being the time derivative of its predecessor. The sort
+@sort{T→Q ⊆ Q→Q} covers all these time-dependent quantities.
 }
 
 @context["dynamics"
@@ -108,10 +108,11 @@ one being the time derivative of its predecessor.
 @section{Dynamics}
 
 Extending kinematics to dynamics requires @sort{M} for masses, @sort{F} for forces, and
-@sort{T→F} for time-dependent forces, plus the following relations between these
+@sort{T→F ⊆ T→Q} for time-dependent forces, plus the following relations between these
 quantities:
   @inset{@op{M × A : F}
          @op{Mnz × Anz : Fnz}
-         @op{M × T→A : T→F}}
+         @op{M × T→A : T→F}
+         @rule{(m × f)[t] ⇒ m × f[t]  ∀ m:M  ∀ f:T→A  ∀ t:T}}
 
 }

@@ -286,12 +286,12 @@ and @var{s:ℝ} we have
 }
 
 @context["function-with-finite-difference-template"
-         #:use "function-with-derivative-template"]{
+         #:insert["function-with-derivative-template"]]{
 
 In numerical approximations, the derivative operator
 @op{𝒟(SQD→SQI) : SQD→SQID} is replaced by the finite-difference
-operator @op{Δ(f:SQD→SQI, h:SQD) : SQD→SQID}. A finite-difference
-approximation is characterized by a parameter @var{h:SQD}, assumed
+operator @op{Δ(f:SQD→SQI, h:SQDnz) : SQD→SQID}. A finite-difference
+approximation is characterized by a parameter @var{h:SQDnz}, assumed
 to be a sufficiently small quantity.
 
 Like the derivative operators, the finite-difference operator is linear, i.e.
