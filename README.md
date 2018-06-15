@@ -25,11 +25,6 @@ He invented a widely used [notation for calculus](https://en.wikipedia.org/wiki/
 laid the foundation of equational logic by his [definition of equality](https://en.wikipedia.org/wiki/Equality_(mathematics)),
 and anticipated formal logic with his ["calculus ratiocinator"](https://en.wikipedia.org/wiki/Calculus_ratiocinator).
 
-If you are interested in the development of digital scientific
-notations, even if your ideas are very different from what I envisage
-with Leibniz, please consider joining my
-[Open Science project](https://www.guaana.com/projects/scientific-notations-for-the-digital-era)
-at [Guaana](https://www.guaana.com/).
 
 ## Status
 
@@ -45,9 +40,6 @@ collection types (lists/arrays, sets, ...) interfaces to databases and external 
 support for workflows. Although in principle today's Leibniz can be used for everything
 (given that it's Turing-complete), it is still insufficient to express many
 aspects of computational science in a sufficiently concise and convenient form.
-
-I will announce any significant progress on my
-[Guaana project](https://www.guaana.com/projects/scientific-notations-for-the-digital-era).
 
 ## Required software, installation
 
