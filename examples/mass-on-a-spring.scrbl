@@ -6,27 +6,32 @@
 @title{Motion of a mass on a spring}
 @author{Konrad Hinsen}
 
-@context["mass-on-a-spring"
+@context["equations-of-motion"
          #:use "mechanics/dynamics"
          #:use "quantities/angular-frequency"]{
 
 We consider a point-like object of mass @op{m : M} attached to a
 spring whose mass we assume to be negligible. The other end of the
 spring is attached to a wall. When the particle is at position
-@op{x : T→L}, the force @op{F : T→F} acting on it is proportional
-to the displacement @op{d : T→L} of @term{x} relative to the
-spring's equilibrium length @op{l : L}:
+@op{x : T→L} relative to the equilibrium length @op{l : L} of the spring, 
+the force @op{F : T→F} acting on it is proportional
+to @term{x}:
 @inset{
-   @equation[force]{F = -(k × d)}
-   @equation[def-d]{d = x - l}
+   @equation[force]{F = -(k × x)}
 }
 where @op{k : force-constant} characterizes the elastic properties
 of the spring.
 
-Newton's equation of motion for the displacement @term{d} of the mass
+@centered[
+  @image["Mass_spring.svg.png"]{Drawing}
+  @linebreak[]
+  @hyperlink["https://commons.wikimedia.org/wiki/File:Mass_spring.svg"]{(Source: Wikimedia Commons)}
+]
+
+Newton's equation of motion for the displacement @term{x} of the mass
 takes the form
 @inset{
-   @equation[newton]{𝒟(𝒟(d)) = -((k ÷ m) × d)}.
+   @equation[newton]{𝒟(𝒟(x)) = -((k ÷ m) × x)}.
 }
 
 @smaller{Additional arithmetic definitions for this context:}
@@ -58,8 +63,8 @@ takes the form
 
 }
 
-@context["analytical-solution-for-mass-on-a-spring"
-         #:extend "mass-on-a-spring"
+@context["analytical-solution"
+         #:extend "equations-of-motion"
          #:use "quantities/angular-frequency"]{
 
 @section{Analytical solution}
@@ -67,7 +72,7 @@ takes the form
 Introducing @op{ω : angular-frequency} defined by
 @equation{ω = √(k ÷ m)}, the solution of @ref[newton]  can be written as
 @inset{
-   @equation[solution]{d[t] = A × cos((ω × t) + δ) ∀ t:T},
+   @equation[solution]{x[t] = A × cos((ω × t) + δ) ∀ t:T},
 }
 where @op{cos(angle) : ℝ} is the cosine function. The amplitude
 @op{A : L} and the phase @op{δ : angle} can take arbitray values.
@@ -97,8 +102,8 @@ The finite difference is computed as
 
 }
 
-@context["numerical-solution-for-mass-on-a-spring"
-         #:extend "mass-on-a-spring"
+@context["numerical-solution"
+         #:extend "equations-of-motion"
          #:insert ["euler-template"
                    hide-vars
                    (rename-sort SQD T)
@@ -126,25 +131,27 @@ set of two coupled first-order equations @ref[newton1].
 
 We introduce @op{v : T→V} representing the velocity
 of the mass. The definition of this velocity,
-   @inset{@equation[newton1.d]{𝒟(d) = v},}
+   @inset{@equation[newton1.x]{𝒟(x) = v},}
 is the first equation in our coupled set. The second one is obtained
-by applying the substitution @rule[subst newton1.d] to the 
+by applying the substitution @rule[subst newton1.x] to the 
 second-order equation @ref[newton] :
   @inset{@substitute[newton1.v subst newton].}
 
 We can now discretize the equations @ref[newton1] by applying
 the substitution @rule[discretize]{𝒟(f) ⇒ Δ(f, h)},
 where @var{f:Q→Q} is an arbitrary function of time
-and @op{h : T} is the integration time step:
+and @op{h : Tnz} is the integration time step:
 
-  @inset{@substitute[newtonΔ.d discretize newton1.d]
+  @inset{@substitute[newtonΔ.x discretize newton1.x]
          @substitute[newtonΔ.v discretize newton1.v]}
 
 Applying @transformation[at-t]{f → f[t]} yields the equations for an
 explicit value of @op{t : T}:
 
-  @inset{@transform[newtonΔ-t.d at-t newtonΔ.d #:reduce #t]
+  @inset{@transform[newtonΔ-t.x at-t newtonΔ.x #:reduce #t]
          @transform[newtonΔ-t.v at-t newtonΔ.v #:reduce #t]}
 
 }
+
+@;signature-graphs["mass-on-a-spring.sig"]
 
