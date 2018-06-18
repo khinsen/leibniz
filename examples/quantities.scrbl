@@ -45,6 +45,15 @@ Replace division by multiplication:
          @rule{q1 ÷ (f × q2) ⇒ (1 ÷ f) × (q1 ÷ q2)
                ∀ q1:Q  ∀ q2:Qnz  ∀ f:ℝnz}}
 
+Remove quantities of zero magnitude from sums:
+  @inset{@rule{q1 + (0 × q2) ⇒ q1
+                ∀ q1:Q  ∀ q2:Q}
+         @rule{q1 - (0 × q2) ⇒ q1
+                ∀ q1:Q  ∀ q2:Q}
+         @rule{(0 × q2) + q1 ⇒ q1
+                ∀ q1:Q  ∀ q2:Q}
+         @rule{(0 × q2) - q1 ⇒ q1
+                ∀ q1:Q  ∀ q2:Q}}
 }
 
 @context["template" #:extend "quantities"]{
