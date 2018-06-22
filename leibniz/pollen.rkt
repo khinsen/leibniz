@@ -13,12 +13,26 @@
          pollen/unstable/typography
          megaparsack megaparsack/text
          "./condd.rkt"
-         "./parser.rkt")
+         "./parser.rkt"
+         (only-in "./documents.rkt" re-raise-exn)
+         (for-syntax syntax/parse))
 
+(begin-for-syntax
+  (define (source-loc stx)
+    (list 'list
+          (syntax-source stx)
+          (syntax-line stx)
+          (syntax-column stx)
+          (syntax-position stx)
+          (syntax-span stx))))
 
-(define (parse-pollen-text parser text)
-  (parse-result!
-   (parse-string parser (string-normalize-spaces (apply string-append text)))))
+(define (join-text . text-parts)
+  (string-normalize-spaces (apply string-append text-parts)))
+
+(define (parse-pollen-text parser text loc)
+  (with-handlers ([exn:fail? (re-raise-exn (list loc))])
+    (parse-result! (parse-string parser text))))
+
 
 (define (root . elements)
   (define contexts (select* 'leibniz (txexpr 'root empty elements)))
@@ -39,14 +53,32 @@
   `(@ (leibniz (context ((id ,name)) ,@leibniz))
       (h3 "Context " ,name) (br) (br) ,@doc))
 
-(define (type type-string)
-  `(@ (leibniz (type ((id ,type-string)))) (i ,type-string)))
+(define (type* loc type-string)
+  (define type-decl (parse-pollen-text sort-or-subsort/p type-string loc))
+  (match type-decl
+    [`(sort ,sort-id)
+     `(@ (leibniz (type ((id ,type-string))))
+         (i ,type-string))]
+    [`(subsort ,sort-id-1 ,sort-id-2)
+     `(@ (leibniz (subtype ((subsort ,type-string) (supersort ,type-string))))
+         (i ,type-string))]))
 
-(define (op . op-strings)
-  (define op-decl (parse-pollen-text operator/p op-strings))
+(define-syntax (type stx)
+  (syntax-parse stx
+    [(_ first-type-str:string more-type-strs:string ...)
+     #`(type* #,(source-loc #'first-type-str)
+              (join-text first-type-str more-type-strs ...))]))
+
+(define (op* loc op-string)
+  (define op-decl (parse-pollen-text operator/p op-string loc))
   (match-define `(op ,op-id ,arg-list ,result-type)  op-decl)
-  (displayln (format "~a ~a ~a" op-id arg-list result-type))
   `(@ (leibniz (op ((id ,(symbol->string op-id)))
                    (arity ,(for/splice ([arg arg-list]) `(type ((id ,(symbol->string arg))))))
                    (type ((id ,(symbol->string result-type))))))
-      (i ,@op-strings)))
+      (i ,op-string)))
+
+(define-syntax (op stx)
+  (syntax-parse stx
+    [(_ first-op-str:string more-op-strs:string ...)
+     #`(op* #,(source-loc #'first-op-str)
+            (join-text first-op-str more-op-strs ...))]))
