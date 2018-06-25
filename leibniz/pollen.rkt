@@ -3,13 +3,19 @@
 ;; Pollen interface 
 
 (provide root
-         context
-         type
-         op)
+         +context
+         +sort
+         +op
+         +term
+         +rule
+         +test
+         section subsection
+         inset)
 
 (require txexpr
          pollen/core
          pollen/decode
+         pollen/tag
          pollen/unstable/typography
          megaparsack megaparsack/text
          "./condd.rkt"
@@ -45,40 +51,129 @@
            (txexpr 'leibniz empty (txexpr 'leibniz-document empty contexts))
            (txexpr 'doc empty doc)))
 
-(define (context name . elements)
+;; Context definition
+
+(define-tag-function (+context attributes elements)
+  (define attrs (attrs->hash attributes))
   (define leibniz (select* 'leibniz (txexpr 'context empty elements)))
   (define doc
     (decode-elements elements
                      #:txexpr-proc (λ (x) (if (equal? (get-tag x) 'leibniz) "" x))))
-  `(@ (leibniz (context ((id ,name)) ,@leibniz))
-      (h3 "Context " ,name) (br) (br) ,@doc))
+  `(@ (leibniz (context ,attributes ,@leibniz))
+      (h3 "Context " ,(hash-ref attrs 'name)) (br) (br) ,@doc))
 
-(define (type* loc type-string)
-  (define type-decl (parse-pollen-text sort-or-subsort/p type-string loc))
-  (match type-decl
+;; Sort and subsort declarations
+
+(define (sort* loc sort-string)
+  (define sort-decl (parse-pollen-text sort-or-subsort/p sort-string loc))
+  (match sort-decl
     [`(sort ,sort-id)
-     `(@ (leibniz (type ((id ,type-string))))
-         (i ,type-string))]
+     `(@ (leibniz (sort ((id ,sort-string))))
+         (i ,sort-string))]
     [`(subsort ,sort-id-1 ,sort-id-2)
-     `(@ (leibniz (subtype ((subsort ,type-string) (supersort ,type-string))))
-         (i ,type-string))]))
+     `(@ (leibniz (subsort ((subsort ,(symbol->string sort-id-1))
+                            (supersort ,(symbol->string sort-id-2)))))
+         (i ,sort-string))]))
 
-(define-syntax (type stx)
+(define-syntax (+sort stx)
   (syntax-parse stx
-    [(_ first-type-str:string more-type-strs:string ...)
-     #`(type* #,(source-loc #'first-type-str)
-              (join-text first-type-str more-type-strs ...))]))
+    [(_ first-str:string more-strs:string ...)
+     #`(sort* #,(source-loc #'first-str)
+              (join-text first-str more-strs ...))]))
+
+;; Operator declarations
+
+(define (arg->xexpr arg)
+  (match arg
+    [`(sort ,sort-id)
+     `(sort ((id ,(symbol->string sort-id))))]
+    [`(var ,name ,sort-id)
+     `(var ((id ,(symbol->string name)) (sort ,(symbol->string sort-id))))]))
 
 (define (op* loc op-string)
   (define op-decl (parse-pollen-text operator/p op-string loc))
-  (match-define `(op ,op-id ,arg-list ,result-type)  op-decl)
+  (match-define `(op ,op-id ,arg-list ,result-sort)  op-decl)
   `(@ (leibniz (op ((id ,(symbol->string op-id)))
-                   (arity ,(for/splice ([arg arg-list]) `(type ((id ,(symbol->string arg))))))
-                   (type ((id ,(symbol->string result-type))))))
+                   (arity ,(for/splice ([arg arg-list])
+                             (arg->xexpr arg)))
+                   (sort ((id ,(symbol->string result-sort))))))
       (i ,op-string)))
 
-(define-syntax (op stx)
+(define-syntax (+op stx)
   (syntax-parse stx
-    [(_ first-op-str:string more-op-strs:string ...)
-     #`(op* #,(source-loc #'first-op-str)
-            (join-text first-op-str more-op-strs ...))]))
+    [(_ first-str:string more-strs:string ...)
+     #`(op* #,(source-loc #'first-str)
+            (join-text first-str more-strs ...))]))
+
+;; Terms
+
+(define (term->xexpr term)
+  (match term
+    [`(term/var ,op-id)
+     `(term/var ((name ,(symbol->string op-id))))]
+    [`(term ,op-id ,args)
+     `(term ((op ,(symbol->string op-id))) ,@(map term->xexpr args))]
+    [(list (and number-type (or 'integer 'rational 'floating-point)) x)
+     `(,number-type ((value ,(number->string x))))]))
+
+(define (term* loc term-string)
+  (define term-decl (parse-pollen-text term/p term-string loc))
+  `(@ (leibniz (term->xexpr term-decl))
+      (i ,term-string)))
+
+(define-syntax (+term stx)
+  (syntax-parse stx
+    [(_ first-str:string more-strs:string ...)
+     #`(term* #,(source-loc #'first-str)
+            (join-text first-str more-strs ...))]))
+
+;; Rules
+
+(define (group-clauses clauses)
+  (for/fold ([vars empty]
+             [condition #f])
+            ([c clauses])
+    (match c
+      [`(var ,name ,sort)
+       (values (cons `(var ((id ,(symbol->string name)) (sort ,(symbol->string sort)))) vars)
+               condition)]
+      [term
+       (if condition
+           (values vars (list 'term '_∧ (list condition term)))
+           (values vars term))])))
+
+(define (rule* loc type-label rule-string)
+  (define rule-decl (parse-pollen-text rule/p rule-string loc))
+  (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
+  (define-values (vars condition) (group-clauses clauses))
+  (displayln rule-decl)
+  `(@ (leibniz (,type-label (vars ,@vars)
+                            (pattern ,(term->xexpr pattern))
+                            ,(if condition
+                                 (list 'condition (term->xexpr condition))
+                                 (@))
+                            (replacement ,(term->xexpr replacement))))
+      (i ,rule-string)))
+
+(define-syntax (+rule stx)
+  (syntax-parse stx
+    [(_ first-str:string more-strs:string ...)
+     #`(rule* #,(source-loc #'first-str)
+              'rule
+              (join-text first-str more-strs ...))]))
+
+(define-syntax (+test stx)
+  (syntax-parse stx
+    [(_ first-str:string more-strs:string ...)
+     #`(rule* #,(source-loc #'first-str)
+              'test
+              (join-text first-str more-strs ...))]))
+
+;; Formatting
+
+(define section (default-tag-function 'h2))
+(define subsection (default-tag-function 'h3))
+(define subsubsection (default-tag-function 'h4))
+(define subsubsubsection (default-tag-function 'h45))
+
+(define inset (default-tag-function 'blockquote))
