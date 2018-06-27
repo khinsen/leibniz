@@ -151,6 +151,26 @@ explicit value of @op{t : T}:
   @inset{@transform[newtonΔ-t.x at-t newtonΔ.x #:reduce #t]
          @transform[newtonΔ-t.v at-t newtonΔ.v #:reduce #t]}
 
+These equations can be used to construct an iterative algorithm that computes
+@equation[time-series.x]{x_{n} = x[t0 + (n × h)]} and
+@equation[time-series.v]{v_{n} = v[t0 + (n × h)]} for any @var{n:ℕ}, given the
+initial values @term{x_{0}} and @term{v_{0}} at time @op{t0 : T}:
+
+  @inset{@rule[algo.x]{x_{n} ⇒ x_{n - 1} + (h × v_{n - 1}) ∀ n:ℕnz}
+         @rule[algo.v]{v_{n} ⇒ v_{n - 1} + (h × ((k ÷ m) × x_{n - 1})) ∀ n:ℕnz}}
+
+
+@smaller{Additional arithmetic definition for this context:}
+@itemlist[
+
+  @item{@smaller{
+  Integer indices select a time value on a grid:
+    @linebreak[]
+  @op{T→L_{ℤ} : L}
+    @linebreak[]
+  @op{T→V_{ℤ} : V}}}
+
+]
 }
 
 @;signature-graphs["mass-on-a-spring.sig"]
