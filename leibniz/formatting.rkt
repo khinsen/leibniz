@@ -204,29 +204,33 @@
         (format-term signature #f (equations:rule-replacement rule))))
   (define vars (terms:term.vars (equations:rule-pattern rule)))
   (define cond (equations:rule-condition rule))
+
   (define var-elems (for/list ([var (in-set vars)]
                                #:unless (equal? (hash-ref c-vars
                                                           (terms:var-name var)
                                                           #f)
                                                 (terms:var-sort var)))
-                      (list (linebreak) (hspace 2)
-                            "∀ "
+                      (list "∀ "
                             (italic (symbol->string (terms:var-name var)))
                             " : "
                             (format-sort (terms:var-sort var)))))
-  (define cond-elem
+  (define clause-elems
     (if cond
-        (elem #:style leibniz-style
-              (linebreak) (hspace 2)
-              "if "
-              (format-term signature #f cond))
-        ""))
+        (append var-elems
+                (list (list (elem #:style leibniz-style
+                                  "if "
+                                  (format-term signature #f cond)))))
+        var-elems))
+  (define clause-prefix
+    (if (> (length clause-elems) 2)
+        (list (linebreak ) (hspace 2))
+        (list (hspace 2))))
+
   (list (format-label label)
         pattern-elem
         (if proc-rule? " ↣ "  separator)
         replacement-elem
-        var-elems
-        cond-elem))
+        (append* (map (λ (e) (append clause-prefix e)) clause-elems))))
 
 (define (format-rule label rule signature)
   (format-rule-or-transformation label rule signature " ⇒ "))
@@ -239,28 +243,36 @@
 (define (format-equation label equation signature)
   (define vars (set-union (terms:term.vars (equations:equation-left equation))
                           (terms:term.vars (equations:equation-right equation))))
+  (define c-vars (operators:all-vars signature))
   (define cond (equations:equation-condition equation))
   (define left-elem (format-term signature #f (equations:equation-left equation)))
   (define right-elem (format-term signature #f (equations:equation-right equation)))
-  (define var-elems (for/list ([var (in-set vars)])
-                      (list (linebreak ) (hspace 2)
-                            "∀ "
+  (define var-elems (for/list ([var (in-set vars)]
+                               #:unless (equal? (hash-ref c-vars
+                                                          (terms:var-name var)
+                                                          #f)
+                                                (terms:var-sort var)))
+                      (list "∀ "
                             (italic (symbol->string (terms:var-name var)))
                             " : "
                             (format-sort (terms:var-sort var)))))
-  (define cond-elem
+  (define clause-elems
     (if cond
-        (elem #:style leibniz-style
-              (linebreak) (hspace 2)
-              "if "
-              (format-term signature #f cond))
-        ""))
-  (list (format-label label)
+        (append var-elems
+                (list (list (elem #:style leibniz-style
+                                  "if "
+                                  (format-term signature #f cond)))))
+        var-elems))
+  (define clause-prefix
+    (if (> (length clause-elems) 2)
+        (list (linebreak ) (hspace 2))
+        (list (hspace 2))))
+ 
+ (list (format-label label)
         left-elem
         " = "
         right-elem
-        var-elems
-        cond-elem))
+        (append* (map (λ (e) (append clause-prefix e)) clause-elems))))
 
 ;;
 ;; Format assets and asset references
