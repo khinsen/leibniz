@@ -63,26 +63,24 @@ can assign numerical values:
 
 @context["time-dependent-kinematics"
          #:extend "kinematics"
-         #:insert ["quantities/function-with-finite-difference-template"
-                   hide-vars
-                   (rename-sort SQD T)
-                   (rename-sort SQDnz Tnz)
-                   (rename-sort SQI L)
-                   (rename-sort SQInz Lnz)
-                   (rename-sort SQID V)
-                   (rename-sort SQIDnz Vnz)
-                   (rename-sort SQD→SQI T→L)
-                   (rename-sort SQD→SQID T→V)]
-         #:insert ["quantities/function-with-finite-difference-template"
-                   hide-vars
-                   (rename-sort SQD T)
-                   (rename-sort SQDnz Tnz)
-                   (rename-sort SQI V)
-                   (rename-sort SQInz Vnz)
-                   (rename-sort SQID A)
-                   (rename-sort SQIDnz Anz)
-                   (rename-sort SQD→SQI T→V)
-                   (rename-sort SQD→SQID T→A)]]{
+         #:insert-use ["quantities/function-with-finite-difference-template"
+                       (rename-sort SQD T)
+                       (rename-sort SQDnz Tnz)
+                       (rename-sort SQI L)
+                       (rename-sort SQInz Lnz)
+                       (rename-sort SQID V)
+                       (rename-sort SQIDnz Vnz)
+                       (rename-sort SQD→SQI T→L)
+                       (rename-sort SQD→SQID T→V)]
+         #:insert-use ["quantities/function-with-finite-difference-template"
+                       (rename-sort SQD T)
+                       (rename-sort SQDnz Tnz)
+                       (rename-sort SQI V)
+                       (rename-sort SQInz Vnz)
+                       (rename-sort SQID A)
+                       (rename-sort SQIDnz Anz)
+                       (rename-sort SQD→SQI T→V)
+                       (rename-sort SQD→SQID T→A)]]{
 
 @section{Time-dependent kinematics}
 
@@ -97,13 +95,12 @@ with each one being the time derivative of its predecessor. The sort
          #:extend "time-dependent-kinematics"
          #:use "quantities/mass"
          #:use "quantities/force"
-         #:insert ["quantities/function-template"
-                   hide-vars
-                   (rename-sort SQD T)
-                   (rename-sort SQDnz Tnz)
-                   (rename-sort SQI F)
-                   (rename-sort SQInz Fnz)
-                   (rename-sort SQD→SQI T→F)]]{
+         #:insert-use ["quantities/function-template"
+                       (rename-sort SQD T)
+                       (rename-sort SQDnz Tnz)
+                       (rename-sort SQI F)
+                       (rename-sort SQInz Fnz)
+                       (rename-sort SQD→SQI T→F)]]{
 
 @section{Dynamics}
 

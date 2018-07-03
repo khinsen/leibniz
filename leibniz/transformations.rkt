@@ -1,6 +1,7 @@
 #lang racket
 
-(provide transform-context-declarations)
+(provide transform-context-declarations
+         hide-context-vars)
 
 (require (prefix-in sorts:  "./sorts.rkt")
          (prefix-in operators:  "./operators.rkt")
@@ -10,29 +11,16 @@
 
 ;; Test cases are in documents.rkt, to avoid cyclic dependencies.
 
-(define (transform-context-declarations decls transformations)
-  (for/fold ([decls decls])
-            ([tr transformations])
-    ((apply-transformation tr) decls)))
+;; Hide context-level variables by pushing them into rule and equation definitions.
 
-(define ((apply-transformation tr) decls)
-  (match tr
-    ['hide-vars
-     (define transformer (add-context-vars (hash-ref decls 'vars)))
-     (~> decls
-         (hash-update 'rules (λ (rules) (for/list ([r rules])
-                                          (transformer r))))
-         (hash-update 'assets (λ (assets) (for/hash ([(label value) assets])
-                                            (values label (transformer value)))))
-         (hash-set 'vars (hash)))]
-    [(list 'rename-sort sort1 sort2)
-     (replace-sorts decls (λ (s) (if (equal? s sort1) sort2 s)))]
-    [(list 'add-include mode cname)
-     (add-include decls mode cname)]
-    [(list 'asset-prefix prefix)
-     (asset-prefix decls prefix)]
-    [(list 'real->float fp-sort)
-     (real->float decls fp-sort)]))
+(define (hide-context-vars context)
+  (define transformer (add-context-vars (hash-ref context 'vars)))
+  (~> context
+      (hash-update 'rules (λ (rules) (for/list ([r rules])
+                                       (transformer r))))
+      (hash-update 'assets (λ (assets) (for/hash ([(label value) assets])
+                                         (values label (transformer value)))))
+      (hash-set 'vars (hash))))
 
 (define ((add-context-vars var-decls) item-decl)
   (define (combined-vars local-vars)
@@ -62,6 +50,45 @@
       [other-term
        other-term]))
   (transform item-decl))
+
+;; Apply transformations to a context
+
+(define (transform-context-declarations context transformations)
+
+  (define (transform-included-contexts crefs)
+    (for/list ([cref crefs])
+      (match-define (cons mode name-or-context) cref)
+      (if (string? name-or-context)
+          cref
+          (cons mode (transform-context-declarations name-or-context transformations)))))
+
+  (define (transform-declarations context)
+    (for/fold ([c context])
+              ([tr transformations])
+        ((apply-transformation tr) c)))
+
+  (~> context
+      (hash-update 'includes transform-included-contexts)
+      transform-declarations))
+
+(define ((apply-transformation tr) decls)
+  (match tr
+    ['hide-vars
+     (define transformer (add-context-vars (hash-ref decls 'vars)))
+     (~> decls
+         (hash-update 'rules (λ (rules) (for/list ([r rules])
+                                          (transformer r))))
+         (hash-update 'assets (λ (assets) (for/hash ([(label value) assets])
+                                            (values label (transformer value)))))
+         (hash-set 'vars (hash)))]
+    [(list 'rename-sort sort1 sort2)
+     (replace-sorts decls (λ (s) (if (equal? s sort1) sort2 s)))]
+    [(list 'add-include mode cname)
+     (add-include decls mode cname)]
+    [(list 'asset-prefix prefix)
+     (asset-prefix decls prefix)]
+    [(list 'real->float fp-sort)
+     (real->float decls fp-sort)]))
 
 ;; Replace sorts by applying sort-transformer to every sort in a context
 
@@ -127,9 +154,9 @@
 
 ;; Add include (use/extend)
 
-(define (add-include context mode cname)
+(define (add-include context mode cname-or-context)
   (hash-update context 'includes
-               (λ (crefs) (append crefs (list (cons mode cname))))))
+               (λ (crefs) (append crefs (list (cons mode cname-or-context))))))
 
 ;; Add a prefix to all asset labels
 

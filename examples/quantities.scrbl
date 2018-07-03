@@ -115,10 +115,9 @@ as @rule{b ÷ a ⇒ 10}, we can test the simplification rules:
 }
 
 @context["mass"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ M)
-                   (rename-sort SQnz Mnz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ M)
+                       (rename-sort SQnz Mnz)]]{
 
 @section{Mass}
 
@@ -129,10 +128,9 @@ Replace SQ by M and SQnz by Mnz in the template:
 
 
 @context["length"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ L)
-                   (rename-sort SQnz Lnz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ L)
+                       (rename-sort SQnz Lnz)]]{
 
 @section{Length}
 
@@ -143,10 +141,9 @@ Replace SQ by L and SQnz by Lnz in the template:
 
 
 @context["time"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ T)
-                   (rename-sort SQnz Tnz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ T)
+                       (rename-sort SQnz Tnz)]]{
 
 @section{Time}
 
@@ -155,10 +152,9 @@ Replace SQ by T and SQnz by Tnz in the template (result now shown).
 }
 
 @context["velocity"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ V)
-                   (rename-sort SQnz Vnz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ V)
+                       (rename-sort SQnz Vnz)]]{
 
 @section{Velocity}
 
@@ -167,10 +163,9 @@ Replace SQ by V and SQnz by Vnz in the template (result not shown).
 }
 
 @context["acceleration"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ A)
-                   (rename-sort SQnz Anz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ A)
+                       (rename-sort SQnz Anz)]]{
 
 @section{Acceleration}
 
@@ -179,10 +174,9 @@ Replace SQ by A and SQnz by Anz in the template (result not shown).
 }
 
 @context["force"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ F)
-                   (rename-sort SQnz Fnz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ F)
+                       (rename-sort SQnz Fnz)]]{
 
 @section{Force}
 
@@ -191,10 +185,9 @@ Replace SQ by F and SQnz by Fnz in the template (result not shown).
 }
 
 @context["angle"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ angle)
-                   (rename-sort SQnz angle-nz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ angle)
+                       (rename-sort SQnz angle-nz)]]{
 
 @sort{angle}
 @op{π : angle}
@@ -203,10 +196,9 @@ Replace SQ by F and SQnz by Fnz in the template (result not shown).
 
 @context["frequency"
          #:use "time"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ frequency)
-                   (rename-sort SQnz frequency-nz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ frequency)
+                       (rename-sort SQnz frequency-nz)]]{
 
 @op{frequency × T : ℝ}
 @op{frequency-nz × Tnz : ℝnz}
@@ -217,10 +209,9 @@ Replace SQ by F and SQnz by Fnz in the template (result not shown).
 @context["angular-frequency"
          #:use "time"
          #:use "angle"
-         #:insert ["template"
-                   hide-vars
-                   (rename-sort SQ angular-frequency)
-                   (rename-sort SQnz angular-frequency-nz)]]{
+         #:insert-use ["template"
+                       (rename-sort SQ angular-frequency)
+                       (rename-sort SQnz angular-frequency-nz)]]{
 
 @op{angular-frequency × T : angle}
 @op{angular-frequency-nz × Tnz : angle-nz}
@@ -228,14 +219,12 @@ Replace SQ by F and SQnz by Fnz in the template (result not shown).
 @op{Tnz × angular-frequency-nz : angle-nz}
 }
 
-@context["function-template" #:insert ["template"
-                                       hide-vars
-                                       (rename-sort SQ SQD)
-                                       (rename-sort SQnz SQDnz)]
-                             #:insert ["template"
-                                       hide-vars
-                                       (rename-sort SQ SQI)
-                                       (rename-sort SQnz SQInz)]]{
+@context["function-template" #:insert-use ["template"
+                                           (rename-sort SQ SQD)
+                                           (rename-sort SQnz SQDnz)]
+                             #:insert-use ["template"
+                                           (rename-sort SQ SQI)
+                                           (rename-sort SQnz SQInz)]]{
 
 @section{A template for functions from one quantity to another}
 
@@ -273,13 +262,11 @@ It is convenient to provide some arithmetic:
 }
 
 @context["function-with-derivative-template"
-         #:insert ["function-template"
-                   hide-vars]
-         #:insert ["function-template"
-                   hide-vars
-                   (rename-sort SQI SQID)
-                   (rename-sort SQInz SQIDnz)
-                   (rename-sort SQD→SQI SQD→SQID)]]{
+         #:insert-use ["function-template"]
+         #:insert-use ["function-template"
+                       (rename-sort SQI SQID)
+                       (rename-sort SQInz SQIDnz)
+                       (rename-sort SQD→SQI SQD→SQID)]]{
 
 @section{A template for functions with derivatives}
 
@@ -295,7 +282,7 @@ and @var{s:ℝ} we have
 }
 
 @context["function-with-finite-difference-template"
-         #:insert["function-with-derivative-template"]]{
+         #:insert-extend["function-with-derivative-template"]]{
 
 In numerical approximations, the derivative operator
 @op{𝒟(SQD→SQI) : SQD→SQID} is replaced by the finite-difference

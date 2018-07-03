@@ -231,8 +231,11 @@
     (pattern (~seq #:extend name:str)
              #:attr ref #`(cons '(extend name) #,(source-loc #'name))
              #:attr verb #'"extends")
-    (pattern (~seq #:insert [name:str tr:expr ...])
-             #:attr ref #`(cons '(insert name tr ...) #,(source-loc #'name))
+    (pattern (~seq #:insert-use [name:str tr:expr ...])
+             #:attr ref #`(cons '(insert-use name tr ...) #,(source-loc #'name))
+             #:attr verb #'"includes transformed")
+    (pattern (~seq #:insert-extend [name:str tr:expr ...])
+             #:attr ref #`(cons '(insert-extend name tr ...) #,(source-loc #'name))
              #:attr verb #'"includes transformed")))
 
 (define-syntax (context stx)

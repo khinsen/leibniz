@@ -661,16 +661,20 @@
                                                        #:combine/key combine-assets)))
           (add-loc new-asset loc)))
 
-    (define (add-include-prefix inserted-context cname)
-      (define elements (map string-trim (string-split cname "/")))
-      (if (equal? (length elements) 1)
-          inserted-context
-          (let ([prefix (first elements)])
-            (hash-update inserted-context 'includes
-                         (λ (is)
-                           (for/list ([mode/name is])
-                             (cons (car mode/name)
-                                   (string-append prefix "/" (cdr mode/name)))))))))
+    (define (resolve-includes context)
+      (define (resolve-includes* document context)
+        (define include-refs (hash-ref context 'includes))
+        (define includes
+          (for/list ([mode/name include-refs])
+            (match-define (cons mode name) mode/name)
+            (define-values (i-doc i-c)
+              (send document get-document-and-context name))
+            (cons mode
+                  (if (equal? i-doc builtins)
+                      name
+                      (resolve-includes* i-doc i-c)))))
+        (hash-set context 'includes includes))
+      (resolve-includes* this context))
 
     (define (merge context inserted-context loc)
       (define (merge* key v1 v2)
@@ -703,16 +707,38 @@
              (add-include context 'use cname loc)]
             [(list 'extend cname)
              (add-include context 'extend cname loc)]
-            [(list 'insert cname tr ...)
+            [(list (and (or 'insert-use 'insert-extend) insert-type) cname tr ...)
              (define (apply-transformations context tr)
                (with-handlers ([exn:fail? (re-raise-exn (list loc))])
                  (transform-context-declarations context tr)))
-             (define insertion
-               (~> (get-context cname)
-                   (add-include-prefix cname)
-                   (apply-transformations tr)
-                   clean-declarations))
-             (merge context insertion loc)]
+             (define (merge-recursively insertion context)
+               (define (insert-includes context)
+                 (for/fold ([c context])
+                           ([mode/context (hash-ref insertion 'includes)]
+                            #:unless (string? (cdr mode/context)))
+                   (if (equal? (car mode/context) 'use)
+                       (hide-context-vars (cdr mode/context))
+                       (cdr mode/context))
+                   (merge-recursively (cdr mode/context) c)))
+               (define (cleanup-insertion insertion)
+                 (clean-declarations
+                  (hash-update insertion 'includes
+                               (λ (crefs)
+                                 (for/list ([mode/name-or-context crefs]
+                                            #:when (string? (cdr mode/name-or-context)))
+                                   mode/name-or-context)))))
+               (~> context
+                   insert-includes
+                   (merge (cleanup-insertion insertion) loc)))
+             (define (maybe-hide-vars context)
+               (if (equal? insert-type 'insert-use)
+                   (hide-context-vars context)
+                   context))
+             (~> (get-context cname)
+                 maybe-hide-vars
+                 resolve-includes
+                 (apply-transformations tr)
+                 (merge-recursively context))]
             [(list 'sort s)
              (add-sort context s loc)]
             [(list 'subsort s1 s2)
@@ -771,20 +797,24 @@
               library-refs))
 
   ;; Retrieve a context by name
-  (define (get-context name)
+  (define (get-document-and-context name)
     (define elements (map string-trim (string-split name "/")))
     (case (length elements)
       [(1)
        (unless (hash-has-key? contexts (first elements))
          (error (format "no context named ~a" name)))
-       (hash-ref contexts (first elements))]
+       (values this (hash-ref contexts (first elements)))]
       [(2)
        (unless (hash-has-key? library (first elements))
          (error (format "no library named ~a" (first elements))))
        (define library-doc (hash-ref library (first elements)))
-       (send library-doc get-context (second elements))]
+       (values library-doc (send library-doc get-context (second elements)))]
       [else
        (error (format "illegal context specification ~a" name))]))
+
+  (define (get-context name)
+    (define-values (document context) (get-document-and-context name))
+    context)
 
   ;; Return an SXML representation of the document
   (define (get-document-sxml)
@@ -1288,7 +1318,7 @@
   (check-equal? (~> a-document
                     (add-context-from-source
                      "test"
-                     (list (cons '(insert "template" hide-vars) #f)))
+                     (list (cons '(insert-use "template") #f)))
                     (get-context "test"))
                 (~> a-document
                     (add-context-from-source
@@ -1317,17 +1347,17 @@
              (thunk (~> a-document
                         (add-context-from-source
                          "with-var-term"
-                         (list (cons '(insert "template") #f)
+                         (list (cons '(insert-extend "template") #f)
                                (cons '(asset var-term-asset (term/var b)) #f)))
                         (add-context-from-source
                          "test"
-                         (list (cons '(insert "with-var-term" hide-vars) #f))))))
+                         (list (cons '(insert-use "with-var-term") #f))))))
 
   ;; rename-sort
   (check-equal? (~> a-document
                     (add-context-from-source
                      "test"
-                     (list (cons '(insert "template" (rename-sort SQ M)) #f)))
+                     (list (cons '(insert-extend "template" (rename-sort SQ M)) #f)))
                     (get-context "test"))
                 (~> a-document
                     (add-context-from-source
@@ -1356,7 +1386,7 @@
   (check-equal? (~> a-document
                     (add-context-from-source
                      "test"
-                     (list (cons '(insert "template" (asset-prefix foo)) #f)))
+                     (list (cons '(insert-extend "template" (asset-prefix foo)) #f)))
                     (get-context "test"))
                 (~> a-document
                     (add-context-from-source
@@ -1459,8 +1489,10 @@
                                        (term heron ((term/var x) (term/var ε) (term/var e)))))) #f)))
         (add-context-from-source
          "converted-to-float"
-         (list (cons '(insert "using-rational" (real->float FP64)) #f)))))
+         (list (cons '(insert-extend "using-rational" (real->float FP64)) #f)))
+))
   (check-equal? (~> heron
                     (get-context "converted-to-float"))
                 (~> heron
-                    (get-context "using-float"))))
+                    (get-context "using-float")))
+)

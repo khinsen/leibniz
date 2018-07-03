@@ -44,7 +44,7 @@ always within the prescribed tolerance.
 }
 
 @context["fp-heron"
-         #:insert ["heron" (real->float FP64)]]{
+         #:insert-extend ["heron" (real->float FP64)]]{
 
 @section{Heron's algorithm using floating-point arithmetic}
 

@@ -86,7 +86,7 @@ where @op{cos(angle) : ℝ} is the cosine function. The amplitude
 @section{Numerical solution}
 
 @context["euler-template"
-         #:insert ["quantities/function-with-finite-difference-template"]]{
+         #:insert-extend ["quantities/function-with-finite-difference-template"]]{
 
 For simplicity, we use one of the simplest numerical integration schemes known
 as the Euler method. It was developed in the era of manual computation, where
@@ -104,26 +104,24 @@ The finite difference is computed as
 
 @context["numerical-solution"
          #:extend "equations-of-motion"
-         #:insert ["euler-template"
-                   hide-vars
-                   (rename-sort SQD T)
-                   (rename-sort SQDnz Tnz)
-                   (rename-sort SQI L)
-                   (rename-sort SQInz Lnz)
-                   (rename-sort SQID V)
-                   (rename-sort SQIDnz Vnz)
-                   (rename-sort SQD→SQI T→L)
-                   (rename-sort SQD→SQID T→V)]
-         #:insert ["euler-template"
-                   hide-vars
-                   (rename-sort SQD T)
-                   (rename-sort SQDnz Tnz)
-                   (rename-sort SQI V)
-                   (rename-sort SQInz Vnz)
-                   (rename-sort SQID A)
-                   (rename-sort SQIDnz Anz)
-                   (rename-sort SQD→SQI T→V)
-                   (rename-sort SQD→SQID T→A)]]{
+         #:insert-use ["euler-template"
+                       (rename-sort SQD T)
+                       (rename-sort SQDnz Tnz)
+                       (rename-sort SQI L)
+                       (rename-sort SQInz Lnz)
+                       (rename-sort SQID V)
+                       (rename-sort SQIDnz Vnz)
+                       (rename-sort SQD→SQI T→L)
+                       (rename-sort SQD→SQID T→V)]
+         #:insert-use ["euler-template"
+                       (rename-sort SQD T)
+                       (rename-sort SQDnz Tnz)
+                       (rename-sort SQI V)
+                       (rename-sort SQInz Vnz)
+                       (rename-sort SQID A)
+                       (rename-sort SQIDnz Anz)
+                       (rename-sort SQD→SQI T→V)
+                       (rename-sort SQD→SQID T→A)]]{
 
 Since the Euler integration scheme applies to first-order differential
 equations only, we must first transform @ref[newton] into a
