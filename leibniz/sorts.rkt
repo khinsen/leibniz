@@ -111,20 +111,21 @@
   (define (add-subsort-relation subsort supersort)
     (validate-sort subsort)
     (validate-sort supersort)
-    (when (equal? subsort supersort)
-      (error "sorts are equal:" subsort supersort))
-    (when (is-subsort? supersort subsort)
-      (error "cycle in subsort relation:" supersort subsort))
-    (sort-graph (let ([new-kind (set-union (hash-ref kinds supersort)
-                                           (hash-ref kinds subsort))])
-                  (for/fold ([kinds kinds])
-                            ([sort (in-set new-kind)])
-                    (hash-set kinds sort new-kind)))
-                (hash-update supersorts subsort
-                             (λ (s) (set-add s supersort)))
-                (hash-update subsorts supersort
-                                 (λ (s) (set-add s subsort)))
-                #f))
+    (if (equal? subsort supersort)
+        this ; don't record a sort as its own subsort
+        (begin
+          (when (is-subsort? supersort subsort)
+            (error "cycle in subsort relation:" supersort subsort))
+          (sort-graph (let ([new-kind (set-union (hash-ref kinds supersort)
+                                                 (hash-ref kinds subsort))])
+                        (for/fold ([kinds kinds])
+                                  ([sort (in-set new-kind)])
+                          (hash-set kinds sort new-kind)))
+                      (hash-update supersorts subsort
+                                   (λ (s) (set-add s supersort)))
+                      (hash-update subsorts supersort
+                                   (λ (s) (set-add s subsort)))
+                      #f))))
 
   (define (merge-sort-graphs s-graph)
     (let ([sg
@@ -368,7 +369,6 @@
   (check-equal? (all-subsorts two-kinds 'W) (set 'V))
 
   (check-exn exn:fail? (thunk (add-sort an-s-graph #t)))
-  (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'A 'A)))
   (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'A 'X)))
   (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'X 'A)))
   (check-exn exn:fail? (thunk (add-subsort-relation an-s-graph 'C 'A)))
