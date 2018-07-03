@@ -2,6 +2,8 @@
 
 (provide
  (contract-out
+  [all-matching-rules (signature? rulelist? term? boolean?
+                          . -> . (sequence/c (cons/c rule? hash?)))]
   [reduce (signature? rulelist? term? . -> . term?)]
   [in-reduction (signature? rulelist? term? . -> . (sequence/c term?))]
   [trace-reduce ((signature? rulelist? term? procedure?) (integer?)

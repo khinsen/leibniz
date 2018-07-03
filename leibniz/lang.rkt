@@ -20,7 +20,7 @@
                      [cs:show-context show-context])
          inset
          html view xml signature-graphs
-         use show reduce trace trans subs
+         use show reduce matching-rules trace trans subs
          (all-from-out scribble/base
                        scribble/doclang))
 
@@ -120,9 +120,6 @@
 (define (parse-transformation tr-str)
   (parse-string transformation/p tr-str))
 
-;; (define (parse-substitution tr-str)
-;;   (parse-string substitution/p tr-str))
-
 (define (make-parsed-term term-str)
   (match (parse-term term-str)
     [(success parsed-term)
@@ -145,13 +142,6 @@
                            parse-result!)
                        #f))
 
-;; (define (make-parsed-substitution transformation-str)
-;;   (make-substitution (current-document) (current-context-name)
-;;                        (~> transformation-str
-;;                            parse-substitution
-;;                            parse-result!)
-;;                        #f))
-
 (define (display-term signature term)
   (when term
     (displayln (format "~a : ~a"
@@ -161,6 +151,10 @@
 (define (display-equation signature equation)
   (when equation
     (displayln (plain-text (format-equation #f equation signature)))))
+
+(define (display-rule signature rule)
+  (when rule
+    (displayln (plain-text (format-rule #f rule signature)))))
 
 (define (show term-str)
   (assert-current-context)
@@ -176,6 +170,16 @@
   (define rterm (and term
                      (rewrite:reduce signature rules term)))
   (display-term signature rterm))
+
+(define (matching-rules term-str)
+  (assert-current-context)
+  (define signature (hash-ref (current-context) 'compiled-signature))
+  (define rules (hash-ref (current-context) 'compiled-rules))
+  (define term (make-parsed-term term-str))
+  (define matching (and term
+                        (rewrite:all-matching-rules signature rules term #f)))
+  (for ([rule-with-substitution matching])
+    (display-rule signature (car rule-with-substitution))))
 
 (define (trace term-str
                #:max-level [max-level 0]
