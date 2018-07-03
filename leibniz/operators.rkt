@@ -165,21 +165,23 @@
                ; The new arity is already present in the list.
                (if (equal? sort s)
                    this
-                   (error (format "new value sort ~a differs from ~a in previous declaration"
-                                  sort s)))]
+                   (error (format "new value sort ~a for arity ~a differs from ~a in previous declaration"
+                                  sort arity s)))]
               [(is-subarity? arity a)
                ; We hit a higher arity, so we must insert the new
                ; one before it. We must also check the sorts
                ; for ensuring monotonicity.
                (if (is-subsort? sort-graph sort s)
                    (insert-rank prefix ranks)
-                   (error "operator not monotonic"))]
+                   (error (format  "operator not monotonic after adding ~a : ~a to ~a"
+                                   arity sort ranks)))]
               [(and (is-subarity? a arity)
                     (not (is-subsort? sort-graph s sort)))
                ; We hit a sub-arity of the one we want to add,
                ; but the corresponding sort is not a sub-sort,
                ; so we signal a monotonicity error.
-               (error "operator not monotonic")]
+               (error (format  "operator not monotonic after adding ~a : ~a to ~a"
+                               arity sort ranks))]
               [else
                ; We get here in two situations:
                ; 1) The new arity is unrelated to the current one.
