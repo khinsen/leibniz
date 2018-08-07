@@ -41,7 +41,7 @@
            (list 'substitute _ _)
            (list 'transform _ _))
        item]
-      [(list 'term/var name)
+      [(list 'term-or-var name)
        (when (hash-has-key? var-decls name)
          (error (format "variable ~a has been removed" name)))
        item]
@@ -248,7 +248,7 @@
                     [mt mod-terms])
            (transform-literal mt rs)))
        (values (cdr rank) (list 'term op mod-args))]
-      [(list 'term/var name)
+      [(list 'term-or-var name)
        (values (terms:term.sort (terms:make-var-or-term signature name lvars))
                term)]
       [(list 'integer x)

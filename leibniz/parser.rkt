@@ -306,7 +306,7 @@
                       [args <- (many+/p term/p #:sep comma-with-whitespace/p)]
                       (char/p #\))
                       (pure `(term ,op-id ,args)))
-                  (pure `(term/var ,op-id))))))
+                  (pure `(term-or-var ,op-id))))))
 
 (define simple-term-suffix/p
   (try/p
@@ -357,25 +357,25 @@
             (pure first-term))))
 
 (module+ test
-  (check-parse term/p "foo" '(term/var foo))
-  (check-parse term/p "foo(bar,baz)" '(term foo ((term/var bar) (term/var baz))))
-  (check-parse term/p "foo(bar, baz)" '(term foo ((term/var bar) (term/var baz))))
-  (check-parse term/p "foo(bar , baz)" '(term foo ((term/var bar) (term/var baz))))
-  (check-parse term/p "foo[bar]" '(term |[]| ((term/var foo) (term/var bar))))
-  (check-parse term/p "foo[bar, baz]" '(term |[]| ((term/var foo) (term/var bar) (term/var baz))))
-  (check-parse term/p "foo_{bar}" '(term _ ((term/var foo) (term/var bar))))
-  (check-parse term/p "foo_{bar, baz}" '(term _ ((term/var foo) (term/var bar) (term/var baz))))
-  (check-parse term/p "foo^{bar}" '(term ^ ((term/var foo) (term/var bar))))
-  (check-parse term/p "foo^{bar, baz}" '(term ^ ((term/var foo) (term/var bar) (term/var baz))))
-  (check-parse term/p "foo_{bar}[baz]" '(term |[]| ((term _ ((term/var foo) (term/var bar))) (term/var baz))))
-  (check-parse term/p "foo[bar]_{baz}" '(term _ ((term |[]| ((term/var foo) (term/var bar))) (term/var baz))))
-  (check-parse term/p "bar + baz" '(term _+ ((term/var bar) (term/var baz))))
-  (check-parse term/p "foo + bar + baz" '(term _+ ( (term _+ ((term/var foo) (term/var bar))) (term/var baz))))
-  (check-parse term/p "a + b + c + d" '(term _+ ((term _+ ((term _+ ((term/var a) (term/var b))) (term/var c))) (term/var d))))
-  (check-parse term/p "foo + (bar + baz)" '(term _+ ((term/var foo) (term _+ ((term/var bar) (term/var baz))))))
-  (check-parse term/p "(foo + bar) + baz" '(term _+ ((term _+ ((term/var foo) (term/var bar))) (term/var baz) )))
-  (check-parse term/p "(foo + 2) - 3⁄4" '(term _- ((term _+ ((term/var foo) (integer 2))) (rational 3/4))))
-  (check-parse term/p "-(a + b)" '(term - ((term _+ ((term/var a) (term/var b))))))
+  (check-parse term/p "foo" '(term-or-var foo))
+  (check-parse term/p "foo(bar,baz)" '(term foo ((term-or-var bar) (term-or-var baz))))
+  (check-parse term/p "foo(bar, baz)" '(term foo ((term-or-var bar) (term-or-var baz))))
+  (check-parse term/p "foo(bar , baz)" '(term foo ((term-or-var bar) (term-or-var baz))))
+  (check-parse term/p "foo[bar]" '(term |[]| ((term-or-var foo) (term-or-var bar))))
+  (check-parse term/p "foo[bar, baz]" '(term |[]| ((term-or-var foo) (term-or-var bar) (term-or-var baz))))
+  (check-parse term/p "foo_{bar}" '(term _ ((term-or-var foo) (term-or-var bar))))
+  (check-parse term/p "foo_{bar, baz}" '(term _ ((term-or-var foo) (term-or-var bar) (term-or-var baz))))
+  (check-parse term/p "foo^{bar}" '(term ^ ((term-or-var foo) (term-or-var bar))))
+  (check-parse term/p "foo^{bar, baz}" '(term ^ ((term-or-var foo) (term-or-var bar) (term-or-var baz))))
+  (check-parse term/p "foo_{bar}[baz]" '(term |[]| ((term _ ((term-or-var foo) (term-or-var bar))) (term-or-var baz))))
+  (check-parse term/p "foo[bar]_{baz}" '(term _ ((term |[]| ((term-or-var foo) (term-or-var bar))) (term-or-var baz))))
+  (check-parse term/p "bar + baz" '(term _+ ((term-or-var bar) (term-or-var baz))))
+  (check-parse term/p "foo + bar + baz" '(term _+ ( (term _+ ((term-or-var foo) (term-or-var bar))) (term-or-var baz))))
+  (check-parse term/p "a + b + c + d" '(term _+ ((term _+ ((term _+ ((term-or-var a) (term-or-var b))) (term-or-var c))) (term-or-var d))))
+  (check-parse term/p "foo + (bar + baz)" '(term _+ ((term-or-var foo) (term _+ ((term-or-var bar) (term-or-var baz))))))
+  (check-parse term/p "(foo + bar) + baz" '(term _+ ((term _+ ((term-or-var foo) (term-or-var bar))) (term-or-var baz) )))
+  (check-parse term/p "(foo + 2) - 3⁄4" '(term _- ((term _+ ((term-or-var foo) (integer 2))) (rational 3/4))))
+  (check-parse term/p "-(a + b)" '(term - ((term _+ ((term-or-var a) (term-or-var b))))))
   (check-parse-failure term/p "foo + bar × baz"))
 
 (define var-clause/p
@@ -405,7 +405,7 @@
 (define (make-rule pattern replacement clauses type-label)
   (match pattern
     [`(var ,name ,sort)
-     `(,type-label (term/var ,name) ,replacement ,(cons pattern clauses))]
+     `(,type-label (term-or-var ,name) ,replacement ,(cons pattern clauses))]
     [_
      `(,type-label ,pattern ,replacement ,clauses)]))
 
@@ -429,45 +429,45 @@
   (check-parse-failure var-clause/p "∀ foo :bar")
   (check-parse-failure var-clause/p "∀ foo: bar")
   (check-parse rule/p "a ⇒ b"
-               '(rule (term/var a)
-                      (term/var b)
+               '(rule (term-or-var a)
+                      (term-or-var b)
                       ()))
   (check-parse rule/p "a ⇒ b ∀ foo:bar"
-               '(rule (term/var a)
-                      (term/var b)
+               '(rule (term-or-var a)
+                      (term-or-var b)
                       ((var foo bar))))
   (check-parse rule/p "a ⇒ b ∀ foo:bar ∀ bar:baz"
-               '(rule (term/var a)
-                      (term/var b)
+               '(rule (term-or-var a)
+                      (term-or-var b)
                       ((var foo bar) (var bar baz))))
   (check-parse rule/p "a ⇒ b ∀ foo:bar if a > 0"
-               '(rule (term/var a)
-                      (term/var b)
-                      ((var foo bar) (term _> ((term/var a) (integer 0))))))
+               '(rule (term-or-var a)
+                      (term-or-var b)
+                      ((var foo bar) (term _> ((term-or-var a) (integer 0))))))
   (check-parse rule/p "a ⇒ b if a > 0"
-               '(rule (term/var a)
-                      (term/var b)
-                      ((term _> ((term/var a) (integer 0))))))
+               '(rule (term-or-var a)
+                      (term-or-var b)
+                      ((term _> ((term-or-var a) (integer 0))))))
   (check-parse rule/p "a ⇒ b + c if a > 0"
-               '(rule (term/var a)
-                      (term _+ ((term/var b) (term/var c))) 
-                      ((term _> ((term/var a) (integer 0))))))
+               '(rule (term-or-var a)
+                      (term _+ ((term-or-var b) (term-or-var c))) 
+                      ((term _> ((term-or-var a) (integer 0))))))
   (check-parse transformation/p "a → b + c if a > 0"
-               '(transformation (term/var a)
-                                (term _+ ((term/var b) (term/var c))) 
-                                ((term _> ((term/var a) (integer 0))))))
+               '(transformation (term-or-var a)
+                                (term _+ ((term-or-var b) (term-or-var c))) 
+                                ((term _> ((term-or-var a) (integer 0))))))
   (check-parse transformation/p "a:foo → b + c if a > 0"
-               '(transformation (term/var a)
-                                (term _+ ((term/var b) (term/var c))) 
-                                ((var a foo) (term _> ((term/var a) (integer 0))))))
+               '(transformation (term-or-var a)
+                                (term _+ ((term-or-var b) (term-or-var c))) 
+                                ((var a foo) (term _> ((term-or-var a) (integer 0))))))
   (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz"
-               '(equation (term/var a)
-                          (term/var b)
+               '(equation (term-or-var a)
+                          (term-or-var b)
                           ((var foo bar) (var bar baz))))
   (check-parse equation/p "a = b ∀ foo:bar ∀ bar:baz if test(a)"
-               '(equation (term/var a)
-                          (term/var b)
-                          ((var foo bar) (var bar baz) (term test ((term/var a)))))))
+               '(equation (term-or-var a)
+                          (term-or-var b)
+                          ((var foo bar) (var bar baz) (term test ((term-or-var a)))))))
 
 
 ; Utility function for parsing input from scribble, which may consist of multiple

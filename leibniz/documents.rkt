@@ -119,7 +119,7 @@
 
 (define (make-term* signature)
   (letrec ([fn (match-lambda
-                 [(list 'term/var name)
+                 [(list 'term-or-var name)
                   (terms:make-var-or-term signature name)]
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
@@ -132,7 +132,7 @@
   (letrec ([fn (match-lambda
                  [#f
                   #f]
-                 [(list 'term/var name)
+                 [(list 'term-or-var name)
                   (terms:make-var-or-term signature name local-vars)]
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
@@ -444,7 +444,7 @@
              (string->symbol op-string)
              (map sxml->asset args))]
       [`(term-or-var (@ (name ,name-string)))
-       (list 'term/var (string->symbol name-string))]
+       (list 'term-or-var (string->symbol name-string))]
       [`(,number-tag (@ (value ,v)))
        (list number-tag (read (open-input-string v)))]
       [`(as-equation (@ (ref ,asset-ref)))
@@ -867,7 +867,7 @@
                           (pattern ,(asset->sxml pattern))
                           ,(condition->sxml condition)
                           (replacement ,(asset->sxml replacement)))]
-        [(list 'term/var name)
+        [(list 'term-or-var name)
          `(term-or-var (@ (name ,(symbol->string name))))]
         [(list 'term op args)
          `(term (@ (op ,(symbol->string op)))
@@ -1114,7 +1114,7 @@
                      "test"
                      (list (cons '(subsort foo bar) #f)
                            (cons '(op a-foo () foo) #f)))
-                    (make-term "test" '(term/var a-foo) #f)
+                    (make-term "test" '(term-or-var a-foo) #f)
                     (terms:term->string))
                 "foo:a-foo")
 
@@ -1125,21 +1125,21 @@
                            (cons '(op a-foo () foo) #f)
                            (cons '(op a-foo ((sort bar)) foo) #f)
                            (cons '(op a-bar ((var X foo)) bar) #f)
-                           (cons '(rule (term a-foo ((term/var X)))
-                                        (term/var a-foo)
+                           (cons '(rule (term a-foo ((term-or-var X)))
+                                        (term-or-var a-foo)
                                         ((var X foo))) #f)
                            (cons '(asset eq1
-                                         (equation (term/var a-foo)
+                                         (equation (term-or-var a-foo)
                                                    (term a-foo
-                                                         ((term/var a-foo)))
+                                                         ((term-or-var a-foo)))
                                                    ())) #f)
                            (cons '(asset tr1
-                                         (transformation (term/var a-foo)
+                                         (transformation (term-or-var a-foo)
                                                          (term a-foo
-                                                               ((term/var a-foo)))
+                                                               ((term-or-var a-foo)))
                                                          ())) #f)
-                           (cons '(asset nested.asset (term/var a-foo)) #f)
-                           (cons '(asset deeply.nested.asset (term/var a-foo)) #f)))
+                           (cons '(asset nested.asset (term-or-var a-foo)) #f)
+                           (cons '(asset deeply.nested.asset (term-or-var a-foo)) #f)))
                     (get-context "test")
                     (clean-declarations))
                 (hash 'includes empty
@@ -1154,25 +1154,25 @@
                       'rules (list
                               (list 'rule
                                     (hash 'X 'foo)
-                                    '(term a-foo ((term/var X)))
-                                    '(term/var a-foo)
+                                    '(term a-foo ((term-or-var X)))
+                                    '(term-or-var a-foo)
                                     #f))
                       'assets (hash 'eq1 (list 'equation
                                                (hash)
-                                               '(term/var a-foo)
-                                               '(term a-foo ((term/var a-foo)))
+                                               '(term-or-var a-foo)
+                                               '(term a-foo ((term-or-var a-foo)))
                                                #f)
                                     'tr1 (list 'transformation
                                                (hash)
-                                               '(term/var a-foo)
-                                               '(term a-foo ((term/var a-foo)))
+                                               '(term-or-var a-foo)
+                                               '(term a-foo ((term-or-var a-foo)))
                                                #f)
                                     'nested (list 'assets (hash 'asset
-                                                                '(term/var a-foo)))
+                                                                '(term-or-var a-foo)))
                                     'deeply (list 'assets (hash 'nested
                                                                 (list 'assets
                                                                       (hash 'asset
-                                                                            '(term/var a-foo))))))))
+                                                                            '(term-or-var a-foo))))))))
 
   (let ([decls (list (cons '(sort foo) #f)
                      (cons '(sort bar) #f)
@@ -1193,16 +1193,16 @@
                      (cons '(op a-foo ((sort bar)) foo) #f)
                      (cons '(op a-bar ((var X foo)) bar) #f)
                      (cons '(asset eq1
-                                   (equation (term/var a-foo)
-                                             (term a-foo ((term/var a-foo)))
+                                   (equation (term-or-var a-foo)
+                                             (term a-foo ((term-or-var a-foo)))
                                              ())) #f)
                      (cons '(asset eq1
-                                   (equation (term/var a-foo)
-                                             (term a-foo ((term/var a-foo)))
+                                   (equation (term-or-var a-foo)
+                                             (term a-foo ((term-or-var a-foo)))
                                              ())) #f)
                      (cons '(asset eq1
-                                   (equation (term a-foo ((term/var a-foo)))
-                                             (term/var a-foo)
+                                   (equation (term a-foo ((term-or-var a-foo)))
+                                             (term-or-var a-foo)
                                              ())) #f))])
     (check-not-exn (thunk
                     (~> empty-document
@@ -1235,24 +1235,24 @@
                (cons '(subsort foo bar) #f)
                (cons '(op a-foo () foo) #f)
                (cons '(op a-foo ((var X foo)) foo) #f)
-               (cons '(rule (term a-foo ((term/var X)))
-                            (term/var a-foo)
+               (cons '(rule (term a-foo ((term-or-var X)))
+                            (term-or-var a-foo)
                             ((var X foo))) #f)
-               (cons '(asset a-term (term/var a-foo)) #f)
-               (cons '(asset a-rule (rule (term a-foo ((term/var X)))
-                                          (term/var a-foo)
+               (cons '(asset a-term (term-or-var a-foo)) #f)
+               (cons '(asset a-rule (rule (term a-foo ((term-or-var X)))
+                                          (term-or-var a-foo)
                                           ((var X foo)))) #f)
                (cons '(asset eq1
-                             (equation (term a-foo ((term/var X)))
-                                       (term/var a-foo)
+                             (equation (term a-foo ((term-or-var X)))
+                                       (term-or-var a-foo)
                                        ((var X foo)))) #f)
                (cons '(asset eq2
                              (equation (integer 2)
                                        (integer 3)
                                        ())) #f)
                (cons '(asset tr
-                             (transformation (term/var X)
-                                             (term a-foo ((term/var X)))
+                             (transformation (term-or-var X)
+                                             (term a-foo ((term-or-var X)))
                                              ((var X foo)))) #f)
                (cons '(asset more-assets
                              (assets [int1 (integer 2)]
@@ -1265,8 +1265,8 @@
   (check-true (~> test-document2
                   (make-test "test"
                              '(rule
-                               (term a-foo ((term/var a-foo)))
-                               (term/var a-foo)
+                               (term a-foo ((term-or-var a-foo)))
+                               (term-or-var a-foo)
                                ())
                              #f)
                   ;; check if the last two (out of three) elements are equal
@@ -1303,14 +1303,14 @@
                (cons '(op foo () SQ) #f)
                (cons '(op + ((sort SQ) (sort SQ)) SQ) #f)
                (cons '(op * ((sort SQ) (sort SQ)) Q) #f)
-               (cons '(rule (term + ((term/var b) (term/var x)))
-                            (term/var b)
+               (cons '(rule (term + ((term-or-var b) (term-or-var x)))
+                            (term-or-var b)
                             ((var x SQ))) #f)
                (cons '(asset eq-asset
-                             (equation (term + ((term/var b) (term/var x)))
-                                       (term/var b)
+                             (equation (term + ((term-or-var b) (term-or-var x)))
+                                       (term-or-var b)
                                        ((var x SQ)))) #f)
-               (cons '(asset term-asset (term/var foo)) #f)
+               (cons '(asset term-asset (term-or-var foo)) #f)
                (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
                (cons '(asset subst-term (substitute rule-from-eq term-asset #f)) #f)))))
 
@@ -1327,17 +1327,17 @@
                            (cons '(op foo () SQ) #f)
                            (cons '(op + ((sort SQ) (sort SQ)) SQ) #f)
                            (cons '(op * ((sort SQ) (sort SQ)) Q) #f)
-                           (cons '(rule (term + ((term/var b) (term/var x)))
-                                        (term/var b)
+                           (cons '(rule (term + ((term-or-var b) (term-or-var x)))
+                                        (term-or-var b)
                                         ((var a Q) (var b SQ) (var x SQ))) #f)
                            (cons '(asset eq-asset
-                                         (equation (term + ((term/var b)
-                                                            (term/var x)))
-                                                   (term/var b)
+                                         (equation (term + ((term-or-var b)
+                                                            (term-or-var x)))
+                                                   (term-or-var b)
                                                    ((var a Q)
                                                     (var b SQ)
                                                     (var x SQ)))) #f)
-                           (cons '(asset term-asset (term/var foo)) #f)
+                           (cons '(asset term-asset (term-or-var foo)) #f)
                            (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
                            (cons '(asset subst-term (substitute rule-from-eq term-asset #f))
                                  #f)))
@@ -1348,7 +1348,7 @@
                         (add-context-from-source
                          "with-var-term"
                          (list (cons '(insert-extend "template") #f)
-                               (cons '(asset var-term-asset (term/var b)) #f)))
+                               (cons '(asset var-term-asset (term-or-var b)) #f)))
                         (add-context-from-source
                          "test"
                          (list (cons '(insert-use "with-var-term") #f))))))
@@ -1368,15 +1368,15 @@
                            (cons '(op foo () M) #f)
                            (cons '(op + ((sort M) (sort M)) M) #f)
                            (cons '(op * ((sort M) (sort M)) Q) #f)
-                           (cons '(rule (term + ((term/var b) (term/var x)))
-                                        (term/var b)
+                           (cons '(rule (term + ((term-or-var b) (term-or-var x)))
+                                        (term-or-var b)
                                         ((var x M))) #f)
                            (cons '(asset eq-asset
-                                         (equation (term + ((term/var b)
-                                                            (term/var x)))
-                                                   (term/var b)
+                                         (equation (term + ((term-or-var b)
+                                                            (term-or-var x)))
+                                                   (term-or-var b)
                                                    ((var x M)))) #f)
-                           (cons '(asset term-asset (term/var foo)) #f)
+                           (cons '(asset term-asset (term-or-var foo)) #f)
                            (cons '(asset rule-from-eq (as-rule eq-asset #f)) #f)
                            (cons '(asset subst-term (substitute rule-from-eq term-asset #f))
                                  #f)))
@@ -1397,15 +1397,15 @@
                            (cons '(op foo () SQ) #f)
                            (cons '(op + ((sort SQ) (sort SQ)) SQ) #f)
                            (cons '(op * ((sort SQ) (sort SQ)) Q) #f)
-                           (cons '(rule (term + ((term/var b) (term/var x)))
-                                        (term/var b)
+                           (cons '(rule (term + ((term-or-var b) (term-or-var x)))
+                                        (term-or-var b)
                                         ((var x SQ))) #f)
                            (cons '(asset foo.eq-asset
-                                         (equation (term + ((term/var b)
-                                                            (term/var x)))
-                                                   (term/var b)
+                                         (equation (term + ((term-or-var b)
+                                                            (term-or-var x)))
+                                                   (term-or-var b)
                                                    ((var x SQ)))) #f)
-                           (cons '(asset foo.term-asset (term/var foo)) #f)
+                           (cons '(asset foo.term-asset (term-or-var foo)) #f)
                            (cons '(asset foo.rule-from-eq (as-rule foo.eq-asset #f)) #f)
                            (cons '(asset foo.subst-term (substitute foo.rule-from-eq foo.term-asset #f))
                                  #f)))
@@ -1418,75 +1418,75 @@
          "using-rational"
          (list (cons '(use "builtins/real-numbers") #f)
                (cons '(op heron ((var x ℝnn) (var ε ℝp) (var e ℝnn)) ℝnn) #f)
-               (cons '(rule (term heron ((term/var x) (term/var ε) (term/var e)))
-                            (term/var e)
-                            ((term _< ((term abs ((term _- ((term/var x)
-                                                            (term ^ ((term/var e)
+               (cons '(rule (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))
+                            (term-or-var e)
+                            ((term _< ((term abs ((term _- ((term-or-var x)
+                                                            (term ^ ((term-or-var e)
                                                                      (integer 2)))))))
-                                       (term/var ε))))) #f)
-               (cons '(rule (term heron ((term/var x) (term/var ε) (term/var e)))
-                            (term heron ((term/var x) (term/var ε) 
+                                       (term-or-var ε))))) #f)
+               (cons '(rule (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))
+                            (term heron ((term-or-var x) (term-or-var ε) 
                                          (term _× ((rational 1/2)
-                                                   (term _+ ((term/var e)
-                                                             (term _÷ ((term/var x)
-                                                                       (term/var e))))))))) 
+                                                   (term _+ ((term-or-var e)
+                                                             (term _÷ ((term-or-var x)
+                                                                       (term-or-var e))))))))) 
                             ()) #f)
                (cons '(asset rule-asset
-                             (rule (term heron ((term/var x) (term/var ε) (term/var e)))
-                                   (term heron ((term/var x) (term/var ε) 
+                             (rule (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))
+                                   (term heron ((term-or-var x) (term-or-var ε) 
                                                 (term _× ((rational 1/2)
-                                                          (term _+ ((term/var e)
-                                                                    (term _÷ ((term/var x)
-                                                                              (term/var e))))))))) 
+                                                          (term _+ ((term-or-var e)
+                                                                    (term _÷ ((term-or-var x)
+                                                                              (term-or-var e))))))))) 
                                    ())) #f)
                (cons '(asset eq-asset
-                             (equation (term heron ((term/var x) (term/var ε) (term/var e)))
-                                       (term heron ((term/var x) (term/var ε) 
+                             (equation (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))
+                                       (term heron ((term-or-var x) (term-or-var ε) 
                                                     (term _× ((rational 1/2)
-                                                              (term _+ ((term/var e)
-                                                                        (term _÷ ((term/var x)
-                                                                                  (term/var e))))))))) 
+                                                              (term _+ ((term-or-var e)
+                                                                        (term _÷ ((term-or-var x)
+                                                                                  (term-or-var e))))))))) 
                                        ())) #f)
                (cons '(asset term-asset
                              (term _× ((rational 1/2)
-                                       (term heron ((term/var x) (term/var ε) (term/var e)))))) #f)))
+                                       (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))))) #f)))
         (add-context-from-source
          "using-float"
          (list (cons '(use "builtins/real-numbers") #f)
                (cons '(use "builtins/IEEE-floating-point") #f)
                (cons '(op heron ((var x FP64) (var ε FP64) (var e FP64)) FP64) #f)
-               (cons '(rule (term heron ((term/var x) (term/var ε) (term/var e)))
-                            (term/var e)
-                            ((term _< ((term abs ((term _- ((term/var x)
-                                                            (term ^ ((term/var e)
+               (cons '(rule (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))
+                            (term-or-var e)
+                            ((term _< ((term abs ((term _- ((term-or-var x)
+                                                            (term ^ ((term-or-var e)
                                                                      (integer 2)))))))
-                                       (term/var ε))))) #f)
-               (cons '(rule (term heron ((term/var x) (term/var ε) (term/var e)))
-                            (term heron ((term/var x) (term/var ε) 
+                                       (term-or-var ε))))) #f)
+               (cons '(rule (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))
+                            (term heron ((term-or-var x) (term-or-var ε) 
                                          (term _× ((floating-point 0.5)
-                                                   (term _+ ((term/var e)
-                                                             (term _÷ ((term/var x)
-                                                                       (term/var e))))))))) 
+                                                   (term _+ ((term-or-var e)
+                                                             (term _÷ ((term-or-var x)
+                                                                       (term-or-var e))))))))) 
                             ()) #f)
                (cons '(asset rule-asset
-                             (rule (term heron ((term/var x) (term/var ε) (term/var e)))
-                                   (term heron ((term/var x) (term/var ε) 
+                             (rule (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))
+                                   (term heron ((term-or-var x) (term-or-var ε) 
                                                 (term _× ((floating-point 0.5)
-                                                          (term _+ ((term/var e)
-                                                                    (term _÷ ((term/var x)
-                                                                              (term/var e))))))))) 
+                                                          (term _+ ((term-or-var e)
+                                                                    (term _÷ ((term-or-var x)
+                                                                              (term-or-var e))))))))) 
                                    ())) #f)
                (cons '(asset eq-asset
-                             (equation (term heron ((term/var x) (term/var ε) (term/var e)))
-                                       (term heron ((term/var x) (term/var ε) 
+                             (equation (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))
+                                       (term heron ((term-or-var x) (term-or-var ε) 
                                                     (term _× ((floating-point 0.5)
-                                                              (term _+ ((term/var e)
-                                                                        (term _÷ ((term/var x)
-                                                                                  (term/var e))))))))) 
+                                                              (term _+ ((term-or-var e)
+                                                                        (term _÷ ((term-or-var x)
+                                                                                  (term-or-var e))))))))) 
                                        ())) #f)
                (cons '(asset term-asset
                              (term _× ((floating-point 0.5)
-                                       (term heron ((term/var x) (term/var ε) (term/var e)))))) #f)))
+                                       (term heron ((term-or-var x) (term-or-var ε) (term-or-var e)))))) #f)))
         (add-context-from-source
          "converted-to-float"
          (list (cons '(insert-extend "using-rational" (real->float FP64)) #f)))

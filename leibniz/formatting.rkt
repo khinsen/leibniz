@@ -472,7 +472,7 @@
        (equal? type 'infix-op)]))
 
   (match decl-term
-    [(list 'term/var raw-name)
+    [(list 'term-or-var raw-name)
      (define-values (name _) (op-symbol-and-type raw-name))
      (if (and signature
               (operators:lookup-var signature raw-name))
@@ -550,31 +550,31 @@
                 "foo ⊆ bar")
   (check-equal? (plain-text (format-rule/tr-declaration
                              #f
-                             (list 'rule (hash) '(term/var X) '(term/var Y) #f)
+                             (list 'rule (hash) '(term-or-var X) '(term-or-var Y) #f)
                              (hash) #f))
                 "X ⇒ Y")
   (check-equal? (plain-text (format-rule/tr-declaration
                              #f
-                             (list 'transformation (hash) '(term/var X) '(term/var Y) #f)
+                             (list 'transformation (hash) '(term-or-var X) '(term-or-var Y) #f)
                              (hash) #f))
                 "X → Y")
   (check-equal? (plain-text (format-asset-declaration
                              'eq1
-                             (list 'equation (hash) '(term/var X) '(term/var Y) #f)
+                             (list 'equation (hash) '(term-or-var X) '(term-or-var Y) #f)
                              (hash) #f))
                 "eq1: X = Y")
   (check-equal? (plain-text (format-asset-declaration
                              'rule1
-                             (list 'rule (hash) '(term/var X) '(term/var Y) #f)
+                             (list 'rule (hash) '(term-or-var X) '(term-or-var Y) #f)
                              (hash) #f))
                 "rule1: X ⇒ Y")
   (check-equal? (plain-text (format-asset-declaration
                              'a-sum
-                             '(term _+ ((term/var X) (term/var Y)))
+                             '(term _+ ((term-or-var X) (term-or-var Y)))
                              (hash) #f))
                 "a-sum: X + Y")
   (check-equal? (plain-text (format-asset-declaration
                              'group
-                             (list 'assets (hash 'index '(integer 2) 'value '(term/var X)))
+                             (list 'assets (hash 'index '(integer 2) 'value '(term-or-var X)))
                              (hash) #f))
                 "group.index: 2\ngroup.value: X"))

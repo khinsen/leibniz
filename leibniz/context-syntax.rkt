@@ -502,18 +502,18 @@
           (cons '(op _+ ((sort A) (sort A)) A) #f)
           (cons '(op foo ((sort A) (sort A)) A) #f)
           (cons '(op bar ((var x A) (sort A)) A) #f)
-          (cons '(rule (term/var a)
-                       (term foo ((term/var a) (term/var a)))
+          (cons '(rule (term-or-var a)
+                       (term foo ((term-or-var a) (term-or-var a)))
                        ((var a A))) #f)
           (cons '(asset a-rule
-                        (rule (term/var a)
-                              (term bar ((term/var a) (term/var a)))
+                        (rule (term-or-var a)
+                              (term bar ((term-or-var a) (term-or-var a)))
                               ((var a A)))) #f)
-          (cons '(asset a-term (term bar ((term/var x) (term/var x)))) #f)
-          (cons '(asset a.nested.asset (term bar ((term/var x) (term/var x)))) #f)
+          (cons '(asset a-term (term bar ((term-or-var x) (term-or-var x)))) #f)
+          (cons '(asset a.nested.asset (term bar ((term-or-var x) (term-or-var x)))) #f)
           (cons '(asset an-equation
-                        (equation (term bar ((term/var x) (term/var x)))
-                                  (term foo ((term/var a) (term/var a)))
+                        (equation (term bar ((term-or-var x) (term-or-var x)))
+                                  (term foo ((term-or-var a) (term-or-var a)))
                                   ((var x A) (var a A)))) #f)))
 
   ;; Check equivalence of the two context specifications
