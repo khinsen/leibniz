@@ -11,42 +11,42 @@
 
 The following operators are defined on terms of sort ◊+sort{boolean}:
 
-◊table[◊tr[◊th{NOT:} ◊th[◊+op{¬(boolean) : boolean}]]
-       ◊tr[◊th{AND:} ◊th[◊+op{boolean ∧ boolean : boolean}]]
-       ◊tr[◊th{OR:}  ◊th[◊+op{boolean ∨ boolean : boolean}]]
-       ◊tr[◊th{XOR:} ◊th[◊+op{boolean ⊻ boolean : boolean}]]]
+◊table[◊tr[◊td{NOT:} ◊td[◊+op{¬(boolean) : boolean}]]
+       ◊tr[◊td{AND:} ◊td[◊+op{boolean ∧ boolean : boolean}]]
+       ◊tr[◊td{OR:}  ◊td[◊+op{boolean ∨ boolean : boolean}]]
+       ◊tr[◊td{XOR:} ◊td[◊+op{boolean ⊻ boolean : boolean}]]]
 
 ◊subsection{Rewrite rules}
 
 ◊subsubsection{Eliminate NOT and OR}
 
 NOT is replaced by XOR with ◊+term{true}:
-  ◊inset{◊+rule{¬(X) ⇒ true ⊻ X ∀ X:boolean}}
+  ◊blockquote{◊+rule{¬(X) ⇒ true ⊻ X ∀ X:boolean}}
 
 OR is replaced by XOR and AND:
-  ◊inset{◊+rule{X ∨ Y ⇒ X ⊻ Y ⊻ (X ∧ Y) ∀ X:boolean  ∀ Y:boolean}}
+  ◊blockquote{◊+rule{X ∨ Y ⇒ X ⊻ Y ⊻ (X ∧ Y) ∀ X:boolean  ∀ Y:boolean}}
 
 ◊subsubsection{Simplify AND relations}
 
 AND is ◊+term{false} if one of its arguments is ◊+term{false}:
-  ◊inset{◊+rule{X ∧ false ⇒ false ∀ X:boolean}
-         ◊+rule{false ∧ X ⇒ false ∀ X:boolean}}
+  ◊blockquote{◊+rule{X ∧ false ⇒ false ∀ X:boolean}
+              ◊+rule{false ∧ X ⇒ false ∀ X:boolean}}
 
 If one argument of AND is ◊+term{true}, the result is the other argument:
-  ◊inset{◊+rule{X ∧ true ⇒ X ∀ X:boolean}
-         ◊+rule{true ∧ X ⇒ X ∀ X:boolean}}
+  ◊blockquote{◊+rule{X ∧ true ⇒ X ∀ X:boolean}
+              ◊+rule{true ∧ X ⇒ X ∀ X:boolean}}
 
 If the two arguments to AND are equal, they are also equal to the result:
-  ◊inset{◊+rule{X ∧ X ⇒ X ∀ X:boolean}}
+  ◊blockquote{◊+rule{X ∧ X ⇒ X ∀ X:boolean}}
 
 ◊subsubsection{Simplify XOR relations}
 
 XOR with ◊+term{false} leaves truth values unchanged:
-  ◊inset{◊+rule{X ⊻ false ⇒ X ∀ X:boolean}
-         ◊+rule{false ⊻ X ⇒ X ∀ X:boolean}}
+  ◊blockquote{◊+rule{X ⊻ false ⇒ X ∀ X:boolean}
+              ◊+rule{false ⊻ X ⇒ X ∀ X:boolean}}
 
 If the two arguments to XOR are equal, the result is ◊+term{false}:
-  ◊inset{◊+rule{X ⊻ X ⇒ false ∀ X:boolean}}
+  ◊blockquote{◊+rule{X ⊻ X ⇒ false ∀ X:boolean}}
 
 ◊subsubsection{Standardize combinations of XOR and AND}
 
@@ -55,32 +55,33 @@ operations that allow no further simplification. However, it is still possible t
 logically equal expressions are rewritten into distinct syntactical forms, making it
 difficult to verify that they are equal. The following rule standardizes results
 by replacing XOR inside AND by AND inside XOR:
-  ◊inset{◊+rule{X ∧ (Y ⊻ Z) ⇒ (X ∧ Y) ⊻ (X ∧ Z)
-               ∀ X:boolean  ∀ Y:boolean   ∀ Z:boolean}}
+  ◊blockquote{◊+rule{X ∧ (Y ⊻ Z) ⇒ (X ∧ Y) ⊻ (X ∧ Z)
+                     ∀ X:boolean  ∀ Y:boolean   ∀ Z:boolean}}
 
 
 ◊subsection{Tests}
 
-Truth table for Not:
-  ◊inset{◊+test{¬(false) ⇒ true}
-         ◊+test{¬(true) ⇒ false}}
+Truth table for NOT:
+  ◊blockquote{◊+test{¬(false) ⇒ true}
+              ◊+test{¬(true) ⇒ false}}
 
 Truth table for AND:
-  ◊inset{◊+test{false ∧ false ⇒ false}
-         ◊+test{false ∧ true ⇒ false}
-         ◊+test{true ∧ false ⇒ false}
-         ◊+test{true ∧ true ⇒ true}}
+  ◊blockquote{◊+test{false ∧ false ⇒ false}
+              ◊+test{false ∧ true ⇒ false}
+              ◊+test{true ∧ false ⇒ false}
+              ◊+test{true ∧ true ⇒ true}}
 
 Truth table for OR:
-  ◊inset{◊+test{false ∨ false ⇒ false}
-         ◊+test{false ∨ true ⇒ true}
-         ◊+test{true ∨ false ⇒ true}
-         ◊+test{true ∨ true ⇒ true}}
+  ◊blockquote{◊+test{false ∨ false ⇒ false}
+              ◊+test{false ∨ true ⇒ true}
+              ◊+test{true ∨ false ⇒ true}
+              ◊+test{true ∨ true ⇒ true}}
 
 Truth table for XOR:
-  ◊inset{◊+test{false ⊻ false ⇒ false}
-         ◊+test{false ⊻ true ⇒ true}
-         ◊+test{true ⊻ false ⇒ true}
-         ◊+test{true ⊻ true ⇒ false}}
-
+  ◊blockquote{◊+test{false ⊻ false ⇒ false}
+              ◊+test{false ⊻ true ⇒ true}
+              ◊+test{true ⊻ false ⇒ true}
+              ◊+test{true ⊻ true ⇒ false}}
 }
+
+

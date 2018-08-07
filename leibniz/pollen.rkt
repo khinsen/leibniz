@@ -9,8 +9,7 @@
          +term
          +rule
          +test
-         section subsection
-         inset)
+         section subsection subsubsection subsubsubsection)
 
 (require txexpr
          pollen/core
@@ -41,10 +40,10 @@
 
 
 (define (root . elements)
-  (define contexts (select* 'leibniz (txexpr 'root empty elements)))
+  (define contexts (select* 'leibniz-decl (txexpr 'root empty elements)))
   (define doc
     (decode-elements elements
-                     #:txexpr-proc (λ (x) (if (equal? (get-tag x) 'leibniz) "" x))
+                     #:txexpr-proc (λ (x) (if (equal? (get-tag x) 'leibniz-decl) "" x))
                      #:txexpr-elements-proc decode-paragraphs
                      #:string-proc smart-dashes))
   (txexpr* 'root empty
@@ -55,11 +54,19 @@
 
 (define-tag-function (+context attributes elements)
   (define attrs (attrs->hash attributes))
-  (define leibniz (select* 'leibniz (txexpr 'context empty elements)))
+  (define leibniz-decls (select* 'leibniz-decl (txexpr 'context empty elements)))
   (define doc
     (decode-elements elements
-                     #:txexpr-proc (λ (x) (if (equal? (get-tag x) 'leibniz) "" x))))
-  `(@ (leibniz (context ,attributes ,@leibniz))
+                     #:txexpr-proc (λ (x)
+                                     (if (member (get-tag x)
+                                                 '(leibniz-decl
+                                                   ;; TODO handle the following:
+                                                   leibniz-check
+                                                   leibniz-eval
+                                                   leibniz-error))
+                                         ""
+                                         x))))
+  `(@ (leibniz-decl (context ,attributes ,@leibniz-decls))
       (h3 "Context " ,(hash-ref attrs 'name)) (br) (br) ,@doc))
 
 ;; Sort and subsort declarations
@@ -71,8 +78,8 @@
      `(@ (leibniz (sort ((id ,sort-string))))
          (i ,sort-string))]
     [`(subsort ,sort-id-1 ,sort-id-2)
-     `(@ (leibniz (subsort ((subsort ,(symbol->string sort-id-1))
-                            (supersort ,(symbol->string sort-id-2)))))
+     `(@ (leibniz-decl (subsort ((subsort ,(symbol->string sort-id-1))
+                                 (supersort ,(symbol->string sort-id-2)))))
          (i ,sort-string))]))
 
 (define-syntax (+sort stx)
@@ -93,10 +100,10 @@
 (define (op* loc op-string)
   (define op-decl (parse-pollen-text operator/p op-string loc))
   (match-define `(op ,op-id ,arg-list ,result-sort)  op-decl)
-  `(@ (leibniz (op ((id ,(symbol->string op-id)))
-                   (arity ,(for/splice ([arg arg-list])
-                             (arg->xexpr arg)))
-                   (sort ((id ,(symbol->string result-sort))))))
+  `(@ (leibniz-decl (op ((id ,(symbol->string op-id)))
+                        (arity ,(for/splice ([arg arg-list])
+                                            (arg->xexpr arg)))
+                        (sort ((id ,(symbol->string result-sort))))))
       (i ,op-string)))
 
 (define-syntax (+op stx)
@@ -109,8 +116,8 @@
 
 (define (term->xexpr term)
   (match term
-    [`(term/var ,op-id)
-     `(term/var ((name ,(symbol->string op-id))))]
+    [`(term-or-var ,op-id)
+     `(term-or-var ((name ,(symbol->string op-id))))]
     [`(term ,op-id ,args)
      `(term ((op ,(symbol->string op-id))) ,@(map term->xexpr args))]
     [(list (and number-type (or 'integer 'rational 'floating-point)) x)
@@ -118,14 +125,14 @@
 
 (define (term* loc term-string)
   (define term-decl (parse-pollen-text term/p term-string loc))
-  `(@ (leibniz (term->xexpr term-decl))
+  `(@ (leibniz-check (term->xexpr term-decl))
       (i ,term-string)))
 
 (define-syntax (+term stx)
   (syntax-parse stx
     [(_ first-str:string more-strs:string ...)
      #`(term* #,(source-loc #'first-str)
-            (join-text first-str more-strs ...))]))
+              (join-text first-str more-strs ...))]))
 
 ;; Rules
 
@@ -146,13 +153,12 @@
   (define rule-decl (parse-pollen-text rule/p rule-string loc))
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
   (define-values (vars condition) (group-clauses clauses))
-  (displayln rule-decl)
-  `(@ (leibniz (,type-label (vars ,@vars)
-                            (pattern ,(term->xexpr pattern))
-                            ,(if condition
-                                 (list 'condition (term->xexpr condition))
-                                 (@))
-                            (replacement ,(term->xexpr replacement))))
+  `(@ (leibniz-decl (,type-label (vars ,@vars)
+                                 (pattern ,(term->xexpr pattern))
+                                 ,(if condition
+                                      (list 'condition (term->xexpr condition))
+                                      (@))
+                                 (replacement ,(term->xexpr replacement))))
       (i ,rule-string)))
 
 (define-syntax (+rule stx)
@@ -162,11 +168,23 @@
               'rule
               (join-text first-str more-strs ...))]))
 
+(define (test* loc test-string)
+  (define rule-decl (parse-pollen-text rule/p test-string loc))
+  (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
+  (cond
+    [(or (not (empty? clauses)))
+     (let ((msg (format "Test may not contain vars or conditions: ~a" test-string)))
+       `(@ (leibniz-error ,msg)
+           (b ,msg)))]
+    [else
+     `(@ (leibniz-eval (test ,(term->xexpr pattern)
+                             ,(term->xexpr replacement)))
+         (i ,test-string))]))
+
 (define-syntax (+test stx)
   (syntax-parse stx
     [(_ first-str:string more-strs:string ...)
-     #`(rule* #,(source-loc #'first-str)
-              'test
+     #`(test* #,(source-loc #'first-str)
               (join-text first-str more-strs ...))]))
 
 ;; Formatting
@@ -175,5 +193,3 @@
 (define subsection (default-tag-function 'h3))
 (define subsubsection (default-tag-function 'h4))
 (define subsubsubsection (default-tag-function 'h45))
-
-(define inset (default-tag-function 'blockquote))
