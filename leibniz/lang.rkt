@@ -21,6 +21,7 @@
          inset
          html view xml signature-graphs
          use show reduce matching-rules trace trans subs
+         current-context
          (all-from-out scribble/base
                        scribble/doclang))
 
