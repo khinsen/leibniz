@@ -426,11 +426,11 @@
                 (list another-s-graph))
   (check-equal? (connected-components merged)
                 (list merged))
-  (check-equal? (connected-components two-kinds)
-                (list an-s-graph
-                      (~> empty-sort-graph
-                          (add-sort 'V) (add-sort 'W)
-                          (add-subsort-relation 'V 'W))))
+  (check-equal? (list->set (connected-components two-kinds))
+                (set an-s-graph
+                     (~> empty-sort-graph
+                         (add-sort 'V) (add-sort 'W)
+                         (add-subsort-relation 'V 'W))))
 
   (check-equal? (~> an-s-graph
                     (optimize-subsort-lookup)
