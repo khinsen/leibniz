@@ -5,9 +5,8 @@
 ◊define-meta[title]{Boolean algebra}
 ◊define-meta[author]{Konrad Hinsen}
 
-◊+context[#:name "boolean"]{
-◊+use["builtin/truth"]
-
+◊+context{boolean}
+◊+use{builtin/truth}
 ◊section{Logical operations}
 
 The following operators are defined on terms of sort ◊+sort{boolean}:
@@ -83,6 +82,4 @@ Truth table for XOR:
               ◊+test{false ⊻ true ⇒ true}
               ◊+test{true ⊻ false ⇒ true}
               ◊+test{true ⊻ true ⇒ false}}
-}
-
 

@@ -24,6 +24,8 @@
          (for-syntax syntax/parse)
          threading)
 
+;; Parsing
+
 (begin-for-syntax
   (define (source-loc stx)
     (list 'list
@@ -40,17 +42,71 @@
   (with-handlers ([exn:fail? (re-raise-exn (list loc))])
     (parse-result! (parse-string parser text))))
 
+;;
+;; The root function, which does most of the processing work
+;; First, the document is partitioned into contexts. Next, the declarations
+;; are collected for each context, and then compiled, before the expressions
+;; inside the context are evaluated.
+;;
+
+(define (extract-single-element element)
+  (define subelements (get-elements element))
+  (unless (equal? 1 (length subelements))
+    (error (format "Element ~a must contain a single subelement, not ~a"
+                   (get-tag element) subelements)))
+  (first subelements))
+
+(define (extract-single-string element)
+  (let ([e (extract-single-element element)])
+    (unless (string? e)
+      (error (format "Element ~a must contain a string, not ~a"
+                     (get-tag element) e)))
+    e))
+
+(define ((has-tag? tag) element)
+  (and (txexpr? element)
+       (equal? (get-tag element) tag)))
+
+(define (process-context context-name context-elements)
+  (define-values (contents decls)
+    (splitf-txexpr (txexpr 'dummy empty context-elements)
+                   (has-tag? 'leibniz-decl)))
+  (values (txexpr 'context (list (list 'id context-name)) (map extract-single-element decls))
+          (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
+                (get-elements contents))))
 
 (define (root . elements)
-  (define contexts (select* 'leibniz-decl (txexpr 'root empty elements)))
-  (define doc
-    (decode-elements elements
-                     #:txexpr-proc (λ (x) (if (equal? (get-tag x) 'leibniz-decl) "" x))
+
+  (define (not-context-element? e)
+    (not ((has-tag? 'leibniz-new-context) e)))
+
+  (define-values (preamble first-context)
+    (splitf-at elements not-context-element?))
+
+  (define-values (contexts document)
+    (let loop ([contexts empty]
+               [document (list preamble)]
+               [todo first-context])
+      (if (empty? todo)
+          (values (reverse contexts)
+                  (append* (reverse document)))
+          (let*-values ([(contents next-context)
+                         (splitf-at (rest todo) not-context-element?)]
+                        [(declarations processed-contents)
+                         (process-context (extract-single-string (first todo))
+                                          contents)])
+            (loop (cons declarations contexts)
+                  (cons processed-contents document)
+                  next-context)))))
+
+  (define decoded-document
+    (decode-elements document
                      #:txexpr-elements-proc decode-paragraphs
                      #:string-proc smart-dashes))
+
   (txexpr* 'root empty
-           (txexpr 'leibniz empty (txexpr 'leibniz-document empty contexts))
-           (txexpr 'doc empty doc)))
+           (txexpr* 'leibniz empty (txexpr 'leibniz-contexts empty contexts))
+           (txexpr 'doc empty decoded-document)))
 
 ;; Preprocess declarations from a context definition
 
@@ -72,6 +128,9 @@
 ;; Context definition
 
 (define-tag-function (+context attributes elements)
+  (txexpr 'leibniz-new-context attributes elements))
+
+(define-tag-function (++context attributes elements)
   (unless (and (equal? 1 (length attributes))
                (equal? (first (first attributes)) 'name))
     (error "Context must have exactly one attribute, \"name\""))
