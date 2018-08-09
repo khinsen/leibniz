@@ -11,7 +11,7 @@
          +test
          section subsection subsubsection subsubsubsection)
 
-(require txexpr
+(require (submod txexpr safe)
          pollen/core
          pollen/decode
          pollen/tag
@@ -75,7 +75,7 @@
   (define sort-decl (parse-pollen-text sort-or-subsort/p sort-string loc))
   (match sort-decl
     [`(sort ,sort-id)
-     `(@ (leibniz (sort ((id ,sort-string))))
+     `(@ (leibniz-decl (sort ((id ,sort-string))))
          (i ,sort-string))]
     [`(subsort ,sort-id-1 ,sort-id-2)
      `(@ (leibniz-decl (subsort ((subsort ,(symbol->string sort-id-1))
@@ -101,8 +101,8 @@
   (define op-decl (parse-pollen-text operator/p op-string loc))
   (match-define `(op ,op-id ,arg-list ,result-sort)  op-decl)
   `(@ (leibniz-decl (op ((id ,(symbol->string op-id)))
-                        (arity ,(for/splice ([arg arg-list])
-                                            (arg->xexpr arg)))
+                        (arity ,@(for/list ([arg arg-list])
+                                   (arg->xexpr arg)))
                         (sort ((id ,(symbol->string result-sort))))))
       (i ,op-string)))
 
@@ -157,7 +157,7 @@
                                  (pattern ,(term->xexpr pattern))
                                  ,(if condition
                                       (list 'condition (term->xexpr condition))
-                                      (@))
+                                      '(condition))
                                  (replacement ,(term->xexpr replacement))))
       (i ,rule-string)))
 
