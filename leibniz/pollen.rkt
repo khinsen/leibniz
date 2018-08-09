@@ -3,7 +3,7 @@
 ;; Pollen interface 
 
 (provide root
-         +context
+         +context +use +extend
          +sort
          +op
          +term
@@ -19,8 +19,10 @@
          megaparsack megaparsack/text
          "./condd.rkt"
          "./parser.rkt"
+         (prefix-in contexts: "./contexts.rkt")
          (only-in "./documents.rkt" re-raise-exn)
-         (for-syntax syntax/parse))
+         (for-syntax syntax/parse)
+         threading)
 
 (begin-for-syntax
   (define (source-loc stx)
@@ -50,11 +52,41 @@
            (txexpr 'leibniz empty (txexpr 'leibniz-document empty contexts))
            (txexpr 'doc empty doc)))
 
+;; Preprocess declarations from a context definition
+
+(define (preprocess-decls decls)
+  (define by-tag
+    (for/fold ([by-tag (hash)])
+              ([decl decls])
+      (define key (first decl))
+      (hash-set by-tag key (append (hash-ref by-tag key empty) (list decl)))))
+
+  (list (txexpr 'includes empty (hash-ref by-tag 'include empty))
+        (txexpr 'sorts empty (hash-ref by-tag 'sort  empty))
+        (txexpr 'subsorts empty (hash-ref by-tag 'subsort empty))
+        (txexpr 'vars empty (hash-ref by-tag 'var empty))
+        (txexpr 'ops empty (hash-ref by-tag 'op empty))
+        (txexpr 'rules empty (hash-ref by-tag 'rule empty))
+        (txexpr 'assets empty (hash-ref by-tag 'asset empty))))
+
 ;; Context definition
 
 (define-tag-function (+context attributes elements)
-  (define attrs (attrs->hash attributes))
-  (define leibniz-decls (select* 'leibniz-decl (txexpr 'context empty elements)))
+  (unless (and (equal? 1 (length attributes))
+               (equal? (first (first attributes)) 'name))
+    (error "Context must have exactly one attribute, \"name\""))
+  (define name (second (first attributes)))
+  (define leibniz-context-decls
+    (txexpr 'context `((id ,name)) 
+            (preprocess-decls (select* 'leibniz-decl
+                                       (txexpr 'context empty elements)))))
+  (define-values (_ leibniz-context)
+    (contexts:xexpr->context leibniz-context-decls))
+  (define full-leibniz-context
+    (~> leibniz-context
+        contexts:add-implicit-declarations
+        ;; contexts:compile-context
+        ))
   (define doc
     (decode-elements elements
                      #:txexpr-proc (λ (x)
@@ -66,8 +98,24 @@
                                                    leibniz-error))
                                          ""
                                          x))))
-  `(@ (leibniz-decl (context ,attributes ,@leibniz-decls))
-      (h3 "Context " ,(hash-ref attrs 'name)) (br) (br) ,@doc))
+  `(@ (leibniz-decl ,leibniz-context-decls)
+      (leibniz-process-in-context ((name ,name)) ,@doc)))
+
+;; Includes
+
+(define (include* mode loc context-ref)
+  `(@ (leibniz-decl (include ((mode ,mode) (ref ,context-ref))))
+      (b ,mode ": ") (i ,context-ref) (br)))
+
+(define-syntax (+use stx)
+  (syntax-parse stx
+    [(_ context-ref:string)
+     #`(include* "use" #,(source-loc #'context-ref) context-ref)]))
+
+(define-syntax (+extend stx)
+  (syntax-parse stx
+    [(_ context-ref:string)
+     #`(include* "extend" #,(source-loc #'context-ref) context-ref)]))
 
 ;; Sort and subsort declarations
 

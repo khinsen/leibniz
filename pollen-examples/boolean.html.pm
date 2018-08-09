@@ -5,7 +5,8 @@
 ◊define-meta[title]{Boolean algebra}
 ◊define-meta[author]{Konrad Hinsen}
 
-◊+context[#:name "boolean" #:use "builtins/truth"]{
+◊+context[#:name "boolean"]{
+◊+use["builtin/truth"]
 
 ◊section{Logical operations}
 
