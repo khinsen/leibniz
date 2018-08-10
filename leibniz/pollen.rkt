@@ -22,6 +22,7 @@
          (prefix-in contexts: "./contexts.rkt")
          (prefix-in documents: "./documents.rkt")
          (for-syntax syntax/parse)
+         xml
          threading)
 
 ;; Parsing
@@ -42,6 +43,21 @@
   (with-handlers ([exn:fail? (contexts:re-raise-exn (list loc))])
     (parse-result! (parse-string parser text))))
 
+;;
+;; Produce an error message in HTML. Show an error message and the
+;; element that caused it.
+;;
+(define error-counter (make-parameter 0))
+
+(define (leibniz-error message element)
+  (define errno (error-counter))
+  (error-counter (+ 1 errno))
+  `(@ (span ((style "background:red;margin:2px;padding:2px;")
+             (id ,(format "error~a" errno)))
+            ,(format "Error #~a:" errno))
+      (span ((style "color:red;margin:2px"))
+            ,(format "~a" element))
+      (span ((style "background:red;margin:2px;padding:2px;")) ,message)))
 ;;
 ;; The root function, which does most of the processing work
 ;; First, the document is partitioned into contexts. Next, the declarations
@@ -94,49 +110,77 @@
         contexts:xexpr->context
         contexts:add-implicit-declarations
         (contexts:compile-context (documents:context-name-resolver document))))
+
+  (define (eval-contents element)
+    (condd
+     [(not (txexpr? element))
+      element]
+     #:do (define tag (get-tag element))
+     [(equal? tag '+context)
+      (leibniz-error "◊+context allowed only at top level"
+                     element)]
+     [else
+      (txexpr tag
+              (get-attrs element)
+              (map eval-contents (get-elements element)))]))
+
   (values (contexts:context->xexpr context context-name)
           (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
-                (get-elements contents))
+                ;; We cannot use map-elements here because it
+                ;; processes elements inside to outside, so we
+                ;; use plain map and do recursive traversal
+                ;; in eval-contents.
+                (map eval-contents (get-elements contents)))
           (documents:add-context document context-name context)))
 
 (define (root . elements)
 
   (define (not-context-element? e)
-    (not ((has-tag? 'leibniz-new-context) e)))
+    (not ((has-tag? '+context) e)))
 
   (define-values (preamble first-context)
     (splitf-at elements not-context-element?))
 
-  (define-values (contexts text)
-    (let loop ([contexts empty]
-               [text (list preamble)]
-               [document documents:empty-document]
-               [todo first-context])
-      (if (empty? todo)
-          (values (reverse contexts)
-                  (append* (reverse text)))
-          (let*-values ([(contents next-context)
-                         (splitf-at (rest todo) not-context-element?)]
-                        [(declarations processed-contents extended-document)
-                         (process-context (extract-single-string (first todo))
-                                          contents document)])
-            (loop (cons declarations contexts)
-                  (cons processed-contents text)
-                  extended-document
-                  next-context)))))
+  (parameterize ([error-counter 1])
+    (begin
+      (define-values (contexts text)
+        (let loop ([contexts empty]
+                   [text (list preamble)]
+                   [document documents:empty-document]
+                   [todo first-context])
+          (if (empty? todo)
+              (values (reverse contexts)
+                      (append* (reverse text)))
+              (let*-values ([(contents next-context)
+                             (splitf-at (rest todo) not-context-element?)]
+                            [(declarations processed-contents extended-document)
+                             (process-context (extract-single-string (first todo))
+                                              contents document)])
+                (loop (cons declarations contexts)
+                      (cons processed-contents text)
+                      extended-document
+                      next-context)))))
 
-  (define decoded-text
-    (decode-elements text
-                     #:txexpr-elements-proc decode-paragraphs
-                     #:string-proc smart-dashes))
+      (define error-links
+        (txexpr 'div '((style "background:red"))
+                (append*
+                 (for/list ([i (range 1 (error-counter))])
+                   `((a ((href ,(format "#error~a" i)))
+                        ,(format "Error #~a" i))
+                     (br))))))
 
-  (txexpr* 'root empty
-           (txexpr* 'leibniz empty (txexpr 'leibniz-contexts empty contexts))
-           (txexpr 'doc empty decoded-text)))
+      (define decoded-text
+        (decode-elements (cons error-links text)
+                         #:txexpr-elements-proc decode-paragraphs
+                         #:string-proc smart-dashes))
+
+      (txexpr* 'root empty
+               (txexpr* 'leibniz empty (txexpr 'leibniz-contexts empty contexts))
+               (txexpr 'doc empty decoded-text)))))
 
 ;; Context definition
 
-(define +context (default-tag-function 'leibniz-new-context))
+(define +context (default-tag-function '+context))
 
 ;; Includes
 
