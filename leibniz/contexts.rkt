@@ -3,7 +3,8 @@
 (provide
  (struct-out context)
  (contract-out
-  [xexpr->context (xexpr/c . -> . (values string? context?))]
+  [xexpr->context (xexpr/c . -> . (values context? (or/c #f string?)))]
+  [context->xexpr (context?  . -> . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
   [compile-context (context? . -> . context?)]))
 
@@ -19,7 +20,82 @@
          threading)
 
 (module+ test
-  (require rackunit))
+  (require rackunit)
+
+  (define xexpr-context
+    '(context ((id "test"))
+              (includes)
+              (sorts (sort ((id "foo")))
+                     (sort ((id "bar"))))
+              (subsorts (subsort ((subsort "foo")
+                                  (supersort "bar"))))
+              (vars (var ((id "X") (sort "foo"))))
+              (ops (op ((id "a-foo")) (arity) (sort ((id "foo"))))
+                   (op ((id "a-foo")) (arity (sort ((id "bar")))) (sort ((id "foo"))))
+                   (op ((id "a-bar")) (arity) (sort ((id "bar"))))
+                   (op ((id "foo2bar"))
+                       (arity (var ((id "X") (sort "foo"))))
+                       (sort ((id "bar")))))
+              (rules (rule (vars)
+                           (pattern (term ((op "foo2bar"))
+                                          (term-or-var ((name "a-bar")))))
+                           (condition)
+                           (replacement (term-or-var ((name "a-foo"))))))
+              (assets (asset ((id "a-term"))
+                             (term-or-var ((name "a-foo"))))
+                      (asset ((id "eq1"))
+                             (equation (vars)
+                                       (left (term-or-var ((name "a-foo"))))
+                                       (condition)
+                                       (right (term ((op "a-foo"))
+                                                    (term-or-var ((name "a-foo")))))))
+                      (asset ((id "tr1"))
+                             (transformation (vars)
+                                             (pattern (term-or-var ((name "a-foo"))))
+                                             (condition)
+                                             (replacement (term ((op "a-foo"))
+                                                                (term-or-var
+                                                                 ((name "a-foo")))))))
+                      (asset ((id "nested"))
+                             (assets (asset ((id "asset"))
+                                            (term-or-var ((name "a-foo"))))))
+                      (asset ((id "deeply"))
+                             (assets
+                              (asset ((id "nested"))
+                                     (assets (asset ((id "asset"))
+                                                    (term-or-var ((name "a-foo"))))))))
+                      )))
+
+  (define reference-context
+    (context empty
+             (set 'foo 'bar)
+             (set (cons 'foo 'bar))
+             (hash 'X 'foo)
+             (set '(a-foo () foo)
+                   '(a-foo ((sort bar)) foo)
+                   '(a-bar () bar)
+                  '(foo2bar ((var X foo)) bar))
+             (list (list 'rule (hash)
+                         '(term foo2bar ((term-or-var a-bar)))
+                         '(term-or-var a-foo) #f))
+             (hash 'a-term '(term-or-var a-foo)
+                   'eq1 (list 'equation
+                              (hash)
+                              '(term-or-var a-foo)
+                              '(term a-foo ((term-or-var a-foo)))
+                              #f)
+                   'tr1 (list 'transformation
+                              (hash)
+                              '(term-or-var a-foo)
+                              '(term a-foo ((term-or-var a-foo)))
+                              #f)
+                   'nested (list 'assets (hash 'asset
+                                               '(term-or-var a-foo)))
+                   'deeply (list 'assets (hash 'nested
+                                               (list 'assets
+                                                     (hash 'asset
+                                                           '(term-or-var a-foo))))))
+             (hash) #f #f #f)))
 
 ;;
 ;; A context is the main unit of Leibniz code. It defines a term algebra
@@ -152,7 +228,7 @@
                         (equal? reduce? "true"))]))
 
   (match-define
-    `(context ((id ,name))
+    `(context (,attrs ...) ...
               (includes () ... ,xexpr-includes ...)
               (sorts () ... ,xexpr-sorts ...)
               (subsorts () ... ,xexpr-subsorts ...)
@@ -161,7 +237,13 @@
               (rules () ... ,xexpr-rules ...)
               (assets () ... ,xexpr-assets ...))
     xexpr-context)
- 
+
+  (define name (if (and (equal? 1 (length attrs))
+                        (equal? 1 (length (first attrs)))
+                        (equal? 2 (length (first (first attrs))))
+                        (equal? (first (first (first attrs))) 'id))
+                   (second (first (first attrs)))
+                   #f))
   (define includes (for/list ([include xexpr-includes])
                      (match include
                        [`(include ((mode ,mode) (ref ,ref)))
@@ -191,124 +273,126 @@
                   (xexpr->asset rule)))
   (define assets (second (xexpr->asset (cons 'assets xexpr-assets))))
 
-  (values name
-          (context includes sorts subsorts vars ops rules assets (hash)
-                   #f #f #f)))
+  (values (context includes sorts subsorts vars ops rules assets (hash)
+                   #f #f #f)
+          name))
 
 (module+ test
 
-  (let-values ([(name the-context)
-                (xexpr->context '(context ((id "test"))
-                                          (includes)
+  (let-values ([(cntxt name)
+                (xexpr->context '(context (includes)
                                           (sorts)
                                           (subsorts)
                                           (vars)
                                           (ops)
                                           (rules)
                                           (assets)))])
+    (check-equal? name #f)
+    (check-equal? cntxt empty-context))
+
+  (let-values ([(cntxt name) (xexpr->context xexpr-context)])
     (check-equal? name "test")
-    (check-equal? the-context empty-context))
+    (check-equal? cntxt reference-context))
 
-  (define the-xexpr-context
-    '(context ((id "test"))
-              (includes)
-              (sorts (sort ((id "foo")))
-                     (sort ((id "bar"))))
-              (subsorts (subsort ((subsort "foo")
-                                  (supersort "bar"))))
-              (vars (var ((id "X") (sort "foo"))))
-              (ops (op ((id "a-foo")) (arity) (sort ((id "foo"))))
-                   (op ((id "a-foo")) (arity (sort ((id "bar")))) (sort ((id "foo"))))
-                   (op ((id "a-bar")) (arity) (sort ((id "bar"))))
-                   (op ((id "foo2bar"))
-                       (arity (var ((id "X") (sort "foo"))))
-                       (sort ((id "bar")))))
-              (rules (rule (vars)
-                           (pattern (term ((op "foo2bar"))
-                                          (term-or-var ((name "a-bar")))))
-                           (condition)
-                           (replacement (term-or-var ((name "a-foo"))))))
-              (assets (asset ((id "a-term"))
-                             (term-or-var ((name "a-foo"))))
-                      (asset ((id "eq1"))
-                             (equation (vars)
-                                       (left (term-or-var ((name "a-foo"))))
-                                       (condition)
-                                       (right (term ((op "a-foo"))
-                                                    (term-or-var ((name "a-foo")))))))
-                      (asset ((id "tr1"))
-                             (transformation (vars)
-                                             (pattern (term-or-var ((name "a-foo"))))
-                                             (condition)
-                                             (replacement (term ((op "a-foo"))
-                                                                (term-or-var
-                                                                 ((name "a-foo")))))))
-                      (asset ((id "nested"))
-                             (assets (asset ((id "asset"))
-                                            (term-or-var ((name "a-foo"))))))
-                      (asset ((id "deeply"))
-                             (assets
-                              (asset ((id "nested"))
-                                     (assets (asset ((id "asset"))
-                                                    (term-or-var ((name "a-foo"))))))))
-)))
-
-  ;; (define the-reference-context
-  ;;   (context empty
-  ;;            (set 'foo 'bar)
-  ;;            (set (cons 'foo 'bar))
-  ;;            (hash 'X 'foo)
-  ;;            (set '(a-foo () foo)
-  ;;                 '(a-bar () bar)
-  ;;                 '(foo2bar ((sort foo)) bar))
-  ;;            (list (list 'rule (hash)
-  ;;                        '(term foo2bar ((term-or-var a-bar)))
-  ;;                        '(term-or-var a-foo) #f))
-  ;;            (hash 'a-term '(term-or-var a-foo))
-  ;;            (hash) #f #f #f))
-
-  (define the-reference-context
-    (context empty
-             (set 'foo 'bar)
-             (set (cons 'foo 'bar))
-             (hash 'X 'foo)
-             (set '(a-foo () foo)
-                   '(a-foo ((sort bar)) foo)
-                   '(a-bar () bar)
-                  '(foo2bar ((var X foo)) bar))
-             (list (list 'rule (hash)
-                         '(term foo2bar ((term-or-var a-bar)))
-                         '(term-or-var a-foo) #f))
-             (hash 'a-term '(term-or-var a-foo)
-                   'eq1 (list 'equation
-                              (hash)
-                              '(term-or-var a-foo)
-                              '(term a-foo ((term-or-var a-foo)))
-                              #f)
-                   'tr1 (list 'transformation
-                              (hash)
-                              '(term-or-var a-foo)
-                              '(term a-foo ((term-or-var a-foo)))
-                              #f)
-                   'nested (list 'assets (hash 'asset
-                                               '(term-or-var a-foo)))
-                   'deeply (list 'assets (hash 'nested
-                                               (list 'assets
-                                                     (hash 'asset
-                                                           '(term-or-var a-foo))))))
-             (hash) #f #f #f))
-
-  (let-values ([(name the-context) (xexpr->context the-xexpr-context)])
-    (check-equal? name "test")
-    (check-equal? the-context the-reference-context))
-
-  (let-values ([(name the-context)
-                (~> the-xexpr-context
+  (let-values ([(cntxt name)
+                (~> xexpr-context
                     xexpr->string
                     string->xexpr
                     xexpr->context)])
     (check-equal? name "test")
-    (check-equal? the-context the-reference-context)))
+    (check-equal? cntxt reference-context)))
+
+;;
+;; Make an xexpr representation of a context
+;;
+(define (context->xexpr cntxt [name #f])
+
+  (define (vars->xexpr vars)
+    (for/list ([(name sort) vars])
+      `(var ((id ,(symbol->string name))
+               (sort ,(symbol->string sort))))))
+
+  (define (op->xexpr op)
+    `(op ((id ,(symbol->string (first op))))
+         (arity ,@(for/list ([sv (second op)])
+                    (if (equal? (first sv) 'sort)
+                        `(sort ((id ,(symbol->string (second sv)))))
+                        `(var ((id ,(symbol->string (second sv)))
+                                 (sort ,(symbol->string (third sv))))))))
+         (sort ((id ,(symbol->string (third op)))))))
+
+  (define (condition->xexpr condition)
+    (if (equal? condition #f)
+        `(condition)
+        `(condition ,(asset->xexpr condition))))
+
+  (define (asset->xexpr asset)
+    (match asset
+      [(list 'assets asset-data)
+       (assets->xexpr asset-data)]
+      [(list 'equation vars left right condition)
+       `(equation (vars ,@(vars->xexpr vars))
+                  (left ,(asset->xexpr left))
+                  ,(condition->xexpr condition)
+                  (right ,(asset->xexpr right)))]
+      [(list 'rule vars pattern replacement condition)
+       `(rule (vars ,@(vars->xexpr vars))
+              (pattern ,(asset->xexpr pattern))
+              ,(condition->xexpr condition)
+              (replacement ,(asset->xexpr replacement)))]
+      [(list 'transformation vars pattern replacement condition)
+       `(transformation (vars ,@(vars->xexpr vars))
+                        (pattern ,(asset->xexpr pattern))
+                        ,(condition->xexpr condition)
+                        (replacement ,(asset->xexpr replacement)))]
+      [(list 'term-or-var name)
+       `(term-or-var ((name ,(symbol->string name))))]
+      [(list 'term op args)
+       `(term ((op ,(symbol->string op)))
+              ,@(for/list ([arg args])
+                  (asset->xexpr arg)))]
+      [(list (and number-tag (or 'integer 'rational 'floating-point)) x)
+       `(,number-tag ((value ,(format "~a" x))))]
+      [(list 'as-equation asset-ref)
+       `(as-equation ((ref ,(symbol->string asset-ref))))]
+      [(list 'as-rule asset-ref flip?)
+       `(as-rule ((ref ,(symbol->string asset-ref))
+                    (flip ,(if flip? "true" "false"))))]
+      [(list 'substitute substitution-ref asset-ref reduce?)
+       `(substitute ((substitute ,(symbol->string substitution-ref))
+                       (ref ,(symbol->string asset-ref))
+                       (reduce ,(if reduce? "true" "false"))))]
+      [(list 'transform transformation-ref asset-ref reduce?)
+       `(transform ((transformation ,(symbol->string transformation-ref))
+                      (ref ,(symbol->string asset-ref))
+                      (reduce ,(if reduce? "true" "false"))))]))
+
+  (define (assets->xexpr assets)
+    `(assets ,@(for/list ([(label asset) assets])
+                 `(asset ((id ,(symbol->string label))) ,(asset->xexpr asset)))))
+
+  `(context ((id ,name))
+            (includes ,@(for/list ([mode/name (context-includes cntxt)])
+                          `(include ((mode ,(car mode/name)) (ref ,(cdr mode/name))))))
+            (sorts ,@(for/list ([s (context-sorts cntxt)])
+                       `(sort ((id ,(symbol->string s))))))
+            (subsorts ,@(for/list ([sd (context-subsorts cntxt)])
+                          `(subsort ((subsort ,(symbol->string (car sd)))
+                                       (supersort ,(symbol->string (cdr sd)))))))
+            (vars ,@(vars->xexpr (context-vars cntxt)))
+            (ops ,@(for/list ([od (context-ops cntxt)])
+                     (op->xexpr od)))
+            (rules ,@(for/list ([rd (context-rules cntxt)])
+                       (asset->xexpr rd)))
+            ,(assets->xexpr (context-assets cntxt))))
+
+(module+ test
+  (let-values ([(cntxt name)
+                (~> reference-context
+                    (context->xexpr "test")
+                    xexpr->context)])
+    (check-equal? name "test")
+    (check-equal? cntxt reference-context)))
 
 ;;
 ;; Take a context generated from a source file, and add
@@ -350,8 +434,8 @@
 
 (module+ test
 
-  (check-equal? (add-implicit-declarations the-reference-context)
-                the-reference-context)
+  (check-equal? (add-implicit-declarations reference-context)
+                reference-context)
 
   (define a-full-context
     (context empty
@@ -380,6 +464,8 @@
              (hash) #f #f #f))
 
   (check-equal? (add-implicit-declarations a-minimal-context)
+                a-full-context)
+  (check-equal? (add-implicit-declarations a-full-context)
                 a-full-context))
 
 ;;
@@ -735,7 +821,7 @@
 
 (module+ test
  
-  (define compiled-reference-context (compile-context the-reference-context))
+  (define compiled-reference-context (compile-context reference-context))
   (let* ([c compiled-reference-context]
          [signature (context-compiled-signature c)]
          [sort-graph (operators:signature-sort-graph signature)]
