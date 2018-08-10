@@ -2,9 +2,11 @@
 
 (provide
  (struct-out context)
+ re-raise-exn
  (contract-out
-  [xexpr->context (xexpr/c . -> . (values context? (or/c #f string?)))]
-  [context->xexpr (context?  . -> . xexpr/c)]
+  [xexpr->context+name (xexpr/c . -> . (values context? (or/c #f string?)))]
+  [xexpr->context (xexpr/c . -> . context?)]
+  [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
   [compile-context (context? . -> . context?)]))
 
@@ -136,7 +138,7 @@
                    name sort1 sort2)))
   sort1)
 
-(define (xexpr->context xexpr-context)
+(define (xexpr->context+name xexpr-context)
 
   (define (xexpr->arg xexpr-arg)
     (match xexpr-arg
@@ -277,28 +279,30 @@
                    #f #f #f)
           name))
 
+(define (xexpr->context xexpr-context)
+  (define-values (cntxt name)
+    (xexpr->context+name xexpr-context))
+  cntxt)
+
 (module+ test
 
-  (let-values ([(cntxt name)
-                (xexpr->context '(context (includes)
+  (check-equal? (xexpr->context '(context (includes)
                                           (sorts)
                                           (subsorts)
                                           (vars)
                                           (ops)
                                           (rules)
-                                          (assets)))])
-    (check-equal? name #f)
-    (check-equal? cntxt empty-context))
+                                          (assets)))
+                empty-context)
 
-  (let-values ([(cntxt name) (xexpr->context xexpr-context)])
-    (check-equal? name "test")
-    (check-equal? cntxt reference-context))
+  (check-equal? (xexpr->context xexpr-context)
+                reference-context)
 
   (let-values ([(cntxt name)
                 (~> xexpr-context
                     xexpr->string
                     string->xexpr
-                    xexpr->context)])
+                    xexpr->context+name)])
     (check-equal? name "test")
     (check-equal? cntxt reference-context)))
 
@@ -390,7 +394,7 @@
   (let-values ([(cntxt name)
                 (~> reference-context
                     (context->xexpr "test")
-                    xexpr->context)])
+                    xexpr->context+name)])
     (check-equal? name "test")
     (check-equal? cntxt reference-context)))
 

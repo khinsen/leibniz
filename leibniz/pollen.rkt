@@ -20,7 +20,6 @@
          "./condd.rkt"
          "./parser.rkt"
          (prefix-in contexts: "./contexts.rkt")
-         (only-in "./documents.rkt" re-raise-exn)
          (for-syntax syntax/parse)
          threading)
 
@@ -39,7 +38,7 @@
   (string-normalize-spaces (apply string-append text-parts)))
 
 (define (parse-pollen-text parser text loc)
-  (with-handlers ([exn:fail? (re-raise-exn (list loc))])
+  (with-handlers ([exn:fail? (contexts:re-raise-exn (list loc))])
     (parse-result! (parse-string parser text))))
 
 ;;
@@ -67,11 +66,35 @@
   (and (txexpr? element)
        (equal? (get-tag element) tag)))
 
+(define (preprocess-decls decls)
+  (define by-tag
+    (for/fold ([by-tag (hash)])
+              ([decl decls])
+      (define key (first decl))
+      (hash-set by-tag key (append (hash-ref by-tag key empty) (list decl)))))
+
+  (list (txexpr 'includes empty (hash-ref by-tag 'include empty))
+        (txexpr 'sorts empty (hash-ref by-tag 'sort  empty))
+        (txexpr 'subsorts empty (hash-ref by-tag 'subsort empty))
+        (txexpr 'vars empty (hash-ref by-tag 'var empty))
+        (txexpr 'ops empty (hash-ref by-tag 'op empty))
+        (txexpr 'rules empty (hash-ref by-tag 'rule empty))
+        (txexpr 'assets empty (hash-ref by-tag 'asset empty))))
+
 (define (process-context context-name context-elements)
   (define-values (contents decls)
     (splitf-txexpr (txexpr 'dummy empty context-elements)
                    (has-tag? 'leibniz-decl)))
-  (values (txexpr 'context (list (list 'id context-name)) (map extract-single-element decls))
+  (define context
+    (~> decls
+        (map extract-single-element _)
+        preprocess-decls
+        (txexpr 'context empty _)
+        contexts:xexpr->context
+        contexts:add-implicit-declarations
+        ;; contexts:compile-context
+        ))
+  (values (contexts:context->xexpr context context-name)
           (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
                 (get-elements contents))))
 
@@ -108,57 +131,9 @@
            (txexpr* 'leibniz empty (txexpr 'leibniz-contexts empty contexts))
            (txexpr 'doc empty decoded-document)))
 
-;; Preprocess declarations from a context definition
-
-(define (preprocess-decls decls)
-  (define by-tag
-    (for/fold ([by-tag (hash)])
-              ([decl decls])
-      (define key (first decl))
-      (hash-set by-tag key (append (hash-ref by-tag key empty) (list decl)))))
-
-  (list (txexpr 'includes empty (hash-ref by-tag 'include empty))
-        (txexpr 'sorts empty (hash-ref by-tag 'sort  empty))
-        (txexpr 'subsorts empty (hash-ref by-tag 'subsort empty))
-        (txexpr 'vars empty (hash-ref by-tag 'var empty))
-        (txexpr 'ops empty (hash-ref by-tag 'op empty))
-        (txexpr 'rules empty (hash-ref by-tag 'rule empty))
-        (txexpr 'assets empty (hash-ref by-tag 'asset empty))))
-
 ;; Context definition
 
-(define-tag-function (+context attributes elements)
-  (txexpr 'leibniz-new-context attributes elements))
-
-(define-tag-function (++context attributes elements)
-  (unless (and (equal? 1 (length attributes))
-               (equal? (first (first attributes)) 'name))
-    (error "Context must have exactly one attribute, \"name\""))
-  (define name (second (first attributes)))
-  (define leibniz-context-decls
-    (txexpr 'context `((id ,name)) 
-            (preprocess-decls (select* 'leibniz-decl
-                                       (txexpr 'context empty elements)))))
-  (define-values (_ leibniz-context)
-    (contexts:xexpr->context leibniz-context-decls))
-  (define full-leibniz-context
-    (~> leibniz-context
-        contexts:add-implicit-declarations
-        ;; contexts:compile-context
-        ))
-  (define doc
-    (decode-elements elements
-                     #:txexpr-proc (λ (x)
-                                     (if (member (get-tag x)
-                                                 '(leibniz-decl
-                                                   ;; TODO handle the following:
-                                                   leibniz-check
-                                                   leibniz-eval
-                                                   leibniz-error))
-                                         ""
-                                         x))))
-  `(@ (leibniz-decl ,leibniz-context-decls)
-      (leibniz-process-in-context ((name ,name)) ,@doc)))
+(define +context (default-tag-function 'leibniz-new-context))
 
 ;; Includes
 
