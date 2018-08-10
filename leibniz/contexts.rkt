@@ -8,8 +8,11 @@
   [xexpr->context (xexpr/c . -> . context?)]
   [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
-  [compile-context (context? . -> . context?)]))
-
+  [compile-context (context? (string? . -> . context?)  . -> . context?)]
+  [without-compiled-resources (context? . -> . context?)]
+  [make-builtin-context
+         ((listof pair?) operators:signature? equations:rulelist?
+         . -> . context?)]))
 
 (require "./lightweight-class.rkt"
          (prefix-in sorts: "./sorts.rkt")
@@ -23,6 +26,9 @@
 
 (module+ test
   (require rackunit)
+
+  (define (dummy-name-resolver name)
+    (error "Call of dummy function"))
 
   (define xexpr-context
     '(context ((id "test"))
@@ -249,9 +255,9 @@
   (define includes (for/list ([include xexpr-includes])
                      (match include
                        [`(include ((mode ,mode) (ref ,ref)))
-                        (cons mode ref)]
+                        (cons (string->symbol mode) ref)]
                        [`(include ((ref ,ref) (mode ,mode)))
-                        (cons mode ref)])))
+                        (cons (string->symbol mode) ref)])))
   (define sorts (for/set ([sort xexpr-sorts])
                   (match sort
                     [`(sort ((id ,s)))
@@ -377,7 +383,8 @@
 
   `(context ((id ,name))
             (includes ,@(for/list ([mode/name (context-includes cntxt)])
-                          `(include ((mode ,(car mode/name)) (ref ,(cdr mode/name))))))
+                          `(include ((mode ,(symbol->string (car mode/name)))
+                                     (ref ,(cdr mode/name))))))
             (sorts ,@(for/list ([s (context-sorts cntxt)])
                        `(sort ((id ,(symbol->string s))))))
             (subsorts ,@(for/list ([sd (context-subsorts cntxt)])
@@ -505,15 +512,18 @@
     [else
      #f]))
 
-(define (compile-context cntxt)
+(define (compile-context cntxt name-resolver)
 
   (define locs (context-locs cntxt))
-  
+  (define includes
+    (for/list ([mode/name (context-includes cntxt)])
+      (cons (car mode/name) (name-resolver (cdr mode/name)))))
+
   (define (compile-sort-graph)
     ;; Merge the sort graphs of the included contexts.
     (define after-includes
       (for/fold ([ms sorts:empty-sort-graph])
-                ([m/c (context-includes cntxt)])
+                ([m/c includes])
         (sorts:merge-sort-graphs ms
                                  (operators:signature-sort-graph
                                   (context-compiled-signature (cdr m/c))))))
@@ -539,8 +549,8 @@
     ;; Merge the signatures of the included contexts.
     (define after-includes
       (for/fold ([msig (operators:empty-signature sort-graph)])
-                ([m/c (context-includes cntxt)])
-        (define csig (hash-ref (cdr m/c) 'compiled-signature))
+                ([m/c includes])
+        (define csig (context-compiled-signature (cdr m/c)))
         (define isig (case (car m/c)
                        [(use) (operators:remove-vars csig)]
                        [(extend) csig]))
@@ -622,9 +632,9 @@
     ;; Merge the rule lists of the included contexts.
     (define after-includes
       (for/fold ([mrl equations:empty-rulelist])
-                ([m/c (context-includes cntxt)])
+                ([m/c includes])
         (equations:merge-rulelists mrl
-                                   (hash-ref (cdr m/c) 'compiled-rules)
+                                   (context-compiled-rules (cdr m/c))
                                    signature)))
     ;; Process the rule declarations
     (for/fold ([rl after-includes])
@@ -799,8 +809,8 @@
     ;; Merge the assets of the included contexts.
     (define after-includes
       (for/fold ([merged-assets (hash)])
-                ([m/c (context-includes cntxt)])
-        (hash-union merged-assets (hash-ref (cdr m/c) 'compiled-assets (hash))
+                ([m/c includes])
+        (hash-union merged-assets (context-compiled-assets (cdr m/c))
                     #:combine/key combine-compiled-assets)))
     ;; Process the asset declarations
     (define assets
@@ -823,9 +833,16 @@
                (compiled-rules     rules)
                (compiled-assets    assets)))
 
+(define (without-compiled-resources cntxt)
+  (struct-copy context cntxt
+               (compiled-signature #f)
+               (compiled-rules     #f)
+               (compiled-assets    #f)))
+
 (module+ test
  
-  (define compiled-reference-context (compile-context reference-context))
+  (define compiled-reference-context (compile-context reference-context
+                                                      dummy-name-resolver))
   (let* ([c compiled-reference-context]
          [signature (context-compiled-signature c)]
          [sort-graph (operators:signature-sort-graph signature)]
@@ -840,4 +857,18 @@
     (check-equal? (length (sequence->list (equations:in-rules rules)))
                   (length (context-rules c)))
     (check-equal? (hash-count assets)
-                  (hash-count (context-assets c)))))
+                  (hash-count (context-assets c))))
+
+  (check-equal? (without-compiled-resources compiled-reference-context)
+                reference-context))
+
+;;
+;; Builtin contexts
+;;
+
+(define (make-builtin-context includes signature rules)
+  (struct-copy context empty-context
+               (includes           includes)
+               (compiled-signature signature)
+               (compiled-rules     rules)
+               (compiled-assets    (hash))))

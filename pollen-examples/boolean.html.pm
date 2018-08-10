@@ -6,7 +6,7 @@
 ◊define-meta[author]{Konrad Hinsen}
 
 ◊+context{boolean}
-◊+use{builtin/truth}
+◊+use{builtins/truth}
 ◊section{Logical operations}
 
 The following operators are defined on terms of sort ◊+sort{boolean}:

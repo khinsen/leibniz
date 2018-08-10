@@ -20,6 +20,7 @@
          "./condd.rkt"
          "./parser.rkt"
          (prefix-in contexts: "./contexts.rkt")
+         (prefix-in documents: "./documents.rkt")
          (for-syntax syntax/parse)
          threading)
 
@@ -81,7 +82,7 @@
         (txexpr 'rules empty (hash-ref by-tag 'rule empty))
         (txexpr 'assets empty (hash-ref by-tag 'asset empty))))
 
-(define (process-context context-name context-elements)
+(define (process-context context-name context-elements document)
   (define-values (contents decls)
     (splitf-txexpr (txexpr 'dummy empty context-elements)
                    (has-tag? 'leibniz-decl)))
@@ -92,11 +93,11 @@
         (txexpr 'context empty _)
         contexts:xexpr->context
         contexts:add-implicit-declarations
-        ;; contexts:compile-context
-        ))
+        (contexts:compile-context (documents:context-name-resolver document))))
   (values (contexts:context->xexpr context context-name)
           (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
-                (get-elements contents))))
+                (get-elements contents))
+          (documents:add-context document context-name context)))
 
 (define (root . elements)
 
@@ -106,30 +107,32 @@
   (define-values (preamble first-context)
     (splitf-at elements not-context-element?))
 
-  (define-values (contexts document)
+  (define-values (contexts text)
     (let loop ([contexts empty]
-               [document (list preamble)]
+               [text (list preamble)]
+               [document documents:empty-document]
                [todo first-context])
       (if (empty? todo)
           (values (reverse contexts)
-                  (append* (reverse document)))
+                  (append* (reverse text)))
           (let*-values ([(contents next-context)
                          (splitf-at (rest todo) not-context-element?)]
-                        [(declarations processed-contents)
+                        [(declarations processed-contents extended-document)
                          (process-context (extract-single-string (first todo))
-                                          contents)])
+                                          contents document)])
             (loop (cons declarations contexts)
-                  (cons processed-contents document)
+                  (cons processed-contents text)
+                  extended-document
                   next-context)))))
 
-  (define decoded-document
-    (decode-elements document
+  (define decoded-text
+    (decode-elements text
                      #:txexpr-elements-proc decode-paragraphs
                      #:string-proc smart-dashes))
 
   (txexpr* 'root empty
            (txexpr* 'leibniz empty (txexpr 'leibniz-contexts empty contexts))
-           (txexpr 'doc empty decoded-document)))
+           (txexpr 'doc empty decoded-text)))
 
 ;; Context definition
 
