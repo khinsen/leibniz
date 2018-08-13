@@ -52,12 +52,17 @@
 (define (leibniz-error message element)
   (define errno (error-counter))
   (error-counter (+ 1 errno))
-  `(@ (span ((style "background:red;margin:2px;padding:2px;")
+  `(@ (span ((class "LeibnizErrorMessage")
              (id ,(format "error~a" errno)))
             ,(format "Error #~a:" errno))
-      (span ((style "color:red;margin:2px"))
+      (span ((class "LeibnizError"))
             ,(format "~a" element))
-      (span ((style "background:red;margin:2px;padding:2px;")) ,message)))
+      (span ((class "LeibnizErrorMessage"))
+            ,message)))
+
+(define (leibniz-checked-expr element)
+  `(span ((class "LeibnizInput")) ,element))
+
 ;;
 ;; The root function, which does most of the processing work
 ;; First, the document is partitioned into contexts. Next, the declarations
@@ -98,6 +103,12 @@
         (txexpr 'rules empty (hash-ref by-tag 'rule empty))
         (txexpr 'assets empty (hash-ref by-tag 'asset empty))))
 
+(define (check-leibniz-expr context expr)
+  (define tag (get-tag expr))
+  (case tag
+    [(term term-or-var) #t]
+    [else #f]))
+
 (define (process-context context-name context-elements document)
   (define-values (contents decls)
     (splitf-txexpr (txexpr 'dummy empty context-elements)
@@ -119,6 +130,12 @@
      [(equal? tag '+context)
       (leibniz-error "◊+context allowed only at top level"
                      element)]
+     [(equal? tag 'leibniz-check)
+      (define source (attr-ref element 'source))
+      (define expr (extract-single-element element))
+      (if (check-leibniz-expr context expr)
+          (leibniz-checked-expr source)
+          (leibniz-error "error" expr))]
      [else
       (txexpr tag
               (get-attrs element)
@@ -205,11 +222,11 @@
   (match sort-decl
     [`(sort ,sort-id)
      `(@ (leibniz-decl (sort ((id ,sort-string))))
-         (i ,sort-string))]
+         ,(leibniz-checked-expr `(i ,sort-string)))]
     [`(subsort ,sort-id-1 ,sort-id-2)
      `(@ (leibniz-decl (subsort ((subsort ,(symbol->string sort-id-1))
                                  (supersort ,(symbol->string sort-id-2)))))
-         (i ,sort-string))]))
+         ,(leibniz-checked-expr `(i ,sort-string)))]))
 
 (define-syntax (+sort stx)
   (syntax-parse stx
@@ -254,8 +271,8 @@
 
 (define (term* loc term-string)
   (define term-decl (parse-pollen-text term/p term-string loc))
-  `(@ (leibniz-check (term->xexpr term-decl))
-      (i ,term-string)))
+  `(@ (leibniz-check ((source ,term-string))
+                     ,(term->xexpr term-decl))))
 
 (define-syntax (+term stx)
   (syntax-parse stx
@@ -288,7 +305,7 @@
                                       (list 'condition (term->xexpr condition))
                                       '(condition))
                                  (replacement ,(term->xexpr replacement))))
-      (i ,rule-string)))
+      ,(leibniz-checked-expr `(i ,rule-string))))
 
 (define-syntax (+rule stx)
   (syntax-parse stx
