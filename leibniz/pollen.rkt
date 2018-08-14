@@ -142,15 +142,16 @@
     (splitf-txexpr (txexpr 'dummy empty context-elements)
                    (has-tag? 'leibniz-decl)))
 
-  (define context
-    (and (not has-syntax-errors?)
-         (~> decls
-             (map extract-single-element _)
-             preprocess-decls
-             (txexpr 'context empty _)
-             contexts:xexpr->context
-             contexts:add-implicit-declarations
-             (contexts:compile-context (documents:context-name-resolver document)))))
+  (define context-or-error
+    (with-handlers ([contexts:exn:fail:leibniz? (λ (e) e)])
+      (and (not has-syntax-errors?)
+           (~> decls
+               (map extract-single-element _)
+               preprocess-decls
+               (txexpr 'context empty _)
+               contexts:xexpr->context
+               contexts:add-implicit-declarations
+               (contexts:compile-context (documents:context-name-resolver document))))))
 
   (define (eval-contents element)
     (condd
@@ -160,11 +161,11 @@
      [(equal? tag '+context)
       (leibniz-error "◊+context allowed only at top level"
                      element)]
-     [(and context
+     [(and (contexts:context? context-or-error)
            (equal? tag 'leibniz-check))
       (define source (attr-ref element 'source))
       (define expr (extract-single-element element))
-      (if (check-leibniz-expr context expr)
+      (if (check-leibniz-expr context-or-error expr)
           (leibniz-checked-expr source)
           (leibniz-error "error" expr))]
      [else
@@ -172,15 +173,34 @@
               (get-attrs element)
               (map eval-contents (get-elements element)))]))
 
-  (values (and context (contexts:context->xexpr context context-name))
-          (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
-                ;; We cannot use map-elements here because it
-                ;; processes elements inside to outside, so we
-                ;; use plain map and do recursive traversal
-                ;; in eval-contents.
-                (map eval-contents (get-elements contents)))
-          (and document
-               (documents:add-context document context-name context))))
+  (cond
+    [(contexts:context? context-or-error)
+     (define context context-or-error)
+     (values (contexts:context->xexpr context context-name)
+             (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
+                   ;; We cannot use map-elements here because it
+                   ;; processes elements inside to outside, so we
+                   ;; use plain map and do recursive traversal
+                   ;; in eval-contents.
+                   (map eval-contents (get-elements contents)))
+             (documents:add-context document context-name context))]
+    [(contexts:exn:fail:leibniz? context-or-error)
+     (match-define (contexts:exn:fail:leibniz msg cont decl) context-or-error)
+     (values #f
+             (cons (txexpr* 'h3 empty
+                            "Context " context-name '(br)
+                            msg '(br)
+                            (format "~a" decl) '(br) '(br))
+                   (map eval-contents (get-elements contents)))
+             document)]
+    [else
+     (values #f
+             (cons (txexpr* 'h3 empty "Context " context-name '(br)
+                            '(span ((class "LeibnizError"))
+                                   "not processed because of syntax errors in the document")
+                            '(br)'(br))
+                   (map eval-contents (get-elements contents)))
+             document)]))
 
 (define (root . elements)
 

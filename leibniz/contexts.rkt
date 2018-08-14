@@ -2,6 +2,7 @@
 
 (provide
  (struct-out context)
+ (struct-out exn:fail:leibniz)
  re-raise-exn
  (contract-out
   [empty-context context?]
@@ -390,7 +391,7 @@
                        `(sort ((id ,(symbol->string s))))))
             (subsorts ,@(for/list ([sd (context-subsorts cntxt)])
                           `(subsort ((subsort ,(symbol->string (car sd)))
-                                       (supersort ,(symbol->string (cdr sd)))))))
+                                     (supersort ,(symbol->string (cdr sd)))))))
             (vars ,@(vars->xexpr (context-vars cntxt)))
             (ops ,@(for/list ([od (context-ops cntxt)])
                      (op->xexpr od)))
@@ -483,21 +484,14 @@
 ;;
 ;; Re-raise exceptions with the source location information from the document
 ;;
-(define-struct (exn:fail:leibniz exn:fail) (a-srcloc-list)
-  #:property prop:exn:srclocs
-  (λ (a-struct)
-    (match a-struct
-      [(struct exn:fail:leibniz (msg marks a-srcloc-list))
-       a-srcloc-list])))
+(struct exn:fail:leibniz exn:fail (a-decl))
 
-(define ((re-raise-exn loc) e)
-  (if loc 
-      (raise (make-exn:fail:leibniz
+(define ((re-raise-exn decl) e)
+  (if decl
+      (raise (exn:fail:leibniz
               (exn-message e)
               (current-continuation-marks)
-              (for/list ([l loc])
-                (and l
-                     (apply srcloc l)))))
+              decl))
       (raise e)))
 
 ;;
@@ -532,12 +526,13 @@
     (define after-sorts
       (for/fold ([sorts after-includes])
                 ([s (context-sorts cntxt)])
-        (with-handlers ([exn:fail? (re-raise-exn (get-loc locs s))])
+        (with-handlers ([exn:fail? (re-raise-exn `(sort ((id ,(symbol->string s)))))])
           (sorts:add-sort sorts s))))
     ;; Process the subsort declarations.
     (for/fold ([sorts after-sorts])
               ([ss (context-subsorts cntxt)])
-      (with-handlers ([exn:fail? (re-raise-exn (get-loc locs ss))])
+      (with-handlers ([exn:fail? (re-raise-exn `(subsort ((subsort ,(symbol->string (car ss)))
+                                                          (supersort ,(symbol->string (cdr ss))))))])
         (sorts:add-subsort-relation sorts (car ss) (cdr ss)))))
 
   (define sort-graph (compile-sort-graph))
