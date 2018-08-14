@@ -17,6 +17,7 @@
          pollen/tag
          pollen/unstable/typography
          megaparsack megaparsack/text
+         data/either
          "./condd.rkt"
          "./parser.rkt"
          (prefix-in contexts: "./contexts.rkt")
@@ -28,6 +29,7 @@
 ;; Parsing
 
 (begin-for-syntax
+  ;; still used in use/extend
   (define (source-loc stx)
     (list 'list
           (syntax-source stx)
@@ -36,18 +38,43 @@
           (syntax-position stx)
           (syntax-span stx))))
 
-(define (join-text . text-parts)
-  (string-normalize-spaces (apply string-append text-parts)))
+(define (leibniz-syntax-error tag text position unexpected expected)
+  (define errno (error-counter))
+  (error-counter (+ 1 errno))
+  `(@ (leibniz-syntax-error)
+      (span ((class "LeibnizErrorMessage")
+             (id ,(format "error~a" errno)))
+            ,(format "Syntax error #~a at position ~a in " errno position))
+      (span ((class "LeibnizError"))
+            ,(format "◊~a{~a}" tag text))
+      (span ((class "LeibnizErrorMessage"))
+            ,(format "unexpected: '~a', expected: ~a"
+                     unexpected (string-join expected)))))
 
-(define (parse-pollen-text parser text loc)
-  (with-handlers ([exn:fail? (contexts:re-raise-exn (list loc))])
-    (parse-result! (parse-string parser text))))
+(define (with-parsed-text tag parser text-parts fn)
+  (define text (string-normalize-spaces (apply string-append text-parts)))
+  (define result (parse-string (to-eof/p parser) text))
+  (if (failure? result)
+      (match (from-failure #f result)
+        [(message loc unexpected expected)
+         (match loc
+           [(srcloc source line column position span)
+            (leibniz-syntax-error tag text column unexpected expected)])])
+      (fn (from-success #f result) text)))
+
+(define-syntax (define-leibniz-parser stx)
+  (syntax-parse stx
+    [(_ tag:id parser:expr decl text body-exprs ...)
+     #'(define (tag . text-parts)
+         (with-parsed-text (quote tag) parser text-parts
+           (λ (decl text)
+             body-exprs ...)))]))
 
 ;;
 ;; Produce an error message in HTML. Show an error message and the
 ;; element that caused it.
 ;;
-(define error-counter (make-parameter 0))
+(define error-counter (make-parameter 1))
 
 (define (leibniz-error message element)
   (define errno (error-counter))
@@ -110,45 +137,61 @@
     [else #f]))
 
 (define (process-context context-name context-elements document)
-  (define-values (contents decls)
+
+  (define-values (valid-elements syntax-errors)
     (splitf-txexpr (txexpr 'dummy empty context-elements)
+                   (has-tag? 'leibniz-syntax-error)))
+  (define-values (contents decls)
+    (splitf-txexpr valid-elements
                    (has-tag? 'leibniz-decl)))
-  (define context
-    (~> decls
-        (map extract-single-element _)
-        preprocess-decls
-        (txexpr 'context empty _)
-        contexts:xexpr->context
-        contexts:add-implicit-declarations
-        (contexts:compile-context (documents:context-name-resolver document))))
 
-  (define (eval-contents element)
-    (condd
-     [(not (txexpr? element))
-      element]
-     #:do (define tag (get-tag element))
-     [(equal? tag '+context)
-      (leibniz-error "◊+context allowed only at top level"
-                     element)]
-     [(equal? tag 'leibniz-check)
-      (define source (attr-ref element 'source))
-      (define expr (extract-single-element element))
-      (if (check-leibniz-expr context expr)
-          (leibniz-checked-expr source)
-          (leibniz-error "error" expr))]
-     [else
-      (txexpr tag
-              (get-attrs element)
-              (map eval-contents (get-elements element)))]))
+  (cond
+    [(not (empty? syntax-errors))
+     (values #f
+             (cons (txexpr* 'h3 '((class "LeibnizError"))
+                            "Context " context-name '(br)
+                            "contains syntax errors" '(br)
+                            '(br))
+                   (get-elements contents))
+             document)]
+    [else
 
-  (values (contexts:context->xexpr context context-name)
-          (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
-                ;; We cannot use map-elements here because it
-                ;; processes elements inside to outside, so we
-                ;; use plain map and do recursive traversal
-                ;; in eval-contents.
-                (map eval-contents (get-elements contents)))
-          (documents:add-context document context-name context)))
+     (define context
+       (~> decls
+           (map extract-single-element _)
+           preprocess-decls
+           (txexpr 'context empty _)
+           contexts:xexpr->context
+           contexts:add-implicit-declarations
+           (contexts:compile-context (documents:context-name-resolver document))))
+
+     (define (eval-contents element)
+       (condd
+        [(not (txexpr? element))
+         element]
+        #:do (define tag (get-tag element))
+        [(equal? tag '+context)
+         (leibniz-error "◊+context allowed only at top level"
+                        element)]
+        [(equal? tag 'leibniz-check)
+         (define source (attr-ref element 'source))
+         (define expr (extract-single-element element))
+         (if (check-leibniz-expr context expr)
+             (leibniz-checked-expr source)
+             (leibniz-error "error" expr))]
+        [else
+         (txexpr tag
+                 (get-attrs element)
+                 (map eval-contents (get-elements element)))]))
+
+     (values (contexts:context->xexpr context context-name)
+             (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
+                   ;; We cannot use map-elements here because it
+                   ;; processes elements inside to outside, so we
+                   ;; use plain map and do recursive traversal
+                   ;; in eval-contents.
+                   (map eval-contents (get-elements contents)))
+             (documents:add-context document context-name context))]))
 
 (define (root . elements)
 
@@ -158,42 +201,47 @@
   (define-values (preamble first-context)
     (splitf-at elements not-context-element?))
 
-  (parameterize ([error-counter 1])
-    (begin
-      (define-values (contexts text)
-        (let loop ([contexts empty]
-                   [text (list preamble)]
-                   [document documents:empty-document]
-                   [todo first-context])
-          (if (empty? todo)
-              (values (reverse contexts)
-                      (append* (reverse text)))
-              (let*-values ([(contents next-context)
-                             (splitf-at (rest todo) not-context-element?)]
-                            [(declarations processed-contents extended-document)
-                             (process-context (extract-single-string (first todo))
-                                              contents document)])
+  (define-values (contexts text)
+    (let loop ([contexts empty]
+               [text (list preamble)]
+               [document documents:empty-document]
+               [todo first-context])
+      (if (empty? todo)
+          (values (reverse contexts)
+                  (append* (reverse text)))
+          (let*-values ([(contents next-context)
+                         (splitf-at (rest todo) not-context-element?)]
+                        [(declarations processed-contents extended-document)
+                         (process-context (extract-single-string (first todo))
+                                          contents document)])
+            (if (not declarations)
+                (loop contexts
+                      (cons (list (txexpr* 'p '((class "LeibnizError"))
+                                           "Document not further processed because of errors"))
+                            (cons processed-contents text))
+                      document
+                      empty)
                 (loop (cons declarations contexts)
                       (cons processed-contents text)
                       extended-document
-                      next-context)))))
+                      next-context))))))
 
-      (define error-links
-        (txexpr 'div '((style "background:red"))
-                (append*
-                 (for/list ([i (range 1 (error-counter))])
-                   `((a ((href ,(format "#error~a" i)))
-                        ,(format "Error #~a" i))
-                     (br))))))
+  (define error-links
+    (txexpr 'div '((style "background:red"))
+            (append*
+             (for/list ([i (range 1 (error-counter))])
+               `((a ((href ,(format "#error~a" i)))
+                    ,(format "Error #~a" i))
+                 (br))))))
 
-      (define decoded-text
-        (decode-elements (cons error-links text)
-                         #:txexpr-elements-proc decode-paragraphs
-                         #:string-proc smart-dashes))
+  (define decoded-text
+    (decode-elements (cons error-links text)
+                     #:txexpr-elements-proc decode-paragraphs
+                     #:string-proc smart-dashes))
 
-      (txexpr* 'root empty
-               (txexpr* 'leibniz empty (txexpr 'leibniz-contexts empty contexts))
-               (txexpr 'doc empty decoded-text)))))
+  (txexpr* 'root empty
+           (txexpr* 'leibniz empty (txexpr 'leibniz-contexts empty contexts))
+           (txexpr 'doc empty decoded-text)))
 
 ;; Context definition
 
@@ -217,22 +265,15 @@
 
 ;; Sort and subsort declarations
 
-(define (sort* loc sort-string)
-  (define sort-decl (parse-pollen-text sort-or-subsort/p sort-string loc))
+(define-leibniz-parser +sort sort-or-subsort/p sort-decl text
   (match sort-decl
     [`(sort ,sort-id)
-     `(@ (leibniz-decl (sort ((id ,sort-string))))
-         ,(leibniz-checked-expr `(i ,sort-string)))]
+     `(@ (leibniz-decl (sort ((id ,text))))
+         ,(leibniz-checked-expr `(i ,text)))]
     [`(subsort ,sort-id-1 ,sort-id-2)
      `(@ (leibniz-decl (subsort ((subsort ,(symbol->string sort-id-1))
                                  (supersort ,(symbol->string sort-id-2)))))
-         ,(leibniz-checked-expr `(i ,sort-string)))]))
-
-(define-syntax (+sort stx)
-  (syntax-parse stx
-    [(_ first-str:string more-strs:string ...)
-     #`(sort* #,(source-loc #'first-str)
-              (join-text first-str more-strs ...))]))
+         ,(leibniz-checked-expr `(i ,text)))]))
 
 ;; Operator declarations
 
@@ -243,20 +284,13 @@
     [`(var ,name ,sort-id)
      `(var ((id ,(symbol->string name)) (sort ,(symbol->string sort-id))))]))
 
-(define (op* loc op-string)
-  (define op-decl (parse-pollen-text operator/p op-string loc))
+(define-leibniz-parser +op operator/p op-decl op-string
   (match-define `(op ,op-id ,arg-list ,result-sort)  op-decl)
   `(@ (leibniz-decl (op ((id ,(symbol->string op-id)))
                         (arity ,@(for/list ([arg arg-list])
                                    (arg->xexpr arg)))
                         (sort ((id ,(symbol->string result-sort))))))
       (i ,op-string)))
-
-(define-syntax (+op stx)
-  (syntax-parse stx
-    [(_ first-str:string more-strs:string ...)
-     #`(op* #,(source-loc #'first-str)
-            (join-text first-str more-strs ...))]))
 
 ;; Terms
 
@@ -269,16 +303,9 @@
     [(list (and number-type (or 'integer 'rational 'floating-point)) x)
      `(,number-type ((value ,(number->string x))))]))
 
-(define (term* loc term-string)
-  (define term-decl (parse-pollen-text term/p term-string loc))
+(define-leibniz-parser +term term/p term-decl term-string
   `(@ (leibniz-check ((source ,term-string))
                      ,(term->xexpr term-decl))))
-
-(define-syntax (+term stx)
-  (syntax-parse stx
-    [(_ first-str:string more-strs:string ...)
-     #`(term* #,(source-loc #'first-str)
-              (join-text first-str more-strs ...))]))
 
 ;; Rules
 
@@ -295,27 +322,18 @@
            (values vars (list 'term '_∧ (list condition term)))
            (values vars term))])))
 
-(define (rule* loc type-label rule-string)
-  (define rule-decl (parse-pollen-text rule/p rule-string loc))
+(define-leibniz-parser +rule rule/p rule-decl rule-string
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
   (define-values (vars condition) (group-clauses clauses))
-  `(@ (leibniz-decl (,type-label (vars ,@vars)
-                                 (pattern ,(term->xexpr pattern))
-                                 ,(if condition
-                                      (list 'condition (term->xexpr condition))
-                                      '(condition))
-                                 (replacement ,(term->xexpr replacement))))
+  `(@ (leibniz-decl (rule (vars ,@vars)
+                          (pattern ,(term->xexpr pattern))
+                          ,(if condition
+                               (list 'condition (term->xexpr condition))
+                               '(condition))
+                          (replacement ,(term->xexpr replacement))))
       ,(leibniz-checked-expr `(i ,rule-string))))
 
-(define-syntax (+rule stx)
-  (syntax-parse stx
-    [(_ first-str:string more-strs:string ...)
-     #`(rule* #,(source-loc #'first-str)
-              'rule
-              (join-text first-str more-strs ...))]))
-
-(define (test* loc test-string)
-  (define rule-decl (parse-pollen-text rule/p test-string loc))
+(define-leibniz-parser +test rule/p rule-decl test-string
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
   (cond
     [(or (not (empty? clauses)))
@@ -326,12 +344,6 @@
      `(@ (leibniz-eval (test ,(term->xexpr pattern)
                              ,(term->xexpr replacement)))
          (i ,test-string))]))
-
-(define-syntax (+test stx)
-  (syntax-parse stx
-    [(_ first-str:string more-strs:string ...)
-     #`(test* #,(source-loc #'first-str)
-              (join-text first-str more-strs ...))]))
 
 ;; Formatting
 

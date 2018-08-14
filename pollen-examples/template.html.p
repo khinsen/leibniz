@@ -13,7 +13,7 @@
     .LeibnizInput { background-color: #E8E8FF; }
     .LeibnizOutput { background-color: #E0FFE0; }
     .LeibnizComment { background-color: #FFE8E8; }
-    .LeibnizError { color: #FFA0A0; }
+    .LeibnizError { color: #FF4040; }
     .LeibnizErrorMessage { color: white; background-color: #FF4040; margin: 2px; padding: 2px;}
   </style>
 

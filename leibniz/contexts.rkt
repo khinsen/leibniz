@@ -4,6 +4,7 @@
  (struct-out context)
  re-raise-exn
  (contract-out
+  [empty-context context?]
   [xexpr->context+name (xexpr/c . -> . (values context? (or/c #f string?)))]
   [xexpr->context (xexpr/c . -> . context?)]
   [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
