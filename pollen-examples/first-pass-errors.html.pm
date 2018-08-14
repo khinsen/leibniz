@@ -5,10 +5,6 @@
 ◊define-meta[title]{A document full of errors}
 ◊define-meta[author]{Konrad Hinsen}
 
-◊+context{declaration-errors}
-◊section{Misplaced context declaration}
-
-◊b{Attempt to define ◊+context{foo} inside a style element.}
 
 ◊+context{syntax-errors}
 ◊section{Syntax errors}
@@ -25,3 +21,8 @@ An incomplete condition in ◊+rule{true ⇒ false if }
 
 A missing result value in ◊+test{true ⊻ true ⇒}
 
+
+◊+context{declaration-errors}
+◊section{Misplaced context declaration}
+
+◊b{Attempt to define ◊+context{foo} inside a style element.}

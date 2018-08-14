@@ -136,70 +136,67 @@
     [(term term-or-var) #t]
     [else #f]))
 
-(define (process-context context-name context-elements document)
+(define (process-context context-name context-elements document has-syntax-errors?)
 
-  (define-values (valid-elements syntax-errors)
-    (splitf-txexpr (txexpr 'dummy empty context-elements)
-                   (has-tag? 'leibniz-syntax-error)))
   (define-values (contents decls)
-    (splitf-txexpr valid-elements
+    (splitf-txexpr (txexpr 'dummy empty context-elements)
                    (has-tag? 'leibniz-decl)))
 
-  (cond
-    [(not (empty? syntax-errors))
-     (values #f
-             (cons (txexpr* 'h3 '((class "LeibnizError"))
-                            "Context " context-name '(br)
-                            "contains syntax errors" '(br)
-                            '(br))
-                   (get-elements contents))
-             document)]
-    [else
+  (define context
+    (and (not has-syntax-errors?)
+         (~> decls
+             (map extract-single-element _)
+             preprocess-decls
+             (txexpr 'context empty _)
+             contexts:xexpr->context
+             contexts:add-implicit-declarations
+             (contexts:compile-context (documents:context-name-resolver document)))))
 
-     (define context
-       (~> decls
-           (map extract-single-element _)
-           preprocess-decls
-           (txexpr 'context empty _)
-           contexts:xexpr->context
-           contexts:add-implicit-declarations
-           (contexts:compile-context (documents:context-name-resolver document))))
+  (define (eval-contents element)
+    (condd
+     [(not (txexpr? element))
+      element]
+     #:do (define tag (get-tag element))
+     [(equal? tag '+context)
+      (leibniz-error "◊+context allowed only at top level"
+                     element)]
+     [(and context
+           (equal? tag 'leibniz-check))
+      (define source (attr-ref element 'source))
+      (define expr (extract-single-element element))
+      (if (check-leibniz-expr context expr)
+          (leibniz-checked-expr source)
+          (leibniz-error "error" expr))]
+     [else
+      (txexpr tag
+              (get-attrs element)
+              (map eval-contents (get-elements element)))]))
 
-     (define (eval-contents element)
-       (condd
-        [(not (txexpr? element))
-         element]
-        #:do (define tag (get-tag element))
-        [(equal? tag '+context)
-         (leibniz-error "◊+context allowed only at top level"
-                        element)]
-        [(equal? tag 'leibniz-check)
-         (define source (attr-ref element 'source))
-         (define expr (extract-single-element element))
-         (if (check-leibniz-expr context expr)
-             (leibniz-checked-expr source)
-             (leibniz-error "error" expr))]
-        [else
-         (txexpr tag
-                 (get-attrs element)
-                 (map eval-contents (get-elements element)))]))
-
-     (values (contexts:context->xexpr context context-name)
-             (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
-                   ;; We cannot use map-elements here because it
-                   ;; processes elements inside to outside, so we
-                   ;; use plain map and do recursive traversal
-                   ;; in eval-contents.
-                   (map eval-contents (get-elements contents)))
-             (documents:add-context document context-name context))]))
+  (values (and context (contexts:context->xexpr context context-name))
+          (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
+                ;; We cannot use map-elements here because it
+                ;; processes elements inside to outside, so we
+                ;; use plain map and do recursive traversal
+                ;; in eval-contents.
+                (map eval-contents (get-elements contents)))
+          (and document
+               (documents:add-context document context-name context))))
 
 (define (root . elements)
 
-  (define (not-context-element? e)
+  ;; Check for syntax errors. Contexts are not processed if any syntax errors
+  ;; are found in the document.
+  (define-values (document-root syntax-error-markers)
+    (splitf-txexpr (txexpr 'root empty elements)
+                   (has-tag? 'leibniz-syntax-error)))
+  (define document-elements (get-elements document-root))
+  (define has-syntax-errors? (not (empty? syntax-error-markers)))
+
+  (define (non-context-element? e)
     (not ((has-tag? '+context) e)))
 
   (define-values (preamble first-context)
-    (splitf-at elements not-context-element?))
+    (splitf-at document-elements non-context-element?))
 
   (define-values (contexts text)
     (let loop ([contexts empty]
@@ -210,17 +207,15 @@
           (values (reverse contexts)
                   (append* (reverse text)))
           (let*-values ([(contents next-context)
-                         (splitf-at (rest todo) not-context-element?)]
+                         (splitf-at (rest todo) non-context-element?)]
                         [(declarations processed-contents extended-document)
                          (process-context (extract-single-string (first todo))
-                                          contents document)])
+                                          contents document has-syntax-errors?)])
             (if (not declarations)
                 (loop contexts
-                      (cons (list (txexpr* 'p '((class "LeibnizError"))
-                                           "Document not further processed because of errors"))
-                            (cons processed-contents text))
+                      (cons processed-contents text)
                       document
-                      empty)
+                      next-context)
                 (loop (cons declarations contexts)
                       (cons processed-contents text)
                       extended-document
