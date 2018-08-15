@@ -1,10 +1,10 @@
 #lang racket
 
 (provide
- (struct-out context)
  (struct-out exn:fail:leibniz)
  re-raise-exn
  (contract-out
+  [context? (any/c . -> . boolean?)]
   [empty-context context?]
   [xexpr->context+name (xexpr/c . -> . (values context? (or/c #f string?)))]
   [xexpr->context (xexpr/c . -> . context?)]
@@ -105,7 +105,7 @@
                                                (list 'assets
                                                      (hash 'asset
                                                            '(term-or-var a-foo))))))
-             (hash) #f #f #f)))
+             #f #f #f)))
 
 ;;
 ;; A context is the main unit of Leibniz code. It defines a term algebra
@@ -115,7 +115,7 @@
 
 (define-class context
 
-  (field includes sorts subsorts vars ops rules assets locs
+  (field includes sorts subsorts vars ops rules assets
          compiled-signature compiled-rules compiled-assets)
 
   ; includes: a list of include declarations
@@ -125,7 +125,6 @@
   ; ops: a set of op declarations (sexps)                 
   ; rules: a list of rules (sexps)                          
   ; assets: a hash mapping labels to assets (sexps)          
-  ; locs: a hash mapping declarations to source locations  
   ; compiled-signature: optimized representation of sorts, subsorts, vars, and ops
   ; compiled-rules: optimized representation of rules
   ; compiled-assets: optimized representation of assets
@@ -133,7 +132,7 @@
 )
 
 (define empty-context
-  (context empty (set) (set)  (hash) (set) (list) (hash) (hash)
+  (context empty (set) (set)  (hash) (set) (list) (hash)
            #f #f #f))
 
 ;;
@@ -283,7 +282,7 @@
                   (xexpr->asset rule)))
   (define assets (second (xexpr->asset (cons 'assets xexpr-assets))))
 
-  (values (context includes sorts subsorts vars ops rules assets (hash)
+  (values (context includes sorts subsorts vars ops rules assets
                    #f #f #f)
           name))
 
@@ -442,7 +441,6 @@
            (context-ops cntxt)
            (context-rules cntxt)
            (context-assets cntxt)
-           (context-locs cntxt)
            #f #f #f))
 
 (module+ test
@@ -461,7 +459,7 @@
                   '(bar2foo ((var X bar)) foo))
              empty
              (hash)
-             (hash) #f #f #f))
+             #f #f #f))
 
   (define a-minimal-context
     (context empty
@@ -474,7 +472,7 @@
                   '(bar2foo ((var X bar)) foo))
              empty
              (hash)
-             (hash) #f #f #f))
+             #f #f #f))
 
   (check-equal? (add-implicit-declarations a-minimal-context)
                 a-full-context)
@@ -482,7 +480,7 @@
                 a-full-context))
 
 ;;
-;; Re-raise exceptions with the source location information from the document
+;; Re-raise exceptions with the declaration that caused it
 ;;
 (struct exn:fail:leibniz exn:fail (a-decl))
 
@@ -498,18 +496,8 @@
 ;; Compile a context. This generates optimized internal representations for
 ;; signatures, rule lists, and assets, which are cached.
 ;;
-(define (get-loc locs decl)
-  (cond
-    [(procedure? locs)
-     (locs decl)]
-    [(hash? locs)
-     (hash-ref locs decl #f)]
-    [else
-     #f]))
-
 (define (compile-context cntxt name-resolver)
 
-  (define locs (context-locs cntxt))
   (define includes
     (for/list ([mode/name (context-includes cntxt)])
       (cons (car mode/name) (name-resolver (cdr mode/name)))))
@@ -526,13 +514,12 @@
     (define after-sorts
       (for/fold ([sorts after-includes])
                 ([s (context-sorts cntxt)])
-        (with-handlers ([exn:fail? (re-raise-exn `(sort ((id ,(symbol->string s)))))])
+        (with-handlers ([exn:fail? (re-raise-exn `(sort ,s))])
           (sorts:add-sort sorts s))))
     ;; Process the subsort declarations.
     (for/fold ([sorts after-sorts])
               ([ss (context-subsorts cntxt)])
-      (with-handlers ([exn:fail? (re-raise-exn `(subsort ((subsort ,(symbol->string (car ss)))
-                                                          (supersort ,(symbol->string (cdr ss))))))])
+      (with-handlers ([exn:fail? (re-raise-exn `(subsort ss))])
         (sorts:add-subsort-relation sorts (car ss) (cdr ss)))))
 
   (define sort-graph (compile-sort-graph))
@@ -555,15 +542,14 @@
     (define after-ops
       (for/fold ([sig after-includes])
                 ([od (context-ops cntxt)])
-        (with-handlers ([exn:fail? (re-raise-exn (get-loc locs od))])
+        (with-handlers ([exn:fail? (re-raise-exn (cons 'op od))])
           (match-define (list name arity rsort) od)
-          (operators:add-op sig name (map argsort arity) rsort
-                            #:meta (get-loc locs od)))))
+          (operators:add-op sig name (map argsort arity) rsort))))
     ;; Process the var declarations.
     (define signature
       (for/fold ([sig after-ops])
                 ([(vname vsort) (context-vars cntxt)])
-        (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash vname vsort)))])
+        (with-handlers ([exn:fail? (re-raise-exn `(var ,vname ,vsort))])
           (operators:add-var sig vname vsort))))
     ;; Check for non-regularity.
     (define non-regular (operators:non-regular-op-example signature))
@@ -635,7 +621,7 @@
     ;; Process the rule declarations
     (for/fold ([rl after-includes])
               ([rd (context-rules cntxt)])
-      (with-handlers ([exn:fail? (re-raise-exn (get-loc locs rd))])
+      (with-handlers ([exn:fail? (re-raise-exn rd)])
         (equations:add-rule rl (make-rule* signature rd #t)))))
 
   (define rules (compile-rules))
@@ -812,7 +798,7 @@
     (define assets
       (for/fold ([assets after-includes])
                 ([(label ad) (context-assets cntxt)])
-        (with-handlers ([exn:fail? (re-raise-exn (get-loc locs (hash label ad)))])
+        (with-handlers ([exn:fail? (re-raise-exn `(asset ,label ,ad))])
           (hash-union assets (hash label (compile-asset ad))
                       #:combine/key combine-compiled-assets))))
     ;; Compute unevaluated assets

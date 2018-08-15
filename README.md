@@ -161,9 +161,16 @@ interest, given that its source code is open.
 Most branches of this repository contain experiments that test the
 utility and feasibility of ideas for improvements and new
 features. Each branch has a short note in this place that explains its
-reason for being. This branch (master) always contains the version
-currently considered most useful.
+reason for being.
 
 Note that all branches except master may be rebased, or modified in
 other ways. If you want to fork this repository, please don't rely on
 any branch other than master.
+
+This branch replaces Scribble by Pollen as the underlying document
+processing platform. The advantage of using Pollen is that all processing
+can be done at the xexpr level. This means in particular that the
+messy macro system for defining contexts can be replaced by much
+simpler plain functions. Another advantage is that Pollen allows precise
+control over the HTML output, which makes it possible to embed the XML
+representation as a script in the HTML file.
