@@ -1,580 +1,316 @@
 #lang racket
 
-(provide format-context
-         format-signature-declaration
-         format-term
-         format-label
-         format-rule
-         format-equation
-         format-transformation
-         format-asset
-         format-asset-reference
-         leibniz-input leibniz-input-with-hover
-         leibniz-output leibniz-output-with-hover
-         leibniz-comment
-         plain-text)
+(provide error->html syntax-error->html
+         leibniz-input leibniz-output
+         format-sort format-subsort
+         format-op
+         format-var
+         asset->html)
 
-(require scribble/core
-         scribble/base
-         (only-in scribble/html-properties make-css-addition hover-property)
-         "./condd.rkt"
-         (prefix-in operators: "./operators.rkt")
-         (prefix-in terms: "./terms.rkt")
-         (prefix-in equations: "./equations.rkt"))
+(require "./condd.rkt")
 
 (module+ test
   (require rackunit))
 
-; HTML styles
+(define (syntax-error->html errno tag text position unexpected expected)
+  `(@ (leibniz-syntax-error)
+      (span ((class "LeibnizErrorMessage")
+             (id ,(format "error~a" errno)))
+            ,(format "Syntax error #~a at position ~a in " errno position))
+      (span ((class "LeibnizError"))
+            ,(format "◊~a{~a}" tag text))
+      (span ((class "LeibnizErrorMessage"))
+            ,(format "unexpected: '~a', expected: ~a"
+                     unexpected (string-join expected)))))
 
-(define leibniz-css
-  (make-css-addition
-   #".Leibniz { background-color: #E8E8FF; }\n.LeibnizOutput { background-color: #E0FFE0; }\n.LeibnizComment { background-color: #FFE8E8; }\n"))
+(define (error->html errno message source)
+  `(@ (span ((class "LeibnizErrorMessage")
+             (id ,(format "error~a" errno)))
+            ,(format "Error #~a:" errno))
+      (span ((class "LeibnizError"))
+            ,(format "~a" source))
+      (span ((class "LeibnizErrorMessage"))
+            ,message)))
 
-(define leibniz-style (style "Leibniz" (list leibniz-css)))
-(define leibniz-output-style (style "LeibnizOutput" (list leibniz-css)))
-(define leibniz-comment-style (style "LeibnizComment" (list leibniz-css)))
+;; Input and output values
 
-(define (leibniz-input . body)
-  (elem #:style leibniz-style
-        body))
+(define (leibniz-input . elements)
+  `(span ((class "LeibnizInput")) ,@elements))
 
-(define (leibniz-output . body)
-  (elem #:style leibniz-output-style
-        body))
+(define (leibniz-output . elements)
+  `(span ((class "LeibnizOutput")) ,@elements))
 
-(define (leibniz-comment . body)
-  (elem #:style leibniz-comment-style
-        body))
-
-(define (leibniz-input-with-hover text . body)
-  (elem #:style (style "Leibniz" (list leibniz-css (hover-property text)))
-        body))
-
-(define (leibniz-output-with-hover text . body)
-  (elem #:style (style "LeibnizOutput" (list leibniz-css (hover-property text)))
-        body))
-
-; Rendering of Leibniz data in terms of Scribble elements
-
-; Rendering of Leibniz data in terms of Scribble elements
+;; Sorts
 
 (define (format-sort symbol)
-  (if symbol
-      (symbol->string symbol)
-      "<any>"))
+  `(i ,(symbol->string symbol)))
 
-(define (format-var name sort)
-  (list (italic (symbol->string name))
-        ":"
-        (format-sort sort)))
+(define (format-subsort symbol1 symbol2)
+  `(@ (i ,(symbol->string symbol1))
+      " ⊆ "
+      (i ,(symbol->string symbol2))))
 
-(define (format-op-arg var-or-sort-decl)
-  (match var-or-sort-decl
-    [(list 'sort sort) (format-sort sort)]
-    [(list 'var name sort) (format-var name sort)]))
+;; Terms
 
-(define (format-subsort-declaration sort1 sort2)
-  (list (format-sort sort1)
-        " ⊆ "   ; MEDIUM MATHEMATICAL SPACE ; SUBSET OF OR EQUAL TO
-        (format-sort sort2)))
-
-(define (op-symbol-and-type op-symbol)
+(define (op-string-and-type op-symbol)
   (define s (symbol->string op-symbol))
   (cond
     [(member s '("[]" "^" "_")) (values s 'special-op)]
     [(string-prefix? s "_") (values (substring s 1) 'infix-op)]
     [else (values s 'prefix-op)]))
 
-(define (op-type op-symbol)
-  (define-values (op-str type) (op-symbol-and-type op-symbol))
-  type)
-
-(define (format-op-declaration op-symbol arg-decls result-sort)
-  (define-values (op-str op-type) (op-symbol-and-type op-symbol))
-  (case op-type
-    [(prefix-op)
-     (list op-str
-           (if (zero? (length arg-decls))
-               ""
-               (list "(" (add-between (map format-op-arg arg-decls) ", ") ")"))
-           " : "
-           (format-sort result-sort))]
-    [(infix-op)
-     (list (format-op-arg (first arg-decls))
-           " " op-str " "
-           (format-op-arg (second arg-decls))
-           " : "
-           (format-sort result-sort))]
-    [(special-op)
-     (case op-str
-       [("[]")
-        (list (format-op-arg (first arg-decls))
-              "["
-              (add-between (map format-op-arg (rest arg-decls)) ", ")
-              "] : "
-              (format-sort result-sort))]
-       [("_")
-        (list (format-op-arg (first arg-decls))
-              (subscript (format-op-arg (second arg-decls)))
-              " : "
-              (format-sort result-sort))]
-       [("^")
-        (list (format-op-arg (first arg-decls))
-              (superscript (format-op-arg (second arg-decls)))
-              " : "
-              (format-sort result-sort))])]))
-
-(define (format-signature-declaration decl)
-  (match decl
-    [(list 'sort sort-symbol)
-     (format-sort sort-symbol)]
-    [(list 'subsort sort-symbol-1 sort-symbol-2)
-     (format-subsort-declaration sort-symbol-1 sort-symbol-2)]
-    [(list 'op op-symbol arg-sorts result-sort)
-     (format-op-declaration op-symbol arg-sorts result-sort)]
-    [(list 'var name sort)
-     (format-var name sort)]))
-
-(define (term->string term)
-  (let ([o (open-output-string)])
-    (terms:display-term term o)
-    (get-output-string o)))
-
 (define (infix-term? term [neighbor-op #f])
-  (define-values (raw-op args) (terms:term.op-and-args term))
-  (and raw-op
-       (let-values ([(op type) (op-symbol-and-type raw-op)])
+  (and (equal? (first term) 'term)
+       (let-values ([(op type) (op-string-and-type (second term))])
          (and (equal? type 'infix-op)
               (not (equal? op neighbor-op))))))
 
 (define (parenthesize term-elem condition)
   (if condition
-      (list "(" term-elem ")")
+      `(@ "(" ,term-elem ")")
       term-elem))
 
-(define (format-label label [as-prefix? #t])
-  (if label
-      (list (bold (symbol->string label))
-            (if as-prefix?  ": " ""))
-      ""))
+(define (flatten xexpr)
 
-(define (format-term signature label term)
-  (list (format-label label)
-        (condd
-         [(terms:var? term)                   ; vars: print name in italic
-          (italic (symbol->string (terms:var-name term)))]
-         #:do (define-values (raw-op args) (terms:term.op-and-args term))
-         [(not raw-op)                        ; everything other than an op-term: convert to string
-          (term->string term)]
-         #:do (define-values (op type) (op-symbol-and-type raw-op))
-         [(zero? (length args))               ; no args implies prefix-op
-          op]
-         [(equal? type 'prefix-op)
-          (list op
-                "("
-                (add-between (for/list ([arg args]) (format-term signature #f arg)) ", ")
-                ")")]
-         #:do (define arg1 (first args))
-         #:do (define f-arg1 (format-term signature #f arg1))
-         [(equal? op "[]")
-          (list (parenthesize f-arg1 (infix-term? arg1))
-                "["
-                (add-between (for/list ([arg (rest args)]) (format-term signature #f arg)) ", ")
-                "]")]
-         #:do (define arg2 (second args))
-         #:do (define f-arg2 (format-term signature #f arg2))
-         [(equal? type 'infix-op)
-          (list (parenthesize f-arg1 (infix-term? arg1 op))
-                " " op  " "
-                (parenthesize f-arg2 (infix-term? arg2)))]
-         [(equal? op "^")
-          (list f-arg1 (superscript f-arg2))]
-         [(equal? op "_")
-          (list f-arg1 (subscript f-arg2))]
-         [else (error (format "operator ~a of type ~a" op type))])))
+  (define (sublist? xexpr)
+    (and (list? xexpr)
+         (equal? '@ (first xexpr))))
 
-(define (format-rule-or-transformation label rule signature separator)
-  (define c-vars (operators:all-vars signature))
-  (define proc-rule? (procedure? (equations:rule-replacement rule)))
-  (define pattern-elem (format-term signature #f (equations:rule-pattern rule)))
-  (define replacement-elem
-    (if proc-rule? 
-        (italic "<procedure>")
-        (format-term signature #f (equations:rule-replacement rule))))
-  (define vars (terms:term.vars (equations:rule-pattern rule)))
-  (define cond (equations:rule-condition rule))
-
-  (define var-elems (for/list ([var (in-set vars)]
-                               #:unless (equal? (hash-ref c-vars
-                                                          (terms:var-name var)
-                                                          #f)
-                                                (terms:var-sort var)))
-                      (list "∀ "
-                            (italic (symbol->string (terms:var-name var)))
-                            " : "
-                            (format-sort (terms:var-sort var)))))
-  (define clause-elems
-    (if cond
-        (append var-elems
-                (list (list (elem #:style leibniz-style
-                                  "if "
-                                  (format-term signature #f cond)))))
-        var-elems))
-  (define clause-prefix
-    (if (> (length clause-elems) 2)
-        (list (linebreak ) (hspace 2))
-        (list (hspace 2))))
-
-  (list (format-label label)
-        pattern-elem
-        (if proc-rule? " ↣ "  separator)
-        replacement-elem
-        (append* (map (λ (e) (append clause-prefix e)) clause-elems))))
-
-(define (format-rule label rule signature)
-  (format-rule-or-transformation label rule signature " ⇒ "))
-
-(define (format-transformation label transformation signature)
-  (format-rule-or-transformation label
-                                 (equations:transformation-rule transformation)
-                                 signature " → "))
-
-(define (format-equation label equation signature)
-  (define vars (set-union (terms:term.vars (equations:equation-left equation))
-                          (terms:term.vars (equations:equation-right equation))))
-  (define c-vars (operators:all-vars signature))
-  (define cond (equations:equation-condition equation))
-  (define left-elem (format-term signature #f (equations:equation-left equation)))
-  (define right-elem (format-term signature #f (equations:equation-right equation)))
-  (define var-elems (for/list ([var (in-set vars)]
-                               #:unless (equal? (hash-ref c-vars
-                                                          (terms:var-name var)
-                                                          #f)
-                                                (terms:var-sort var)))
-                      (list "∀ "
-                            (italic (symbol->string (terms:var-name var)))
-                            " : "
-                            (format-sort (terms:var-sort var)))))
-  (define clause-elems
-    (if cond
-        (append var-elems
-                (list (list (elem #:style leibniz-style
-                                  "if "
-                                  (format-term signature #f cond)))))
-        var-elems))
-  (define clause-prefix
-    (if (> (length clause-elems) 2)
-        (list (linebreak ) (hspace 2))
-        (list (hspace 2))))
- 
- (list (format-label label)
-        left-elem
-        " = "
-        right-elem
-        (append* (map (λ (e) (append clause-prefix e)) clause-elems))))
-
-;;
-;; Format assets and asset references
-;;
-(define (format-asset label asset signature)
-  (cond
-    [(equations:equation? asset) (format-equation label asset signature)]
-    [(equations:rule? asset) (format-rule label asset signature)]
-    [(equations:transformation? asset) (format-transformation label asset signature)]
-    [(terms:term? asset) (format-term signature label asset)]
-    [(hash? asset) "formatting of nested assets not yet implemented"]
-    [else (error (format "illegal asset type: ~a" asset))]))
-
-(define (format-asset-reference label asset)
-  (define prefix (cond
-                   [(equations:equation? asset) "=."]
-                   [(equations:rule? asset) "⇒."]
-                   [else ""]))
-  (list prefix (format-label label #f)))
-
-;;
-;; Format a complete context
-;;
-(define (format-context decls)
-  (list (format-sort-declarations (hash-ref decls 'sorts))
-        (format-subsort-declarations (hash-ref decls 'subsorts))
-        (format-op-declarations (hash-ref decls 'ops))
-        (format-var-declarations (hash-ref decls 'vars))
-        (format-rule-declarations (hash-ref decls 'rules)
-                                  (hash-ref decls 'vars)
-                                  (hash-ref decls 'compiled-signature #f))
-        (format-asset-declarations (hash-ref decls 'assets)
-                                   (hash-ref decls 'vars)
-                                   (hash-ref decls 'compiled-signature #f))))
-
-(define (format-sort-declarations sort-decls)
-  (define sorts
-    (for/list ([s sort-decls])
-      (elem #:style leibniz-output-style
-            (format-sort s))))
-  (if (empty? sorts)
-      ""
-      (list "Sorts: " (add-between sorts ", ") (linebreak))))
-
-(define (format-subsort-declarations subsort-decls)
-  (define subsorts
-    (for/list ([sd subsort-decls])
-      (elem #:style leibniz-output-style
-            (format-subsort-declaration (car sd) (cdr sd)))))
-  (if (empty? subsorts)
-      ""
-      (list "Subsort relations: " (add-between subsorts ", ") (linebreak))))
-
-(define (format-op-declarations op-decls)
-  (define ops
-    (for/list ([od op-decls])
-      (elem #:style leibniz-output-style
-            (apply format-op-declaration od))))
-  (if (empty? op-decls)
-      ""
-      (list "Operators:" (linebreak)
-            (apply nested
-                   (add-between ops (linebreak))
-                   #:style 'inset))))
-
-(define (format-var-declarations var-decls)
-  (define vars
-    (for/list ([(name sort) var-decls])
-      (elem #:style leibniz-output-style
-            (format-var name sort))))
-  (if (hash-empty? var-decls)
-      ""
-      (list "Vars: "
-            (add-between vars ", ")
-            (linebreak)
-            (linebreak))))
-
-(define (format-rule-declarations rule-decls var-decls signature)
-  (define rules
-    (for/list ([rd rule-decls])
-      (elem #:style leibniz-output-style
-            (format-rule/tr-declaration #f rd var-decls signature))))
-  (if (empty? rule-decls)
-      ""
-      (list "Rules:" (linebreak)
-            (apply nested
-                   (add-between rules (linebreak))
-                   #:style 'inset))))
-
-(define (format-asset-declarations asset-decls var-decls signature)
-  (define assets
-    (for/list ([(label ad) asset-decls])
-      (elem #:style leibniz-output-style
-            (format-asset-declaration label ad var-decls signature))))
-  (if (empty? asset-decls)
-      ""
-      (list "Assets:" (linebreak)
-            (apply nested
-                   (add-between assets (linebreak))
-                   #:style 'inset))))
-
-(define (format-rule/tr-declaration label decl context-vars signature)
-  (match-define `(,type-tag ,vars ,pattern ,replacement ,condition) decl)
-  (define pattern-elem (format-decl-term pattern signature))
-  (define proc-rule? (procedure? replacement))
-  (define replacement-elem
-    (if proc-rule?
-        (italic "<procedure>")
-        (format-decl-term replacement signature)))
-  (list* (format-label label)
-         pattern-elem
-         (cond
-           [(equal? type-tag 'transformation) " → "]
-           [proc-rule? " ↣ "]
-           [else " ⇒ "])
-         replacement-elem
-         (format-clauses condition vars context-vars signature)))
-
-(define (format-equation-declaration label decl context-vars signature)
-  (match-define `(equation ,vars ,left ,right ,condition) decl)
-  (define left-elem (format-decl-term left signature))
-  (define right-elem (format-decl-term right signature))
-  (list* (format-label label)
-         left-elem
-         " = "
-         right-elem
-         (format-clauses condition vars context-vars signature)))
-
-(define (format-asset-declaration label decl context-vars signature)
-  (match decl
-    [`(equation ,vars ,left ,right ,condition)
-     (format-equation-declaration label decl context-vars signature)]
-    [`(rule ,vars ,pattern ,replacement ,condition)
-     (format-rule/tr-declaration label decl context-vars signature)]
-    [`(transformation ,vars ,pattern ,replacement ,condition)
-     (format-rule/tr-declaration label decl context-vars signature)]
-    [`(as-equation ,asset-ref)
-     (list (format-label label)
-           "=("
-           (format-label asset-ref #f)
-           ") ")]
-    [`(as-rule ,asset-ref,flip?)
-     (list (format-label label)
-           (if flip? "⇐(" "⇒(")
-           (format-label asset-ref #f)
-           ") ")]
-    [`(substitute ,rule-ref ,asset-ref ,reduce?)
-     (list (format-label label)
-           (format-label rule-ref #f)
-           "("
-           (format-label asset-ref #f)
-           (if reduce? ") ⇩"  ")"))]
-    [`(transform ,tr-ref ,asset-ref ,reduce?)
-     (list (format-label label)
-           (format-label asset-ref #f)
-           " ⁞ "
-           (format-label tr-ref #f)
-           (if reduce? " ⇩" ""))]
-    [`(assets ,assets)
-     (add-between
-      (for/list ([(label2 value) assets])
-        (define nested-label (string->symbol (string-join (list (symbol->string label)
-                                                                (symbol->string label2))
-                                                          ".")))
-        (format-asset-declaration nested-label value context-vars signature))
-      (linebreak))]
-    [term
-     (list (format-label label)
-           (format-decl-term term signature))]))
-
-(define (format-clauses condition vars context-vars signature)
-  (define var-elems
-    (for/list ([(name sort) vars])
-      (if (equal? (hash-ref context-vars name #f) sort)
-          ""
-          (list (linebreak) (hspace 2)
-                "∀ "
-                (format-var name sort)))))
-  (if condition
-        (cons (list (linebreak) (hspace 2)
-                    "if "
-                    (format-decl-term condition signature))
-              var-elems)
-        var-elems))
-
-(define (format-decl-term decl-term signature)
-
-  (define (infix-decl-term? decl-term [neighbor-op #f])
+  (define (flatten* items acc)
     (condd
-      [(not (equal? (first decl-term) 'term))
-       #f]
-      #:do (define raw-op (second decl-term))
-      #:do (define-values (op type) (op-symbol-and-type raw-op))
-      [(equal? op neighbor-op)
-       #f]
+      [(empty? items)
+       acc]
+      #:do (define f (first items))
+      #:do (define rf (flatten* (rest items) acc))
+      [(sublist? f)
+       (flatten* (rest f) rf)]
+      #:do (define ff (if (list? f)
+                          (cons (first f) (flatten* (rest f) empty))
+                          f))
+      [(and (string? ff)
+            (list? rf)
+            (not (empty? rf))
+            (string? (first rf)))
+       (cons (string-append ff (first rf)) (rest rf))]
       [else
-       (equal? type 'infix-op)]))
+       (cons ff rf)]))
 
-  (match decl-term
-    [(list 'term-or-var raw-name)
-     (define-values (name _) (op-symbol-and-type raw-name))
-     (if (and signature
-              (operators:lookup-var signature raw-name))
-         (italic name)
-         name)]
-    [(list 'term raw-op args)
-     (define-values (op type) (op-symbol-and-type raw-op))
+  (define flattened (flatten* (list xexpr) empty))
+
+  (if (equal? 1 (length flattened))
+      (first flattened)
+      (cons '@ flattened)))
+
+(define (format-term* term)
+  (define tag (first term))
+  (case tag
+    [(var)
+     `(i ,(symbol->string (second term)))]
+    [(integer rational floating-point)
+     (format "~a" (second term))]
+    [(term)
+     (define raw-op (second term))
+     (define-values (op type) (op-string-and-type raw-op))
+     (define args (third term))
      (condd
-      [(zero? (length args))               ; no args implies prefix-op
+      [(empty? args)
        op]
       [(equal? type 'prefix-op)
-       (list op
-             "("
-             (add-between (for/list ([arg args])
-                            (format-decl-term arg signature)) ", ")
-             ")")]
+       (list '@
+        (format "~a(" op)
+        (cons '@ (add-between (map format-term* args) ", "))
+        ")")]
       #:do (define arg1 (first args))
-      #:do (define f-arg1 (format-decl-term arg1 signature))
+      #:do (define f-arg1 (format-term* arg1))
       [(equal? op "[]")
-       (list (parenthesize f-arg1 (infix-decl-term? arg1))
-             "["
-             (add-between (for/list ([arg (rest args)])
-                            (format-decl-term arg signature)) ", ")
-             "]")]
+       (list '@
+        (parenthesize f-arg1 (infix-term? arg1))
+        "["
+        (cons '@ (add-between (map format-term* (rest args)) ", "))
+        "]")]
       #:do (define arg2 (second args))
-      #:do (define f-arg2 (format-decl-term arg2 signature))
+      #:do (define f-arg2 (format-term* arg2))
       [(equal? type 'infix-op)
-       (list (parenthesize f-arg1 (infix-decl-term? arg1 op))
-             " " op  " "
-             (parenthesize f-arg2 (infix-decl-term? arg2)))]
+       (list '@
+        (parenthesize f-arg1 (infix-term? arg1 op))
+        " " op  " "
+        (parenthesize f-arg2 (infix-term? arg2)))]
       [(equal? op "^")
-       (list f-arg1 (superscript f-arg2))]
+       (list '@
+        (parenthesize f-arg1 (infix-term? arg1 op))
+        `(sup ,f-arg2))]
       [(equal? op "_")
-       (list f-arg1 (subscript f-arg2))])]
-    [(list (or 'integer 'rational 'floating-point) n)
-     (term->string n)]
-    [_ (error (format "illegal term ~a" decl-term))]))
+       (list '@
+        (parenthesize f-arg1 (infix-term? arg1 op))
+        `(sub ,f-arg2))]
+      [else
+       (error (format "operator ~a of type ~a" op type))])]))
 
-(define (plain-text body)
-  (cond
-    [(list? body)
-     (apply string-append (map plain-text (flatten body)))]
-    [(not (element? body))
-     ; replace math spaces by plain spaces
-     (string-normalize-spaces body #px"\\p{Zs}+" #:trim? #f)]
-    [(equal? 'superscript (element-style body))
-     (string-append "^{" (plain-text (element-content body)) "}")]
-    [(equal? 'subscript (element-style body))
-     (string-append "_{" (plain-text (element-content body)) "}")]
-    [(equal? (element-style body) 'newline)
-     "\n"]
-    [(equal? (element-style body) 'hspace)
-     " "]
-    [else
-     (plain-text (element-content body))]))
+(define (format-term term)
+  (flatten (format-term* term)))
 
 (module+ test
+  (check-equal? (format-term '(integer 3)) "3")
+  (check-equal? (format-term '(rational -3/2)) "-3/2")
+  (check-equal? (format-term '(floating-point 1.5)) "1.5")
+  (check-equal? (format-term '(term a-foo ())) "a-foo")
+  (check-equal? (format-term* '(term a-foo ((term a-bar ()))))
+                '(@ "a-foo(" (@ "a-bar") ")"))
+  (check-equal? (format-term '(term a-foo ((term a-bar ()))))
+                "a-foo(a-bar)")
+  (check-equal? (format-term* '(term a-foo ((term a-bar ()) (term a-baz ()))))
+                '(@ "a-foo(" (@ "a-bar" ", " "a-baz") ")"))
+  (check-equal? (format-term '(term a-foo ((term a-bar ()) (term a-baz ()))))
+                "a-foo(a-bar, a-baz)")
+  (check-equal? (format-term* '(term |[]| ((term f ()) (term x ()))))
+                '(@ "f" "[" (@ "x") "]"))
+  (check-equal? (format-term '(term |[]| ((term f ()) (term x ()))))
+                "f[x]")
+  (check-equal? (format-term* '(term |[]| ((term _+ ((term a ()) (term b ())))
+                                           (term x ()))))
+                '(@ (@ "(" (@ "a" " " "+" " " "b") ")") "[" (@ "x") "]"))
+  (check-equal? (format-term '(term |[]| ((term _+ ((term a ()) (term b ())))
+                                          (term x ()))))
+                "(a + b)[x]")
+  (check-equal? (format-term* '(term _+ ((term a ()) (term b ()))))
+                '(@ "a" " " "+" " " "b"))
+  (check-equal? (format-term '(term _+ ((term a ()) (term b ()))))
+                "a + b")
+  (check-equal? (format-term* '(term _+ ((term a ())
+                                         (term _+ ((term b ()) (term c ()))))))
+                '(@ "a" " " "+" " " (@ "(" (@ "b" " " "+" " " "c") ")")))
+  (check-equal? (format-term '(term _+ ((term a ())
+                                        (term _+ ((term b ()) (term c ()))))))
+                "a + (b + c)")
+  (check-equal? (format-term* '(term _+ ((term _+ ((term a ()) (term b ())))
+                                         (term c ()))))
+                '(@ (@ "a" " " "+" " " "b") " " "+" " " "c"))
+  (check-equal? (format-term '(term _+ ((term _+ ((term a ()) (term b ())))
+                                        (term c ()))))
+                "a + b + c")
+  (check-equal? (format-term* '(term ^ ((term a ()) (term b ()))))
+                '(@ "a" (sup "b")))
+  (check-equal? (format-term '(term ^ ((term a ()) (term b ()))))
+                '(@ "a" (sup "b")))
+  (check-equal? (format-term* '(term ^ ((term _+ ((term a ()) (term b ())))
+                                        (term c ()))))
+                '(@ (@ "(" (@ "a" " " "+" " " "b") ")") (sup "c")))
+  (check-equal? (format-term '(term ^ ((term _+ ((term a ()) (term b ())))
+                                       (term c ()))))
+                '(@  "(a + b)"  (sup "c")))
+  (check-equal? (format-term* '(term _ ((term a ()) (term b ()))))
+                '(@ "a" (sub "b")))
+  (check-equal? (format-term '(term _ ((term a ()) (term b ()))))
+                '(@ "a" (sub "b")))
+  (check-equal? (format-term* '(term _ ((term _+ ((term a ()) (term b ())))
+                                        (term c ()))))
+                '(@ (@ "(" (@ "a" " " "+" " " "b") ")") (sub "c")))
+  (check-equal? (format-term '(term _ ((term _+ ((term a ()) (term b ())))
+                                       (term c ()))))
+                '(@  "(a + b)"  (sub "c"))))
 
-  (check-equal? (plain-text
-                 (format-op-declaration 'foo (list '(sort bar)) 'baz))
-                "foo(bar) : baz")
-  (check-equal? (plain-text
-                 (format-op-declaration '^ '((sort foo) (sort bar)) 'baz))
-                "foo^{bar} : baz")
-  (check-equal? (plain-text
-                 (format-op-declaration '_ '((sort foo) (sort bar)) 'baz))
-                "foo_{bar} : baz")
-  (check-equal? (plain-text
-                 (format-op-declaration '|[]| '((sort foo) (sort bar)) 'baz))
-                "foo[bar] : baz")
-  (check-equal? (plain-text
-                 (format-var 'X 'foo))
-                "X:foo")
-  (check-equal? (plain-text (format-signature-declaration '(subsort foo bar)))
-                "foo ⊆ bar")
-  (check-equal? (plain-text (format-rule/tr-declaration
-                             #f
-                             (list 'rule (hash) '(term-or-var X) '(term-or-var Y) #f)
-                             (hash) #f))
-                "X ⇒ Y")
-  (check-equal? (plain-text (format-rule/tr-declaration
-                             #f
-                             (list 'transformation (hash) '(term-or-var X) '(term-or-var Y) #f)
-                             (hash) #f))
-                "X → Y")
-  (check-equal? (plain-text (format-asset-declaration
-                             'eq1
-                             (list 'equation (hash) '(term-or-var X) '(term-or-var Y) #f)
-                             (hash) #f))
-                "eq1: X = Y")
-  (check-equal? (plain-text (format-asset-declaration
-                             'rule1
-                             (list 'rule (hash) '(term-or-var X) '(term-or-var Y) #f)
-                             (hash) #f))
-                "rule1: X ⇒ Y")
-  (check-equal? (plain-text (format-asset-declaration
-                             'a-sum
-                             '(term _+ ((term-or-var X) (term-or-var Y)))
-                             (hash) #f))
-                "a-sum: X + Y")
-  (check-equal? (plain-text (format-asset-declaration
-                             'group
-                             (list 'assets (hash 'index '(integer 2) 'value '(term-or-var X)))
-                             (hash) #f))
-                "group.index: 2\ngroup.value: X"))
+;; Operator declarations
+
+(define (format-op* op-decl)
+  (match-define (list raw-op arity v-sort) op-decl)
+  (define-values (op type) (op-string-and-type raw-op))
+  (define (format-arg arg)
+    (match arg
+      [`(sort ,s)
+       (format-sort s)]
+      [`(var ,n ,s)
+       (format-var n s)]))
+  (case type
+    [(prefix-op)
+     (flatten (list '@
+               op
+               (if (empty? arity)
+                   ""
+                   (list '@
+                         "("
+                         (cons '@ (add-between (map format-arg arity) ", "))
+                         ")"))
+               " : "
+               (format-sort v-sort)))]
+    [(infix-op)
+     (flatten (list '@
+                    (format-arg (first arity))
+                    " " op " "
+                    (format-arg (second arity))
+                    " : "
+                    (format-sort v-sort)))]
+    [(special-op)
+     (case op
+       [("[]")
+        (flatten (list '@
+                       (format-arg (first arity))
+                       "["
+                       (cons '@ (add-between (map format-arg (rest arity)) ", "))
+                       "] : "
+                       (format-sort v-sort)))]
+       [("^")
+        (flatten (list '@
+                       (format-arg (first arity))
+                       (list 'sup (format-arg (second arity)))
+                       " : "
+                       (format-sort v-sort)))]
+       [("_")
+        (flatten (list '@
+                       (format-arg (first arity))
+                       (list 'sub (format-arg (second arity)))
+                       " : "
+                       (format-sort v-sort)))])]))
+
+(define (format-op op-decl)
+  (flatten (format-op* op-decl)))
+
+(module+ test
+  (check-equal? (format-op '(a-foo () foo))
+                '(@ "a-foo : " (i "foo")))
+  (check-equal? (format-op '(a-foo ((sort bar)) foo))
+                '(@ "a-foo(" (i "bar") ") : " (i "foo")))
+  (check-equal? (format-op '(foo2bar ((var X foo)) bar))
+                '(@ "foo2bar(X:" (i "foo") ") : " (i "bar")))
+  (check-equal? (format-op '(_+ ((sort foo) (sort foo)) foo))
+                '(@ (i "foo") " + " (i "foo") " : " (i "foo")))
+  (check-equal? (format-op '(|[]| ((sort foo) (sort bar) (sort bar)) foo))
+                '(@ (i "foo") "[" (i "bar") ", " (i "bar")  "] : " (i "foo")))
+  (check-equal? (format-op '(^ ((sort foo) (sort bar)) foo))
+                '(@ (i "foo") (sup (i "bar")) " : " (i "foo")))
+  (check-equal? (format-op '(_ ((sort foo) (sort bar)) foo))
+                '(@ (i "foo") (sub (i "bar")) " : " (i "foo"))))
+
+;; Var declarations
+
+(define (format-var name sort)
+  (flatten (list '@ (symbol->string name) ":" (format-sort sort))))
+
+(module+ test
+  (check-equal? (format-var 'X 'foo)
+                '(@ "X:" (i "foo"))))
+
+;; Assets
+
+(define (asset->html asset)
+  (case (first asset)
+    [(term)
+     (leibniz-input (format-term asset))]
+    [(test-result)
+     (match-define `(test-result ,left ,right ,actual ,success?) asset)
+     (if success?
+         (list '@
+               (leibniz-input (format-term left)
+                              " ⇒ "
+                              (format-term right))
+               " "
+               (leibniz-output '(span ((style "color:green;")) " ✓" )))
+         (list '@
+               (leibniz-input (format-term left)
+                              " ⇒ "
+                              `(span ((style "color:red;"))
+                                     (s ,(format-term right))))
+               " "
+               (leibniz-output `(span ((style "color:green;"))
+                                      ,(format-term actual)))))]
+    [else
+     (error "not yet implemented")]))

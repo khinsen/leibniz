@@ -6,7 +6,8 @@
          +context +use +extend
          +sort
          +op
-         +term
+         +var
+         +term +eval-term
          +rule
          +test
          section subsection subsubsection subsubsubsection)
@@ -20,6 +21,7 @@
          data/either
          "./condd.rkt"
          "./parser.rkt"
+         "./formatting.rkt"
          (prefix-in contexts: "./contexts.rkt")
          (prefix-in documents: "./documents.rkt")
          (for-syntax syntax/parse)
@@ -41,15 +43,7 @@
 (define (leibniz-syntax-error tag text position unexpected expected)
   (define errno (error-counter))
   (error-counter (+ 1 errno))
-  `(@ (leibniz-syntax-error)
-      (span ((class "LeibnizErrorMessage")
-             (id ,(format "error~a" errno)))
-            ,(format "Syntax error #~a at position ~a in " errno position))
-      (span ((class "LeibnizError"))
-            ,(format "◊~a{~a}" tag text))
-      (span ((class "LeibnizErrorMessage"))
-            ,(format "unexpected: '~a', expected: ~a"
-                     unexpected (string-join expected)))))
+  (syntax-error->html errno tag text position unexpected expected))
 
 (define (with-parsed-text tag parser text-parts fn)
   (define text (string-normalize-spaces (apply string-append text-parts)))
@@ -79,6 +73,7 @@
 (define (leibniz-error message element)
   (define errno (error-counter))
   (error-counter (+ 1 errno))
+  (error->html errno message element)
   `(@ (span ((class "LeibnizErrorMessage")
              (id ,(format "error~a" errno)))
             ,(format "Error #~a:" errno))
@@ -86,9 +81,6 @@
             ,(format "~a" element))
       (span ((class "LeibnizErrorMessage"))
             ,message)))
-
-(define (leibniz-checked-expr element)
-  `(span ((class "LeibnizInput")) ,element))
 
 ;;
 ;; The root function, which does most of the processing work
@@ -130,11 +122,14 @@
         (txexpr 'rules empty (hash-ref by-tag 'rule empty))
         (txexpr 'assets empty (hash-ref by-tag 'asset empty))))
 
-(define (check-leibniz-expr context expr)
-  (define tag (get-tag expr))
-  (case tag
-    [(term term-or-var) #t]
-    [else #f]))
+;; (define (leibniz-format-result source-tag source result)
+;;   (case source-tag
+;;     [("test")
+;;      (@ (leibniz-input source)
+;;         (leibniz-output
+;;          (if result
+;;              (span ((style "color:green;")) "✓" )
+;;              (span ((style "color:red;")) "X" ))))]))
 
 (define (process-context context-name context-elements document has-syntax-errors?)
 
@@ -158,16 +153,39 @@
      [(not (txexpr? element))
       element]
      #:do (define tag (get-tag element))
+
      [(equal? tag '+context)
       (leibniz-error "◊+context allowed only at top level"
                      element)]
+
      [(and (contexts:context? context-or-error)
            (equal? tag 'leibniz-check))
       (define source (attr-ref element 'source))
+      (define source-tag (attr-ref element 'source-tag))
       (define expr (extract-single-element element))
-      (if (check-leibniz-expr context-or-error expr)
-          (leibniz-checked-expr source)
-          (leibniz-error "error" expr))]
+      (define check
+        (with-handlers ([exn:fail? (λ (e) e)])
+          (contexts:check-asset context-or-error expr)))
+      (match check
+        [(exn:fail msg cont)
+         (leibniz-error msg (format "◊+~a{~a}" source))]
+        [else
+         (leibniz-input source)])]
+
+     [(and (contexts:context? context-or-error)
+           (equal? tag 'leibniz-eval))
+      (define source (attr-ref element 'source))
+      (define source-tag (attr-ref element 'source-tag))
+      (define expr (extract-single-element element))
+      (define result
+        (with-handlers ([exn:fail? (λ (e) e)])
+          (contexts:eval-asset context-or-error expr)))
+      (match result
+        [(exn:fail msg cont)
+         (leibniz-error msg (format "◊+~a{~a}" source))]
+        [else
+         (asset->html result)])]
+
      [else
       (txexpr tag
               (get-attrs element)
@@ -187,11 +205,14 @@
     [(contexts:exn:fail:leibniz? context-or-error)
      (match-define (contexts:exn:fail:leibniz msg cont decl) context-or-error)
      (values #f
-             (cons (txexpr* 'h3 empty
-                            "Context " context-name '(br)
-                            msg '(br)
-                            (format "~a" decl) '(br) '(br))
-                   (map eval-contents (get-elements contents)))
+             (list* (txexpr* 'h3 empty
+                             "Context " context-name)
+                    (txexpr* 'p empty 
+                             `(span ((class "LeibnizError")) ,msg)
+                             '(br)
+                             `(span ((class "LeibnizError"))
+                                    ,(format "caused by ~a" decl)))
+                    (map eval-contents (get-elements contents)))
              document)]
     [else
      (values #f
@@ -280,15 +301,15 @@
 
 ;; Sort and subsort declarations
 
-(define-leibniz-parser +sort sort-or-subsort/p sort-decl text
+(define-leibniz-parser +sort sort-or-subsort/p sort-decl sort-string
   (match sort-decl
     [`(sort ,sort-id)
-     `(@ (leibniz-decl (sort ((id ,text))))
-         ,(leibniz-checked-expr `(i ,text)))]
+     `(@ (leibniz-decl (sort ((id ,sort-string))))
+         ,(leibniz-input (format-sort sort-id)))]
     [`(subsort ,sort-id-1 ,sort-id-2)
      `(@ (leibniz-decl (subsort ((subsort ,(symbol->string sort-id-1))
                                  (supersort ,(symbol->string sort-id-2)))))
-         ,(leibniz-checked-expr `(i ,text)))]))
+         ,(leibniz-input (format-subsort sort-id-1 sort-id-2)))]))
 
 ;; Operator declarations
 
@@ -300,12 +321,19 @@
      `(var ((id ,(symbol->string name)) (sort ,(symbol->string sort-id))))]))
 
 (define-leibniz-parser +op operator/p op-decl op-string
-  (match-define `(op ,op-id ,arg-list ,result-sort)  op-decl)
+  (match-define `(op ,op-id ,arg-list ,v-sort) op-decl)
   `(@ (leibniz-decl (op ((id ,(symbol->string op-id)))
-                        (arity ,@(for/list ([arg arg-list])
-                                   (arg->xexpr arg)))
-                        (sort ((id ,(symbol->string result-sort))))))
-      (i ,op-string)))
+                        (arity ,@(map arg->xexpr arg-list))
+                        (sort ((id ,(symbol->string v-sort))))))
+      ,(leibniz-input (format-op (list op-id arg-list v-sort)))))
+
+;; Var declarations
+
+(define-leibniz-parser +var var/p var-decl var-string
+  (match-define `(var ,var-id ,var-sort) var-decl)
+  `(@ (leibniz-decl (var ((id ,(symbol->string var-id))
+                          (sort ,(symbol->string var-sort)))))
+      ,(leibniz-input (format-var var-id var-sort))))
 
 ;; Terms
 
@@ -319,8 +347,12 @@
      `(,number-type ((value ,(number->string x))))]))
 
 (define-leibniz-parser +term term/p term-decl term-string
-  `(@ (leibniz-check ((source ,term-string))
+  `(@ (leibniz-check ((source ,term-string) (source-tag "term"))
                      ,(term->xexpr term-decl))))
+
+(define-leibniz-parser +eval-term term/p term-decl term-string
+  `(@ (leibniz-eval ((source ,term-string) (source-tag "eval-term"))
+                    ,(term->xexpr term-decl))))
 
 ;; Rules
 
@@ -346,7 +378,7 @@
                                (list 'condition (term->xexpr condition))
                                '(condition))
                           (replacement ,(term->xexpr replacement))))
-      ,(leibniz-checked-expr `(i ,rule-string))))
+      ,(leibniz-input `(i ,rule-string))))
 
 (define-leibniz-parser +test rule/p rule-decl test-string
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
@@ -356,9 +388,9 @@
        `(@ (leibniz-error ,msg)
            (b ,msg)))]
     [else
-     `(@ (leibniz-eval (test ,(term->xexpr pattern)
-                             ,(term->xexpr replacement)))
-         (i ,test-string))]))
+     `(@ (leibniz-eval ((source ,test-string) (source-tag "test"))
+                       (test (term ,(term->xexpr pattern))
+                             (reduced-term ,(term->xexpr replacement)))))]))
 
 ;; Formatting
 

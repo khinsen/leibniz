@@ -14,7 +14,9 @@
   [without-compiled-resources (context? . -> . context?)]
   [make-builtin-context
          ((listof pair?) operators:signature? equations:rulelist?
-         . -> . context?)]))
+         . -> . context?)]
+  [check-asset (context? xexpr/c . -> . any/c)]
+  [eval-asset (context? xexpr/c . -> . any/c)]))
 
 (require "./lightweight-class.rkt"
          (prefix-in sorts: "./sorts.rkt")
@@ -27,7 +29,8 @@
          threading)
 
 (module+ test
-  (require rackunit)
+  (require rackunit
+           racket/function)
 
   (define (dummy-name-resolver name)
     (error "Call of dummy function"))
@@ -84,7 +87,7 @@
              (set '(a-foo () foo)
                    '(a-foo ((sort bar)) foo)
                    '(a-bar () bar)
-                  '(foo2bar ((var X foo)) bar))
+                   '(foo2bar ((var X foo)) bar))
              (list (list 'rule (hash)
                          '(term foo2bar ((term-or-var a-bar)))
                          '(term-or-var a-foo) #f))
@@ -145,96 +148,101 @@
                    name sort1 sort2)))
   sort1)
 
+
+(define (xexpr->arg xexpr-arg)
+  (match xexpr-arg
+    [`(var ((id ,var-name) (sort ,sort-name)))
+     (list 'var (string->symbol var-name) (string->symbol sort-name))]
+    [`(var ((sort ,sort-name) (id ,var-name)))
+     (list 'var (string->symbol var-name) (string->symbol sort-name))]
+    [`(sort ((id ,sort-name)))
+     (list 'sort (string->symbol sort-name))]))
+
+(define (xexpr->vars xexpr-vars)
+  (for/fold ([vars (hash)])
+            ([v xexpr-vars])
+    (define new-var
+      (match v
+        [(or `(var ((id ,vn) (sort ,sn)))
+             `(var ((sort ,sn) (id ,vn))))
+         (hash (string->symbol vn) (string->symbol sn))]))
+    (hash-union vars new-var #:combine/key combine-varsets)))
+
+(define (xexpr->asset xexpr-asset)
+  (match xexpr-asset
+    [`(assets () ... (asset ((id ,label)) ,value) ...)
+     (list 'assets
+           (for/hash ([l label]
+                      [v value])
+             (values (string->symbol l) (xexpr->asset v))))]
+    [`(equation () ...
+                (vars () ... ,ev ...)
+                (left () ... ,el)
+                ,ec
+                (right () ... ,er))
+     (list 'equation
+           (xexpr->vars ev)
+           (xexpr->asset el)
+           (xexpr->asset er)
+           (match ec
+             [`(condition () ...)       #f]
+             [`(condition () ... ,term) term]))]
+    [`(rule () ...
+            (vars () ... ,rv ...)
+            (pattern () ... ,rp)
+            ,rc
+            (replacement () ... ,rr))
+     (list 'rule
+           (xexpr->vars rv)
+           (xexpr->asset rp)
+           (xexpr->asset rr)
+           (match rc
+             [`(condition () ...)       #f]
+             [`(condition () ... ,term) term]))]
+    [`(transformation () ...
+                      (vars () ... ,rv ...)
+                      (pattern () ... ,rp)
+                      ,rc
+                      (replacement () ... ,rr))
+     (list 'transformation
+           (xexpr->vars rv)
+           (xexpr->asset rp)
+           (xexpr->asset rr)
+           (match rc
+             [`(condition () ...)       #f]
+             [`(condition () ... ,term) term]))]
+    [`(term ((op ,op-string)) ,args ...)
+     (list 'term
+           (string->symbol op-string)
+           (map xexpr->asset args))]
+    [`(term-or-var ((name ,name-string)))
+     (list 'term-or-var (string->symbol name-string))]
+    [`(,number-tag ((value ,v)))
+     (list number-tag (read (open-input-string v)))]
+    [`(as-equation ((ref ,asset-ref)))
+     (list 'as-equation (string->symbol asset-ref))]
+    [`(as-rule ((ref ,asset-ref) (flip ,flip?)))
+     (list 'as-rule (string->symbol asset-ref) (equal? flip? "true"))]
+    [`(substitute () ...
+                  ((substitute ,substitution-ref)
+                   (ref ,asset-ref)
+                   (reduce ,reduce?)))
+     (list 'substitute (string->symbol substitution-ref)
+           (string->symbol asset-ref)
+           (equal? reduce? "true"))]
+    [`(transform () ...
+                 ((transformation ,transformation-ref)
+                  (ref ,asset-ref)
+                  (reduce ,reduce?)))
+     (list 'transform (string->symbol transformation-ref)
+           (string->symbol asset-ref)
+           (equal? reduce? "true"))]
+    [`(test () ...
+            (term ,t)
+            (reduced-term ,rt))
+     (list 'test (xexpr->asset t) (xexpr->asset rt))]))
+
 (define (xexpr->context+name xexpr-context)
-
-  (define (xexpr->arg xexpr-arg)
-    (match xexpr-arg
-      [`(var ((id ,var-name) (sort ,sort-name)))
-       (list 'var (string->symbol var-name) (string->symbol sort-name))]
-      [`(var ((sort ,sort-name) (id ,var-name)))
-       (list 'var (string->symbol var-name) (string->symbol sort-name))]
-      [`(sort ((id ,sort-name)))
-       (list 'sort (string->symbol sort-name))]))
-
-  (define (xexpr->vars xexpr-vars)
-    (for/fold ([vars (hash)])
-              ([v xexpr-vars])
-      (define new-var
-        (match v
-          [(or `(var ((id ,vn) (sort ,sn)))
-               `(var ((sort ,sn) (id ,vn))))
-           (hash (string->symbol vn) (string->symbol sn))]))
-      (hash-union vars new-var #:combine/key combine-varsets)))
-
-  (define (xexpr->asset xexpr-asset)
-    (match xexpr-asset
-      [`(assets () ... (asset ((id ,label)) ,value) ...)
-       (list 'assets
-             (for/hash ([l label]
-                        [v value])
-               (values (string->symbol l) (xexpr->asset v))))]
-      [`(equation () ...
-                  (vars () ... ,ev ...)
-                  (left () ... ,el)
-                  ,ec
-                  (right () ... ,er))
-       (list 'equation
-             (xexpr->vars ev)
-             (xexpr->asset el)
-             (xexpr->asset er)
-             (match ec
-               [`(condition () ...)       #f]
-               [`(condition () ... ,term) term]))]
-      [`(rule () ...
-              (vars () ... ,rv ...)
-              (pattern () ... ,rp)
-              ,rc
-              (replacement () ... ,rr))
-       (list 'rule
-             (xexpr->vars rv)
-             (xexpr->asset rp)
-             (xexpr->asset rr)
-             (match rc
-               [`(condition () ...)       #f]
-               [`(condition () ... ,term) term]))]
-      [`(transformation () ...
-                        (vars () ... ,rv ...)
-                        (pattern () ... ,rp)
-                        ,rc
-                        (replacement () ... ,rr))
-       (list 'transformation
-             (xexpr->vars rv)
-             (xexpr->asset rp)
-             (xexpr->asset rr)
-             (match rc
-               [`(condition () ...)       #f]
-               [`(condition () ... ,term) term]))]
-      [`(term ((op ,op-string)) ,args ...)
-       (list 'term
-             (string->symbol op-string)
-             (map xexpr->asset args))]
-      [`(term-or-var ((name ,name-string)))
-       (list 'term-or-var (string->symbol name-string))]
-      [`(,number-tag ((value ,v)))
-       (list number-tag (read (open-input-string v)))]
-      [`(as-equation ((ref ,asset-ref)))
-       (list 'as-equation (string->symbol asset-ref))]
-      [`(as-rule ((ref ,asset-ref) (flip ,flip?)))
-       (list 'as-rule (string->symbol asset-ref) (equal? flip? "true"))]
-      [`(substitute () ...
-                    ((substitute ,substitution-ref)
-                     (ref ,asset-ref)
-                     (reduce ,reduce?)))
-       (list 'substitute (string->symbol substitution-ref)
-                         (string->symbol asset-ref)
-                         (equal? reduce? "true"))]
-      [`(transform () ...
-                   ((transformation ,transformation-ref)
-                    (ref ,asset-ref)
-                    (reduce ,reduce?)))
-       (list 'transform (string->symbol transformation-ref)
-                        (string->symbol asset-ref)
-                        (equal? reduce? "true"))]))
 
   (match-define
     `(context (,attrs ...) ...
@@ -496,6 +504,55 @@
 ;; Compile a context. This generates optimized internal representations for
 ;; signatures, rule lists, and assets, which are cached.
 ;;
+(define (compile-term signature)
+  (letrec ([fn (match-lambda
+                 [(list 'term-or-var name)
+                  (terms:make-var-or-term signature name)]
+                 [(list 'term op args)
+                  (terms:make-term signature op (map fn args))]
+                 [(list 'integer n) n]
+                 [(list 'rational r) r]
+                 [(list 'floating-point fp) fp])])
+    fn))
+
+(define (compile-pattern signature local-vars)
+  (letrec ([fn (match-lambda
+                 [#f
+                  #f]
+                 [(list 'term-or-var name)
+                  (terms:make-var-or-term signature name local-vars)]
+                 [(list 'term op args)
+                  (terms:make-term signature op (map fn args))]
+                 [(list 'integer n) n]
+                 [(list 'rational r) r]
+                 [(list 'floating-point fp) fp])])
+    fn))
+
+(define (compile-rule signature rule-expr check-equationality?)
+  (match rule-expr
+    [(list 'rule vars pattern replacement condition)
+     (let* ([mp (compile-pattern signature vars)])
+       (equations:make-rule signature (mp pattern)
+                            (mp condition)
+                            (mp replacement)
+                            #f
+                            check-equationality?))]
+    [_ #f]))
+
+(define (compile-transformation signature rule-expr)
+  (and~> (compile-rule signature (cons 'rule (rest rule-expr)) #f)
+         (equations:make-transformation signature _)))
+
+(define (compile-equation signature equation-expr)
+  (match equation-expr
+    [(list 'equation vars left right condition)
+     (let ([mp (compile-pattern signature vars)])
+       (equations:make-equation signature
+                                (mp left)
+                                (mp condition)
+                                (mp right)))]
+    [_ #f]))
+
 (define (compile-context cntxt name-resolver)
 
   (define includes
@@ -519,7 +576,7 @@
     ;; Process the subsort declarations.
     (for/fold ([sorts after-sorts])
               ([ss (context-subsorts cntxt)])
-      (with-handlers ([exn:fail? (re-raise-exn `(subsort ss))])
+      (with-handlers ([exn:fail? (re-raise-exn `(subsort ,ss))])
         (sorts:add-subsort-relation sorts (car ss) (cdr ss)))))
 
   (define sort-graph (compile-sort-graph))
@@ -561,55 +618,6 @@
 
   (define signature (compile-signature))
 
-  (define (make-term* signature)
-    (letrec ([fn (match-lambda
-                   [(list 'term-or-var name)
-                    (terms:make-var-or-term signature name)]
-                   [(list 'term op args)
-                    (terms:make-term signature op (map fn args))]
-                   [(list 'integer n) n]
-                   [(list 'rational r) r]
-                   [(list 'floating-point fp) fp])])
-      fn))
-
-  (define (make-pattern* signature local-vars)
-    (letrec ([fn (match-lambda
-                   [#f
-                    #f]
-                   [(list 'term-or-var name)
-                    (terms:make-var-or-term signature name local-vars)]
-                   [(list 'term op args)
-                    (terms:make-term signature op (map fn args))]
-                   [(list 'integer n) n]
-                   [(list 'rational r) r]
-                   [(list 'floating-point fp) fp])])
-      fn))
-
-  (define (make-rule* signature rule-expr check-equationality?)
-    (match rule-expr
-      [(list 'rule vars pattern replacement condition)
-       (let* ([mp (make-pattern* signature vars)])
-         (equations:make-rule signature (mp pattern)
-                              (mp condition)
-                              (mp replacement)
-                              #f
-                              check-equationality?))]
-      [_ #f]))
-
-  (define (make-transformation* signature rule-expr)
-    (and~> (make-rule* signature (cons 'rule (rest rule-expr)) #f)
-           (equations:make-transformation signature _)))
-
-  (define (make-equation* signature equation-expr)
-    (match equation-expr
-      [(list 'equation vars left right condition)
-       (let ([mp (make-pattern* signature vars)])
-         (equations:make-equation signature
-                                  (mp left)
-                                  (mp condition)
-                                  (mp right)))]
-      [_ #f]))
-
   (define (compile-rules)
     ;; Merge the rule lists of the included contexts.
     (define after-includes
@@ -622,7 +630,7 @@
     (for/fold ([rl after-includes])
               ([rd (context-rules cntxt)])
       (with-handlers ([exn:fail? (re-raise-exn rd)])
-        (equations:add-rule rl (make-rule* signature rd #t)))))
+        (equations:add-rule rl (compile-rule signature rd #t)))))
 
   (define rules (compile-rules))
 
@@ -715,11 +723,11 @@
     (define (compile-asset decl)
       (match decl
         [(list 'rule arg ...)
-         (box (make-rule* signature decl #f))]
+         (box (compile-rule signature decl #f))]
         [(list 'equation arg ...)
-         (box (make-equation* signature decl))]
+         (box (compile-equation signature decl))]
         [(list 'transformation arg ...)
-         (box (make-transformation* signature decl))]
+         (box (compile-transformation signature decl))]
         [(or (list 'as-equation _)
              (list 'as-rule _ _)
              (list 'substitute _ _ _)
@@ -730,10 +738,8 @@
         [(list 'assets assets)
          (for/hash ([(label value) assets])
            (values label (compile-asset value)))]
-        ;; TODO Should test for valid term declarations, rather than suppose
-        ;; that it must be a term since it's no other valid declaration.
         [term
-         (box ((make-term* signature) decl))]))
+         (box ((compile-term signature) decl))]))
     ;; Helper functions for computing dependent assets
     (define (compute-asset assets decl)
       (match decl
@@ -854,3 +860,102 @@
                (compiled-signature signature)
                (compiled-rules     rules)
                (compiled-assets    (hash))))
+
+;;
+;; Check and evaluate assets within a context
+;;
+
+(define (check-asset cntxt xexpr-asset)
+  (define signature (context-compiled-signature cntxt))
+  (unless signature
+    (error "check-asset requires a compiled context"))
+  (define asset (xexpr->asset xexpr-asset))
+  (match asset
+    [(list (and tag
+                (or 'rule 'equation 'transformation 'assets 'test
+                    'as-equation 'as-rule 'substitute 'transform)) _ ...)
+     (error (format "not yet implemented:" tag))]
+    [term
+     ((compile-term signature) asset)]))
+
+(module+ test
+  (check-not-false (check-asset compiled-reference-context
+                                '(term-or-var ((name "a-foo")))))
+  (check-not-false (check-asset compiled-reference-context
+                                '(term ((op "a-foo")) (term-or-var ((name "a-foo"))))))
+  (check-exn exn:fail?
+             (thunk (check-asset reference-context
+                                 '(term-or-var ((name "a-foo"))))))
+  (check-exn exn:fail?
+             (thunk (check-asset compiled-reference-context
+                                 '(term-or-var ((name "an-undefined-op")))))))
+
+(define (uncompile-term compiled-term)
+  (define-values (op args) (terms:term.op-and-args compiled-term))
+  (cond
+    [op
+     (list 'term op (map uncompile-term args))]
+    [(terms:var? compiled-term)
+     (list 'var (terms:var-name compiled-term) (terms:var-sort compiled-term))]
+    [(integer? compiled-term)
+     (list 'integer compiled-term)]
+    [(rational? compiled-term)
+     (list 'rational compiled-term)]
+    [(inexact? compiled-term)
+     (list 'floating-point compiled-term)]
+    [else
+     (error "illegal term type")]))
+
+(define (eval-asset cntxt xexpr-asset)
+  (define signature (context-compiled-signature cntxt))
+  (unless signature
+    (error "eval-asset requires a compiled context"))
+  (define rules (context-compiled-rules cntxt))
+  (define asset (xexpr->asset xexpr-asset))
+  (match asset
+    [(list (and tag
+                (or 'rule 'equation 'transformation 'assets
+                    'as-equation 'as-rule 'substitute 'transform)) _ ...)
+     (error (format "asset of type ~a cannot be evaluated" tag))]
+    [(list 'test term reduced-term)
+     (define make (compile-term signature))
+     (define term* (make term))
+     (define reduced-term* (make reduced-term))
+     (define actual-reduced-term* (rewrite:reduce signature rules term*))
+     (list 'test-result
+           (uncompile-term term*)
+           (uncompile-term reduced-term*)
+           (uncompile-term actual-reduced-term*)
+           (equal? reduced-term* actual-reduced-term*))]
+    [term
+     (define term* ((compile-term signature) term))
+     (define reduced-term* (rewrite:reduce signature rules term*))
+     (uncompile-term reduced-term*)]))
+
+(module+ test
+  ;; a successful test
+  (check-equal?
+   (eval-asset compiled-reference-context
+               '(test (term (term ((op "foo2bar"))
+                                  (term-or-var ((name "a-bar")))))
+                      (reduced-term (term-or-var ((name "a-foo"))))))
+   (let ([t '(term foo2bar ((term a-bar ())))]
+         [rt '(term a-foo ())])
+     (list 'test-result t rt rt #t)))
+  ;; a failing test
+  (check-equal?
+   (eval-asset compiled-reference-context
+               '(test (term (term-or-var ((name "a-foo"))))
+                      (reduced-term (term-or-var ((name "a-bar"))))))
+   (let ([t '(term a-foo ())]
+         [rt '(term a-bar ())])
+     (list 'test-result t rt t #f)))
+  ;; a term
+  (check-equal? (eval-asset compiled-reference-context
+                            '(term ((op "foo2bar"))
+                                   (term-or-var ((name "a-bar")))))
+                '(term a-foo ()))
+  ;; failure for an asset list
+  (check-exn exn:fail?
+             (thunk (eval-asset compiled-reference-context
+                                '(assets)))))
