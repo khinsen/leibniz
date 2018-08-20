@@ -182,7 +182,7 @@
           (contexts:eval-asset context-or-error expr)))
       (match result
         [(exn:fail msg cont)
-         (leibniz-error msg (format "◊+~a{~a}" source))]
+         (leibniz-error msg (format "◊+~a{~a}" source-tag source))]
         [else
          (asset->html result)])]
 
@@ -362,7 +362,9 @@
             ([c clauses])
     (match c
       [`(var ,name ,sort)
-       (values (cons `(var ((id ,(symbol->string name)) (sort ,(symbol->string sort)))) vars)
+       (values (cons `(var ((id ,(symbol->string name))
+                            (sort ,(symbol->string sort))))
+                     vars)
                condition)]
       [term
        (if condition
@@ -372,13 +374,15 @@
 (define-leibniz-parser +rule rule/p rule-decl rule-string
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
   (define-values (vars condition) (group-clauses clauses))
-  `(@ (leibniz-decl (rule (vars ,@vars)
-                          (pattern ,(term->xexpr pattern))
-                          ,(if condition
-                               (list 'condition (term->xexpr condition))
-                               '(condition))
-                          (replacement ,(term->xexpr replacement))))
-      ,(leibniz-input `(i ,rule-string))))
+  (define rule-expr `(rule (vars ,@vars)
+                           (pattern ,(term->xexpr pattern))
+                           ,(if condition
+                                (list 'condition (term->xexpr condition))
+                                '(condition))
+                           (replacement ,(term->xexpr replacement))))
+  `(@ (leibniz-decl ,rule-expr)
+      (leibniz-eval ((source  ,rule-string) (source-tag "rule"))
+                    ,rule-expr)))
 
 (define-leibniz-parser +test rule/p rule-decl test-string
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
@@ -397,4 +401,4 @@
 (define section (default-tag-function 'h2))
 (define subsection (default-tag-function 'h3))
 (define subsubsection (default-tag-function 'h4))
-(define subsubsubsection (default-tag-function 'h45))
+(define subsubsubsection (default-tag-function 'h5))

@@ -890,11 +890,11 @@
              (thunk (check-asset compiled-reference-context
                                  '(term-or-var ((name "an-undefined-op")))))))
 
-(define (uncompile-term compiled-term)
+(define (decompile-term compiled-term)
   (define-values (op args) (terms:term.op-and-args compiled-term))
   (cond
     [op
-     (list 'term op (map uncompile-term args))]
+     (list 'term op (map decompile-term args))]
     [(terms:var? compiled-term)
      (list 'var (terms:var-name compiled-term) (terms:var-sort compiled-term))]
     [(integer? compiled-term)
@@ -914,23 +914,32 @@
   (define asset (xexpr->asset xexpr-asset))
   (match asset
     [(list (and tag
-                (or 'rule 'equation 'transformation 'assets
+                (or 'equation 'transformation 'assets
                     'as-equation 'as-rule 'substitute 'transform)) _ ...)
      (error (format "asset of type ~a cannot be evaluated" tag))]
+    [(list 'rule vars pattern replacement condition)
+     (define make (compile-pattern signature vars))
+     (define pattern* (make pattern))
+     (define replacement* (make replacement))
+     (define condition* (and condition (make condition)))
+     (list 'rule vars
+           (decompile-term pattern*)
+           (decompile-term replacement*)
+           (and condition (decompile-term condition)))]
     [(list 'test term reduced-term)
      (define make (compile-term signature))
      (define term* (make term))
      (define reduced-term* (make reduced-term))
      (define actual-reduced-term* (rewrite:reduce signature rules term*))
      (list 'test-result
-           (uncompile-term term*)
-           (uncompile-term reduced-term*)
-           (uncompile-term actual-reduced-term*)
+           (decompile-term term*)
+           (decompile-term reduced-term*)
+           (decompile-term actual-reduced-term*)
            (equal? reduced-term* actual-reduced-term*))]
     [term
      (define term* ((compile-term signature) term))
      (define reduced-term* (rewrite:reduce signature rules term*))
-     (uncompile-term reduced-term*)]))
+     (decompile-term reduced-term*)]))
 
 (module+ test
   ;; a successful test

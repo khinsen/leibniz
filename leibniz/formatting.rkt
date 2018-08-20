@@ -5,6 +5,7 @@
          format-sort format-subsort
          format-op
          format-var
+         format-rule format-transformation
          asset->html)
 
 (require "./condd.rkt")
@@ -154,6 +155,7 @@
   (check-equal? (format-term '(rational -3/2)) "-3/2")
   (check-equal? (format-term '(floating-point 1.5)) "1.5")
   (check-equal? (format-term '(term a-foo ())) "a-foo")
+  (check-equal? (format-term '(var a-foo)) '(i "a-foo"))
   (check-equal? (format-term* '(term a-foo ((term a-bar ()))))
                 '(@ "a-foo(" (@ "a-bar") ")"))
   (check-equal? (format-term '(term a-foo ((term a-bar ()))))
@@ -289,12 +291,38 @@
   (check-equal? (format-var 'X 'foo)
                 '(@ "X:" (i "foo"))))
 
+;; Rules and transformations
+
+(define (format-rule-or-transformation arrow rule-decl)
+  (match-define
+    (list (or 'rule 'transformation)
+          vars pattern replacement condition)
+    rule-decl)
+  (flatten
+   (list '@
+         (format-term pattern)
+         arrow
+         (format-term replacement)
+         (cons '@ (for/list ([(name sort) vars])
+                    (list '@ " ∀ " (format-var name sort))))
+         (if condition
+             (list '@ " if " (format-term condition))
+             ""))))
+
+(define (format-rule rule-decl)
+  (format-rule-or-transformation " ⇒ " rule-decl))
+
+(define (format-transformation rule-decl)
+  (format-rule-or-transformation " → " rule-decl))
+
 ;; Assets
 
 (define (asset->html asset)
   (case (first asset)
     [(term)
      (leibniz-input (format-term asset))]
+    [(rule)
+     (leibniz-input (format-rule asset))]
     [(test-result)
      (match-define `(test-result ,left ,right ,actual ,success?) asset)
      (if success?
