@@ -159,7 +159,7 @@
           (contexts:check-asset context-or-error expr)))
       (match check
         [(exn:fail msg cont)
-         (leibniz-error msg (format "◊+~a{~a}" source))]
+         (leibniz-error msg (format "◊+~a{~a}" source-tag source))]
         [else
          (leibniz-input source)])]
 
@@ -212,22 +212,20 @@
     [(contexts:exn:fail:leibniz? context-or-error)
      (match-define (contexts:exn:fail:leibniz msg cont decl) context-or-error)
      (values #f
-             (list* (txexpr* 'h3 empty
-                             "Context " context-name)
-                    (txexpr* 'p empty 
-                             `(span ((class "LeibnizError")) ,msg)
-                             '(br)
-                             `(span ((class "LeibnizError"))
-                                    ,(format "caused by ~a" decl)))
-                    (map eval-contents (get-elements contents)))
+             (row-for-context context-name
+                              (cons `(context-column
+                                      ,(leibniz-error msg decl))
+                                    (map eval-contents
+                                         (get-elements contents))))
              document)]
     [else
      (values #f
-             (cons (txexpr* 'h3 empty "Context " context-name '(br)
-                            '(span ((class "LeibnizError"))
-                                   "not processed because of syntax errors in the document")
-                            '(br)'(br))
-                   (map eval-contents (get-elements contents)))
+             (row-for-context context-name
+                              (cons '(context-column
+                                      (span ((class "LeibnizError"))
+                                            "not processed because of syntax errors in the document"))
+                                    (map eval-contents
+                                         (get-elements contents))))
              document)]))
 
 (define (root . elements)
@@ -269,16 +267,18 @@
                       extended-document
                       next-context))))))
 
-  (define error-links
-    (txexpr 'div '((style "background:red"))
-            (append*
-             (for/list ([i (range 1 (error-counter))])
-               `((a ((href ,(format "#error~a" i)))
-                    ,(format "Error #~a" i))
-                 (br))))))
+  (define errors
+    (for/list ([i (range 1 (error-counter))])
+      `((a ((href ,(format "#error~a" i)))
+           ,(format "Error #~a" i))
+        (br))))
+  (define error-section
+    (if (empty? errors)
+        ""
+        (txexpr 'div '((style "background:red")) (append* errors))))
 
   (define decoded-text
-    (decode-elements (cons error-links text)
+    (decode-elements (cons error-section text)
                      #:txexpr-elements-proc decode-paragraphs
                      #:string-proc smart-dashes))
 
