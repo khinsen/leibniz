@@ -122,15 +122,6 @@
         (txexpr 'rules empty (hash-ref by-tag 'rule empty))
         (txexpr 'assets empty (hash-ref by-tag 'asset empty))))
 
-;; (define (leibniz-format-result source-tag source result)
-;;   (case source-tag
-;;     [("test")
-;;      (@ (leibniz-input source)
-;;         (leibniz-output
-;;          (if result
-;;              (span ((style "color:green;")) "✓" )
-;;              (span ((style "color:red;")) "X" ))))]))
-
 (define (process-context context-name context-elements document has-syntax-errors?)
 
   (define-values (contents decls)
@@ -191,16 +182,32 @@
               (get-attrs element)
               (map eval-contents (get-elements element)))]))
 
+  (define (row-for-context context-name text)
+    (define-values (main-text context-column)
+      (splitf-txexpr (txexpr 'dummy empty text)
+                     (has-tag? 'context-column)))
+    (list
+     (txexpr* 'hr '((style "border-top: dotted 1px;"))
+              (txexpr* 'div '((class "row"))
+                       (txexpr 'div '((class "column context"))
+                               (list*
+                                (txexpr* 'h3 empty
+                                         "Context " context-name)
+                                (apply append
+                                       (map get-elements context-column))))
+                       (txexpr 'div '((class "column main"))
+                               (get-elements main-text))))))
+
   (cond
     [(contexts:context? context-or-error)
      (define context context-or-error)
      (values (contexts:context->xexpr context context-name)
-             (cons (txexpr* 'h3 empty "Context " context-name '(br) '(br))
-                   ;; We cannot use map-elements here because it
-                   ;; processes elements inside to outside, so we
-                   ;; use plain map and do recursive traversal
-                   ;; in eval-contents.
-                   (map eval-contents (get-elements contents)))
+             (row-for-context context-name
+                              ;; We cannot use map-elements here because it
+                              ;; processes elements inside to outside, so we
+                              ;; use plain map and do recursive traversal
+                              ;; in eval-contents.
+                              (map eval-contents (get-elements contents)))
              (documents:add-context document context-name context))]
     [(contexts:exn:fail:leibniz? context-or-error)
      (match-define (contexts:exn:fail:leibniz msg cont decl) context-or-error)
@@ -287,7 +294,7 @@
 
 (define (include* mode loc context-ref)
   `(@ (leibniz-decl (include ((mode ,mode) (ref ,context-ref))))
-      (b ,mode ": ") (i ,context-ref) (br)))
+      (context-column ,mode "s: " (i ,context-ref) (br))))
 
 (define-syntax (+use stx)
   (syntax-parse stx

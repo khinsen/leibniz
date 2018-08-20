@@ -10,6 +10,26 @@
   </script>
 
   <style type="text/css">
+
+    * {
+        box-sizing: border-box;
+    }
+
+    .column {
+        float: left;
+        padding: 10px;
+    }
+    .main {
+      width: 75%;
+    }
+    .context {
+      width: 25%;
+    }
+    .row:after {
+        content: "";
+        display: table;
+        clear: both;
+    }
     .LeibnizInput { background-color: #E8E8FF; }
     .LeibnizOutput { background-color: #E0FFE0; }
     .LeibnizComment { background-color: #FFE8E8; }
@@ -17,6 +37,13 @@
     .LeibnizErrorMessage { color: white; background-color: #FF4040; margin: 2px; padding: 2px;}
   </style>
 
+  <div class="row">
+    <div class="column context"></div>
+    <div class="column main">
+      <h1>◊(select 'title metas)</h1>
+      by <b>◊(select 'author metas)</b>
+    </div>
+  </div>
   ◊(->html (select* 'doc doc))
 
 </body>
