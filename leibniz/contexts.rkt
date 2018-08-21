@@ -186,7 +186,7 @@
            (xexpr->asset er)
            (match ec
              [`(condition () ...)       #f]
-             [`(condition () ... ,term) term]))]
+             [`(condition () ... ,term) (xexpr->asset term)]))]
     [`(rule () ...
             (vars () ... ,rv ...)
             (pattern () ... ,rp)
@@ -198,7 +198,7 @@
            (xexpr->asset rr)
            (match rc
              [`(condition () ...)       #f]
-             [`(condition () ... ,term) term]))]
+             [`(condition () ... ,term) (xexpr->asset term)]))]
     [`(transformation () ...
                       (vars () ... ,rv ...)
                       (pattern () ... ,rp)
@@ -210,7 +210,7 @@
            (xexpr->asset rr)
            (match rc
              [`(condition () ...)       #f]
-             [`(condition () ... ,term) term]))]
+             [`(condition () ... ,term) (xexpr->asset term)]))]
     [`(term ((op ,op-string)) ,args ...)
      (list 'term
            (string->symbol op-string)
@@ -865,36 +865,11 @@
 ;; Check and evaluate assets within a context
 ;;
 
-(define (check-asset cntxt xexpr-asset)
-  (define signature (context-compiled-signature cntxt))
-  (unless signature
-    (error "check-asset requires a compiled context"))
-  (define asset (xexpr->asset xexpr-asset))
-  (match asset
-    [(list (and tag
-                (or 'rule 'equation 'transformation 'assets 'test
-                    'as-equation 'as-rule 'substitute 'transform)) _ ...)
-     (error (format "not yet implemented:" tag))]
-    [term
-     ((compile-term signature) asset)]))
-
-(module+ test
-  (check-not-false (check-asset compiled-reference-context
-                                '(term-or-var ((name "a-foo")))))
-  (check-not-false (check-asset compiled-reference-context
-                                '(term ((op "a-foo")) (term-or-var ((name "a-foo"))))))
-  (check-exn exn:fail?
-             (thunk (check-asset reference-context
-                                 '(term-or-var ((name "a-foo"))))))
-  (check-exn exn:fail?
-             (thunk (check-asset compiled-reference-context
-                                 '(term-or-var ((name "an-undefined-op")))))))
-
-(define (decompile-term compiled-term)
+(define (decompile-pattern compiled-term)
   (define-values (op args) (terms:term.op-and-args compiled-term))
   (cond
     [op
-     (list 'term op (map decompile-term args))]
+     (list 'term op (map decompile-pattern args))]
     [(terms:var? compiled-term)
      (list 'var (terms:var-name compiled-term) (terms:var-sort compiled-term))]
     [(integer? compiled-term)
@@ -905,6 +880,43 @@
      (list 'floating-point compiled-term)]
     [else
      (error "illegal term type")]))
+
+(define (check-asset cntxt xexpr-asset)
+  (define signature (context-compiled-signature cntxt))
+  (unless signature
+    (error "check-asset requires a compiled context"))
+  (define asset (xexpr->asset xexpr-asset))
+  (match asset
+    [(list (and tag
+                (or 'equation 'transformation 'assets 'test
+                    'as-equation 'as-rule 'substitute 'transform)) _ ...)
+     (error (format "not yet implemented:" tag))]
+    [(list 'rule vars pattern replacement condition)
+     (define make (compile-pattern signature vars))
+     (define pattern* (make pattern))
+     (define replacement* (make replacement))
+     (define condition* (and condition (make condition)))
+     (list 'rule vars
+           (decompile-pattern pattern*)
+           (decompile-pattern replacement*)
+           (and condition (decompile-pattern condition*)))]
+    [pattern
+     (define pattern* ((compile-pattern signature (hash)) asset))
+     (decompile-pattern pattern*)]))
+
+(module+ test
+  (check-equal? (check-asset compiled-reference-context
+                             '(term-or-var ((name "a-foo"))))
+                '(term a-foo ()))
+  (check-equal? (check-asset compiled-reference-context
+                             '(term ((op "a-foo")) (term-or-var ((name "a-foo")))))
+                '(term a-foo ((term a-foo ()))))
+  (check-exn exn:fail?
+             (thunk (check-asset reference-context
+                                 '(term-or-var ((name "a-foo"))))))
+  (check-exn exn:fail?
+             (thunk (check-asset compiled-reference-context
+                                 '(term-or-var ((name "an-undefined-op")))))))
 
 (define (eval-asset cntxt xexpr-asset)
   (define signature (context-compiled-signature cntxt))
@@ -917,29 +929,20 @@
                 (or 'equation 'transformation 'assets
                     'as-equation 'as-rule 'substitute 'transform)) _ ...)
      (error (format "asset of type ~a cannot be evaluated" tag))]
-    [(list 'rule vars pattern replacement condition)
-     (define make (compile-pattern signature vars))
-     (define pattern* (make pattern))
-     (define replacement* (make replacement))
-     (define condition* (and condition (make condition)))
-     (list 'rule vars
-           (decompile-term pattern*)
-           (decompile-term replacement*)
-           (and condition (decompile-term condition)))]
     [(list 'test term reduced-term)
      (define make (compile-term signature))
      (define term* (make term))
      (define reduced-term* (make reduced-term))
      (define actual-reduced-term* (rewrite:reduce signature rules term*))
      (list 'test-result
-           (decompile-term term*)
-           (decompile-term reduced-term*)
-           (decompile-term actual-reduced-term*)
+           (decompile-pattern term*)
+           (decompile-pattern reduced-term*)
+           (decompile-pattern actual-reduced-term*)
            (equal? reduced-term* actual-reduced-term*))]
     [term
      (define term* ((compile-term signature) term))
      (define reduced-term* (rewrite:reduce signature rules term*))
-     (decompile-term reduced-term*)]))
+     (list 'reduced-term (decompile-pattern reduced-term*))]))
 
 (module+ test
   ;; a successful test

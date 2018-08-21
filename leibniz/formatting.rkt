@@ -319,8 +319,6 @@
 
 (define (asset->html asset)
   (case (first asset)
-    [(term)
-     (leibniz-input (format-term asset))]
     [(rule)
      (leibniz-input (format-rule asset))]
     [(test-result)
@@ -340,5 +338,9 @@
                " "
                (leibniz-output `(span ((style "color:green;"))
                                       ,(format-term actual)))))]
+    [(reduced-term)
+     (leibniz-output (format-term (second asset)))]
+    [(term var integer rational floating-point)
+     (leibniz-input (format-term asset))]
     [else
-     (error "not yet implemented")]))
+     (error (format "not yet implemented: ~a" (first asset)))]))

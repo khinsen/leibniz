@@ -150,27 +150,17 @@
                      element)]
 
      [(and (contexts:context? context-or-error)
-           (equal? tag 'leibniz-check))
-      (define source (attr-ref element 'source))
-      (define source-tag (attr-ref element 'source-tag))
-      (define expr (extract-single-element element))
-      (define check
-        (with-handlers ([exn:fail? (λ (e) e)])
-          (contexts:check-asset context-or-error expr)))
-      (match check
-        [(exn:fail msg cont)
-         (leibniz-error msg (format "◊+~a{~a}" source-tag source))]
-        [else
-         (leibniz-input source)])]
-
-     [(and (contexts:context? context-or-error)
-           (equal? tag 'leibniz-eval))
+           (member tag '(leibniz-check leibniz-eval)))
       (define source (attr-ref element 'source))
       (define source-tag (attr-ref element 'source-tag))
       (define expr (extract-single-element element))
       (define result
         (with-handlers ([exn:fail? (λ (e) e)])
-          (contexts:eval-asset context-or-error expr)))
+          (case tag
+            [(leibniz-check)
+             (contexts:check-asset context-or-error expr)]
+            [(leibniz-eval)
+             (contexts:eval-asset context-or-error expr)])))
       (match result
         [(exn:fail msg cont)
          (leibniz-error msg (format "◊+~a{~a}" source-tag source))]
@@ -358,8 +348,12 @@
                      ,(term->xexpr term-decl))))
 
 (define-leibniz-parser +eval-term term/p term-decl term-string
-  `(@ (leibniz-eval ((source ,term-string) (source-tag "eval-term"))
-                    ,(term->xexpr term-decl))))
+  (define xexpr (term->xexpr term-decl))
+  `(@ (leibniz-check ((source ,term-string) (source-tag "eval-term"))
+                     ,xexpr)
+      " ⇒ "
+      (leibniz-eval ((source ,term-string) (source-tag "eval-term"))
+                    ,xexpr)))
 
 ;; Rules
 
@@ -388,8 +382,8 @@
                                 '(condition))
                            (replacement ,(term->xexpr replacement))))
   `(@ (leibniz-decl ,rule-expr)
-      (leibniz-eval ((source  ,rule-string) (source-tag "rule"))
-                    ,rule-expr)))
+      (leibniz-check ((source  ,rule-string) (source-tag "rule"))
+                     ,rule-expr)))
 
 (define-leibniz-parser +test rule/p rule-decl test-string
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)

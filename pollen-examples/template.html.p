@@ -20,10 +20,10 @@
         padding: 10px;
     }
     .main {
-      width: 75%;
+      width: 80%;
     }
     .context {
-      width: 25%;
+      width: 20%;
     }
     .row:after {
         content: "";
