@@ -181,7 +181,7 @@
               (txexpr* 'div '((class "row"))
                        (txexpr 'div '((class "column context"))
                                (list*
-                                (txexpr* 'h3 empty
+                                (txexpr* 'h4 empty
                                          "Context " context-name)
                                 (apply append
                                        (map get-elements context-column))))
