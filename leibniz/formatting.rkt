@@ -344,7 +344,9 @@
 (define (asset->html asset label)
   (case (first asset)
     [(rule)
-     (leibniz-input (format-rule asset))]
+     (if label
+         (leibniz-input (format-label label #t) (format-rule asset))
+         (leibniz-input (format-rule asset)))]
     [(equation)
      (leibniz-input (format-label label #t) (format-equation asset))]
     [(test-result)
@@ -367,6 +369,8 @@
     [(reduced-term)
      (leibniz-output (format-term (second asset)))]
     [(term var integer rational floating-point)
-     (leibniz-input (format-term asset))]
+     (if label
+         (leibniz-input (format-label label #t) (format-term asset))
+         (leibniz-input (format-term asset)))]
     [else
      (error (format "not yet implemented: ~a" (first asset)))]))

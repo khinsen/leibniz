@@ -7,9 +7,15 @@
 
 ◊+context{test}
 
-We define ◊+sort{foo} and ◊+sort{bar ⊆ foo}, and then ◊+op{a-foo : foo}.
+We define ◊+sort{foo} and ◊+sort{bar ⊆ foo}, and then ◊+op{a-foo : foo} and ◊+term{a-foo}
+The only rule is:
+    ◊+rule{a-foo ⇒ a-foo}
 
 ◊+equation[#:label "eq1"]{a-foo = a-foo}
+
+◊+term[#:label "term1"]{a-foo}
+
+◊+rule[#:label "rule1"]{a-foo ⇒ a-foo}
 
 ◊+context{another-test}
 ◊+extend{test}

@@ -361,9 +361,14 @@
     [(list (and number-type (or 'integer 'rational 'floating-point)) x)
      `(,number-type ((value ,(number->string x))))]))
 
-(define-leibniz-parser +term term/p term-decl term-string
-  `(@ (leibniz-check ((source ,term-string) (source-tag "term"))
-                     ,(term->xexpr term-decl))))
+(define-leibniz-parser-with-optional-label +term term/p term-decl term-string term-label
+  (define term-expr (term->xexpr term-decl))
+  (if term-label
+      `(@ (leibniz-decl (asset ((id ,term-label)) ,term-expr))
+          (leibniz-check ((source ,term-string) (source-tag "term") (label ,term-label))
+                         ,term-expr))
+      `(@ (leibniz-check ((source ,term-string) (source-tag "term"))
+                         ,term-expr))))
 
 (define-leibniz-parser +eval-term term/p term-decl term-string
   (define xexpr (term->xexpr term-decl))
@@ -390,7 +395,7 @@
            (values vars (list 'term '_∧ (list condition term)))
            (values vars term))])))
 
-(define-leibniz-parser +rule rule/p rule-decl rule-string
+(define-leibniz-parser-with-optional-label +rule rule/p rule-decl rule-string rule-label
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)
   (define-values (vars condition) (group-clauses clauses))
   (define rule-expr `(rule (vars ,@vars)
@@ -399,9 +404,13 @@
                                 (list 'condition (term->xexpr condition))
                                 '(condition))
                            (replacement ,(term->xexpr replacement))))
-  `(@ (leibniz-decl ,rule-expr)
-      (leibniz-check ((source ,rule-string) (source-tag "rule"))
-                     ,rule-expr)))
+  (if rule-label
+      `(@ (leibniz-decl (asset ((id ,rule-label)) ,rule-expr))
+          (leibniz-check ((source ,rule-string) (source-tag "rule") (label ,rule-label))
+                         ,rule-expr))
+      `(@ (leibniz-decl ,rule-expr)
+          (leibniz-check ((source ,rule-string) (source-tag "rule"))
+                         ,rule-expr))))
 
 ;; Equations
 
