@@ -9,6 +9,8 @@
 
 We define ◊+sort{foo} and ◊+sort{bar ⊆ foo}, and then ◊+op{a-foo : foo}.
 
+◊+equation[#:label "eq1"]{a-foo = a-foo}
+
 ◊+context{another-test}
 ◊+extend{test}
 

@@ -41,6 +41,13 @@
 (define (leibniz-output . elements)
   `(span ((class "LeibnizOutput")) ,@elements))
 
+;; Labels
+
+(define (format-label label as-prefix?)
+  (if as-prefix?
+      `(b ,label ": ")
+      `(b ,label)))
+
 ;; Sorts
 
 (define (format-sort symbol)
@@ -315,12 +322,31 @@
 (define (format-transformation rule-decl)
   (format-rule-or-transformation " → " rule-decl))
 
+;; Equations
+
+(define (format-equation equation-decl)
+  (match-define
+    (list 'equation vars left right condition)
+    equation-decl)
+  (flatten
+   (list '@
+         (format-term left)
+         " = "
+         (format-term right)
+         (cons '@ (for/list ([(name sort) vars])
+                    (list '@ " ∀ " (format-var name sort))))
+         (if condition
+             (list '@ " if " (format-term condition))
+             ""))))
+
 ;; Assets
 
-(define (asset->html asset)
+(define (asset->html asset label)
   (case (first asset)
     [(rule)
      (leibniz-input (format-rule asset))]
+    [(equation)
+     (leibniz-input (format-label label #t) (format-equation asset))]
     [(test-result)
      (match-define `(test-result ,left ,right ,actual ,success?) asset)
      (if success?

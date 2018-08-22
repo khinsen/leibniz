@@ -9,6 +9,7 @@
          +var
          +term +eval-term
          +rule
+         +equation
          +test
          section subsection subsubsection subsubsubsection)
 
@@ -45,7 +46,7 @@
   (error-counter (+ 1 errno))
   (syntax-error->html errno tag text position unexpected expected))
 
-(define (with-parsed-text tag parser text-parts fn)
+(define (with-parsed-text tag label parser text-parts fn)
   (define text (string-normalize-spaces (apply string-append text-parts)))
   (define result (parse-string (to-eof/p parser) text))
   (if (failure? result)
@@ -54,14 +55,30 @@
          (match loc
            [(srcloc source line column position span)
             (leibniz-syntax-error tag text column unexpected expected)])])
-      (fn (from-success #f result) text)))
+      (fn (from-success #f result) text label)))
 
 (define-syntax (define-leibniz-parser stx)
   (syntax-parse stx
     [(_ tag:id parser:expr decl text body-exprs ...)
      #'(define (tag . text-parts)
-         (with-parsed-text (quote tag) parser text-parts
-           (λ (decl text)
+         (with-parsed-text (quote tag) #f parser text-parts
+           (λ (decl text label)
+             body-exprs ...)))]))
+
+(define-syntax (define-leibniz-parser-with-label stx)
+  (syntax-parse stx
+    [(_ tag:id parser:expr decl-name text-name label-name body-exprs ...)
+     #'(define (tag #:label label . text-parts)
+         (with-parsed-text (quote tag) label parser text-parts
+           (λ (decl-name text-name label-name)
+             body-exprs ...)))]))
+
+(define-syntax (define-leibniz-parser-with-optional-label stx)
+  (syntax-parse stx
+    [(_ tag:id parser:expr decl-name text-name label-name body-exprs ...)
+     #'(define (tag #:label [label #f] . text-parts)
+         (with-parsed-text (quote tag) label parser text-parts
+           (λ (decl-name text-name label-name)
              body-exprs ...)))]))
 
 ;;
@@ -153,6 +170,7 @@
            (member tag '(leibniz-check leibniz-eval)))
       (define source (attr-ref element 'source))
       (define source-tag (attr-ref element 'source-tag))
+      (define label (attr-ref element 'label #f))
       (define expr (extract-single-element element))
       (define result
         (with-handlers ([exn:fail? (λ (e) e)])
@@ -165,7 +183,7 @@
         [(exn:fail msg cont)
          (leibniz-error msg (format "◊+~a{~a}" source-tag source))]
         [else
-         (asset->html result)])]
+         (asset->html result label)])]
 
      [else
       (txexpr tag
@@ -382,8 +400,28 @@
                                 '(condition))
                            (replacement ,(term->xexpr replacement))))
   `(@ (leibniz-decl ,rule-expr)
-      (leibniz-check ((source  ,rule-string) (source-tag "rule"))
+      (leibniz-check ((source ,rule-string) (source-tag "rule"))
                      ,rule-expr)))
+
+;; Equations
+
+(define-leibniz-parser-with-label +equation equation/p 
+                                  equation-decl equation-string equation-label
+  (match-define `(equation ,left ,right ,clauses) equation-decl)
+  (define-values (vars condition) (group-clauses clauses))
+  (define equation-expr `(equation (vars ,@vars)
+                                   (left ,(term->xexpr left))
+                                   ,(if condition
+                                        (list 'condition
+                                              (term->xexpr condition))
+                                        '(condition))
+                                   (right ,(term->xexpr right))))
+  `(@ (leibniz-decl (asset ((id ,equation-label)) ,equation-expr))
+      (leibniz-check ((source ,equation-string) (source-tag "equation")
+                      (label ,equation-label))
+                     ,equation-expr)))
+
+;; Tests
 
 (define-leibniz-parser +test rule/p rule-decl test-string
   (match-define `(rule ,pattern ,replacement ,clauses) rule-decl)

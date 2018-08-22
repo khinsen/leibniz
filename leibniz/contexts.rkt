@@ -888,17 +888,17 @@
   (define asset (xexpr->asset xexpr-asset))
   (match asset
     [(list (and tag
-                (or 'equation 'transformation 'assets 'test
+                (or 'transformation 'assets 'test
                     'as-equation 'as-rule 'substitute 'transform)) _ ...)
-     (error (format "not yet implemented:" tag))]
-    [(list 'rule vars pattern replacement condition)
+     (error (format "not yet implemented: ~a" tag))]
+    [(list (and type (or 'rule 'equation)) vars pattern1 pattern2 condition)
      (define make (compile-pattern signature vars))
-     (define pattern* (make pattern))
-     (define replacement* (make replacement))
+     (define pattern1* (make pattern1))
+     (define pattern2* (make pattern2))
      (define condition* (and condition (make condition)))
-     (list 'rule vars
-           (decompile-pattern pattern*)
-           (decompile-pattern replacement*)
+     (list type vars
+           (decompile-pattern pattern1*)
+           (decompile-pattern pattern2*)
            (and condition (decompile-pattern condition*)))]
     [pattern
      (define pattern* ((compile-pattern signature (hash)) asset))
