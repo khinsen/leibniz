@@ -4,12 +4,15 @@
          add-to-library
          add-context
          get-context
-         context-name-resolver)
+         context-name-resolver
+         read-xhtml-document)
 
 (require (prefix-in builtins: "./builtin-contexts.rkt")
          (prefix-in contexts: "./contexts.rkt")
          "./lightweight-class.rkt"
-         threading)
+         threading
+         xml
+         txexpr)
 
 (module+ test
   (require rackunit))
@@ -43,6 +46,11 @@
               (cons name order)
               library
               library-refs))
+
+  ;; Add a context defined by an xexpr
+  (define (add-xexpr-context xexpr)
+    (define-values (cntxt name) (contexts:xexpr->context+name xexpr))
+    (add-context name (contexts:compile-context cntxt (context-name-resolver))))
 
   ;; Retrieve a context by name
   (define (get-document-and-context name)
@@ -103,3 +111,57 @@
 (define empty-document
   (~> (document (hash) empty  (hash) (hash))
       (add-to-library "builtins" builtins #f)))
+
+;; Read document from an HTML file
+
+(define (read-xhtml filename)
+  (~> filename
+      open-input-file
+      read-xml/element
+      xml->xexpr))
+
+(define ((has-tag? tag) element)
+  (and (txexpr? element)
+       (equal? tag (get-tag element))))
+
+(define (xhtml->contexts xexpr)
+  (~> xexpr
+      (findf-txexpr
+       (λ (x) (and ((has-tag? 'script) x)
+                   (attrs-equal? '((id "leibniz-document") (type "application/xml"))
+                                 (get-attrs x)))))
+      (findf-txexpr (has-tag? 'leibniz-document))
+      (findf*-txexpr (has-tag? 'context))))
+
+(define (xhtml->document xexpr)
+  (define document-element
+    (~> xexpr
+        (findf-txexpr
+         (λ (x) (and ((has-tag? 'script) x)
+                     (attrs-equal? '((id "leibniz-document") (type "application/xml"))
+                                   (get-attrs x)))))
+        (findf-txexpr (has-tag? 'leibniz-document))))
+  (define docref-elements
+    (~> document-element
+        (findf-txexpr (has-tag? 'library))
+        (findf*-txexpr (has-tag? 'document-ref))))
+  (define context-elements
+    (~> document-element
+        (findf*-txexpr (has-tag? 'context))))
+  (define document-with-imports
+    (for/fold ([document empty-document])
+              ([doc-ref (or docref-elements empty)])
+      (define name (attr-ref doc-ref "id"))
+      (define filename (attr-ref doc-ref "filename"))
+      (add-to-library document name
+                      (read-xhtml-document filename)
+                      filename)))
+  (for/fold ([document document-with-imports])
+            ([xexpr context-elements])
+    (add-xexpr-context document xexpr)))
+
+(define (read-xhtml-document filename)
+  (~> filename
+      read-xhtml
+      xhtml->document))
+

@@ -3,6 +3,7 @@
 ;; Pollen interface 
 
 (provide root
+         +import
          +context +use +extend
          +sort
          +op
@@ -251,11 +252,31 @@
 
   (define-values (preamble first-context)
     (splitf-at document-elements non-context-element?))
+  (define-values (library preamble-text)
+    (partition (has-tag? 'document-ref) preamble))
+  (define-values (document-with-imports reverse-import-list)
+    (for/fold ([document documents:empty-document]
+               [import-list empty])
+              ([doc-ref library])
+      (define name (attr-ref doc-ref "id"))
+      (define filename (attr-ref doc-ref "filename"))
+      (values (documents:add-to-library document name
+                                        (documents:read-xhtml-document filename)
+                                        filename)
+              (cons `(@ (a ((href ,filename)) ,name) '(br)) import-list))))
+  (define preamble-with-import-list
+    (list
+     (txexpr* 'div '((class "row"))
+              (txexpr 'div '((class "column context"))
+                      (list* '(h4 "Imported documents:")
+                             (reverse reverse-import-list)))
+              (txexpr 'div '((class "column main"))
+                      preamble-text))))
 
   (define-values (contexts text)
     (let loop ([contexts empty]
-               [text (list preamble)]
-               [document documents:empty-document]
+               [text (list preamble-with-import-list)]
+               [document document-with-imports]
                [todo first-context])
       (if (empty? todo)
           (values (reverse contexts)
@@ -291,8 +312,16 @@
                      #:string-proc smart-dashes))
 
   (txexpr* 'root empty
-           (txexpr* 'leibniz empty (txexpr 'leibniz-contexts empty contexts))
+           (txexpr* 'leibniz empty
+                    (txexpr 'leibniz-document empty
+                            (cons (txexpr 'library empty library)
+                                  contexts)))
            (txexpr 'doc empty decoded-text)))
+
+;; Import of documents
+
+(define (+import document-name #:filename filename)
+  `(document-ref ((id ,document-name) (filename ,filename))))
 
 ;; Context definition
 
