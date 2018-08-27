@@ -16,7 +16,8 @@
          ((listof pair?) operators:signature? equations:rulelist?
          . -> . context?)]
   [check-asset (context? xexpr/c . -> . any/c)]
-  [eval-asset (context? xexpr/c . -> . any/c)]))
+  [eval-asset (context? xexpr/c . -> . any/c)]
+  [eval-context-expr (context? xexpr/c . -> . context?)]))
 
 (require "./lightweight-class.rkt"
          (prefix-in sorts: "./sorts.rkt")
@@ -973,3 +974,18 @@
   (check-exn exn:fail?
              (thunk (eval-asset compiled-reference-context
                                 '(assets)))))
+
+;;
+;; Evaluate an expression yielding a context
+;;
+(define (eval-context-expr cntxt xexpr)
+  (define signature (context-compiled-signature cntxt))
+  (unless signature
+    (error "eval-context-expr requires a compiled context"))
+  (define rules (context-compiled-rules cntxt))
+  (define term (xexpr->asset xexpr))
+  (define term* ((compile-term signature) term))
+  (define reduced-term* (rewrite:reduce signature rules term*))
+  (unless (context? reduced-term*)
+    (error (format "not a fully reduced context: ~a" xexpr)))
+  reduced-term*)

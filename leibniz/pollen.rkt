@@ -8,7 +8,7 @@
          +sort
          +op
          +var
-         +term +eval-term
+         +term +eval-term +substitute-context
          +rule
          +equation
          +test
@@ -26,6 +26,7 @@
          "./formatting.rkt"
          (prefix-in contexts: "./contexts.rkt")
          (prefix-in documents: "./documents.rkt")
+         (only-in "./builtin-contexts.rkt" current-context-name-resolver)
          (for-syntax syntax/parse)
          xml
          threading)
@@ -104,6 +105,19 @@
             ,message)))
 
 ;;
+;; Extract specific elements from an element list
+;;
+(define ((has-tag? tag) element)
+  (and (txexpr? element)
+       (equal? (get-tag element) tag)))
+
+(define (extract-elements tag elements)
+  (define-values (filtered-txexpr extracted-elements)
+    (splitf-txexpr (txexpr 'dummy empty elements)
+                   (has-tag? tag)))
+  (values (get-elements filtered-txexpr) extracted-elements))
+
+;;
 ;; The root function, which does most of the processing work
 ;; First, the document is partitioned into contexts. Next, the declarations
 ;; are collected for each context, and then compiled, before the expressions
@@ -124,10 +138,6 @@
                      (get-tag element) e)))
     e))
 
-(define ((has-tag? tag) element)
-  (and (txexpr? element)
-       (equal? (get-tag element) tag)))
-
 (define (preprocess-decls decls)
   (define by-tag
     (for/fold ([by-tag (hash)])
@@ -145,9 +155,10 @@
 
 (define (process-context context-name context-elements document has-syntax-errors?)
 
+  (define name-resolver (documents:context-name-resolver document))
+
   (define-values (contents decls)
-    (splitf-txexpr (txexpr 'dummy empty context-elements)
-                   (has-tag? 'leibniz-decl)))
+    (extract-elements 'leibniz-decl context-elements))
 
   (define context-or-error
     (with-handlers ([contexts:exn:fail:leibniz? (λ (e) e)])
@@ -158,7 +169,7 @@
                (txexpr 'context empty _)
                contexts:xexpr->context
                contexts:add-implicit-declarations
-               (contexts:compile-context (documents:context-name-resolver document))))))
+               (contexts:compile-context name-resolver)))))
 
   (define (eval-contents element)
     (condd
@@ -194,10 +205,16 @@
               (get-attrs element)
               (map eval-contents (get-elements element)))]))
 
+  (define evaluated-contents
+    (parameterize ([current-context-name-resolver name-resolver])
+      ;; We cannot use map-elements here because it processes
+      ;; elements inside to outside, so we use plain map and do
+      ;; recursive traversal in eval-contents.
+      (map eval-contents contents)))
+
   (define (row-for-context context-name text)
     (define-values (main-text context-column)
-      (splitf-txexpr (txexpr 'dummy empty text)
-                     (has-tag? 'context-column)))
+      (extract-elements 'context-column text))
     (list
      (txexpr* 'hr '((style "border-top: dotted 1px;"))
               (txexpr* 'div '((class "row"))
@@ -207,59 +224,68 @@
                                 '(br)
                                 (apply append
                                        (map get-elements context-column))))
-                       (txexpr 'div '((class "column main"))
-                               (get-elements main-text))))))
+                       (txexpr 'div '((class "column main")) main-text)))))
 
-  (cond
-    ;; No error
-    [(contexts:context? context-or-error)
-     (define context context-or-error)
-     (values (contexts:context->xexpr context context-name)
-             (row-for-context context-name
-                              ;; We cannot use map-elements here because it
-                              ;; processes elements inside to outside, so we
-                              ;; use plain map and do recursive traversal
-                              ;; in eval-contents.
-                              (map eval-contents (get-elements contents)))
-             (documents:add-context document context-name context)
-             ;; Continue processing
-             #t)]
-    ;; Error in processing the context after syntax checking
-    [(contexts:exn:fail:leibniz? context-or-error)
-     (match-define (contexts:exn:fail:leibniz msg cont decl) context-or-error)
-     (values #f
-             (row-for-context context-name
-                              (list* `(context-column
-                                       ,(leibniz-error msg decl)
-                                       '(br))
-                                    (map eval-contents
-                                         (get-elements contents))))
-             document
-             ;; Don't continue processing because the following contexts
-             ;; might include the current one which had errors.
-             #f)]
-    ;; Syntax error in context definition
-    [else
-     (values #f
-             (row-for-context context-name
-                              (cons '(context-column
-                                      (span ((class "LeibnizError"))
-                                            "not processed because of syntax errors in the document"))
-                                    (map eval-contents
-                                         (get-elements contents))))
-             document
-             ;; Continue processing in order to check for syntax errors in the
-             ;; whole document.
-             #t)]))
+  (condd
+   ;; Syntax error in context definition
+   [(not context-or-error)
+    (values #f
+            (row-for-context context-name
+                             (cons '(context-column
+                                     (span ((class "LeibnizError"))
+                                           "not processed because of syntax errors in the document"))
+                                   evaluated-contents))
+            document
+            ;; Continue processing in order to check for syntax errors in the
+            ;; whole document.
+            #t)]
+   ;; Error in processing the context after syntax checking
+   [(contexts:exn:fail:leibniz? context-or-error)
+    (match-define (contexts:exn:fail:leibniz msg cont decl) context-or-error)
+    (values #f
+            (row-for-context context-name
+                             (list* `(context-column
+                                      ,(leibniz-error msg decl)
+                                      '(br))
+                                    evaluated-contents))
+            document
+            ;; Don't continue processing because the following contexts
+            ;; might include the current one which had errors.
+            #f)]
+   ;; No error
+   #:do (define context context-or-error)
+   #:do (define-values (cleaned-contents substitute-contexts)
+          (extract-elements 'leibniz-substitute-context evaluated-contents))
+   ;; Plain context definition
+   [(empty? substitute-contexts)
+    (values (contexts:context->xexpr context context-name)
+            (row-for-context context-name cleaned-contents)
+            (documents:add-context document context-name context)
+            ;; Continue processing
+            #t)]
+   ;; Substituted context definition
+   [else
+    (unless (equal? 1 (length substitute-contexts))
+      (error "more than one substitute context"))
+    (define element (first substitute-contexts))
+    (define source (attr-ref element 'source))
+    (define expr (extract-single-element element))
+    (define substitute-context
+      (with-handlers ([exn:fail? (λ (e) e)])
+        (parameterize ([current-context-name-resolver name-resolver])
+          (contexts:eval-context-expr context expr))))
+    (values (contexts:context->xexpr substitute-context context-name)
+            (row-for-context context-name cleaned-contents)
+            (documents:add-context document context-name substitute-context)
+            ;; Continue processing
+            #t)]))
 
 (define (root . elements)
 
   ;; Check for syntax errors. Contexts are not processed if any syntax errors
   ;; are found in the document.
-  (define-values (document-root syntax-error-markers)
-    (splitf-txexpr (txexpr 'root empty elements)
-                   (has-tag? 'leibniz-syntax-error)))
-  (define document-elements (get-elements document-root))
+  (define-values (document-elements syntax-error-markers)
+    (extract-elements 'leibniz-syntax-error elements))
   (define has-syntax-errors? (not (empty? syntax-error-markers)))
 
   (define (non-context-element? e)
@@ -445,6 +471,12 @@
       " ⇒ "
       (leibniz-eval ((source ,term-string) (source-tag "eval-term"))
                     ,xexpr)))
+
+(define-leibniz-parser +substitute-context term/p term-decl term-string
+  (define xexpr (term->xexpr term-decl))
+  `(@ (leibniz-check ((source ,term-string) (source-tag "substitute-context"))
+                     ,xexpr)
+      (leibniz-substitute-context ((source ,term-string)) ,xexpr)))
 
 ;; Rules
 

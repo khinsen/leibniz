@@ -34,3 +34,8 @@ Finally, a few useless assets:
 We define ◊+sort{baz} and ◊+sort{qoox}, and then ◊+var{ANY:baz}.
 
 We also use ◊+term{"a string constant"}
+
+◊+context{a-transformed-context}
+◊+use{builtins/contexts}
+
+This context is the same as ◊+substitute-context{context("test")}
