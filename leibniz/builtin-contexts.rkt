@@ -122,23 +122,23 @@
          (-> #:vars ([X ℤ] [Y ℤ])
              (_× X Y) (binary-op integer? *))
 
-         (=> #:vars ([X zero] [Y ℤnz])
+         (=> #:vars ([X zero] [Y ℤ.nz])
              (_div X Y) 0)
          (-> #:vars ([X ℤ])
              (_div X 1) (return-X))
-         (-> #:vars ([X ℤ] [Y ℤnz])
+         (-> #:vars ([X ℤ] [Y ℤ.nz])
              (_div X Y) (binary-op integer? quotient))
 
-         (=> #:vars ([X zero] [Y ℤnz])
+         (=> #:vars ([X zero] [Y ℤ.nz])
              (_rem X Y) 0)
          (=> #:vars ([X ℤ])
              (_rem X 1) 0)
          (-> #:vars ([X ℤ] [Y ℤ])
              (_rem X Y) (binary-op integer? remainder))
 
-         (=> #:vars ([X ℤnz] [Y zero])
+         (=> #:vars ([X ℤ.nz] [Y zero])
              (^ X Y) 1)
-         (=> #:vars ([X ℕnz])
+         (=> #:vars ([X ℕ.nz])
              (^ 0 X) 0)
          (-> #:vars ([X ℤ] [Y ℤ])
              (^ X Y) (binary-op integer? expt-with-fix-for-zero))
@@ -188,8 +188,8 @@
     (ss:signature
      (include integer-signature)
      (op an-int ℤ)
-     (op a-nzint ℤnz)
-     (op a-nznat ℕnz)))
+     (op a-nzint ℤ.nz)
+     (op a-nznat ℕ.nz)))
   (with-rules integer-signature+ merged-integer-rules
     (chk
      #:= (RT (_+ 0 an-int)) (T an-int)
@@ -271,14 +271,14 @@
          (-> #:vars ([X ℚ])
              (_× X 1) (return-X))
 
-         (=> #:vars ([X zero] [Y ℚnz])
+         (=> #:vars ([X zero] [Y ℚ.nz])
              (_÷ X Y) 0)
          (-> #:vars ([X ℚ])
              (_÷ X 1) (return-X))
 
-         (=> #:vars ([X ℚnz] [Y zero])
+         (=> #:vars ([X ℚ.nz] [Y zero])
              (^ X Y) 1)
-         (=> #:vars ([X ℕnz])
+         (=> #:vars ([X ℕ.nz])
              (^ 0 X) 0)))
 
 (define merged-rational-rules
@@ -318,8 +318,8 @@
     (ss:signature
      (include rational-signature)
      (op a-rat ℚ)
-     (op a-nzrat ℚnz)
-     (op a-nznat ℕnz)))
+     (op a-nzrat ℚ.nz)
+     (op a-nznat ℕ.nz)))
   (with-rules rational-signature+ merged-rational-rules
     (chk
      #:= (RT (_+ 0 a-rat)) (T a-rat)
@@ -340,45 +340,45 @@
 ;
 ; Real numbers
 ;
-; 'ℝ    real
-; 'ℝnz  non-zero real
-; 'ℝp   positive real
-; 'ℝnn  non-negative real
+; 'ℝ     real
+; 'ℝ.nz  non-zero real
+; 'ℝ.p   positive real
+; 'ℝ.nn  non-negative real
 ;
 (define real-number-signature
   (ss:signature
    (include rational-signature)
    (sort ℝ)
    (subsort ℚ ℝ)
-   (sort ℝnz)
-   (subsort ℝnz ℝ)
-   (subsort ℚnz ℝnz)
-   (sort ℝp)
-   (subsort ℝp ℝnz)
-   (subsort ℚp ℝp)
-   (sort ℝnn)
-   (subsort ℝnn ℝ)
-   (subsort ℝp ℝnn)
-   (subsort ℚnn ℝnn)
+   (sort ℝ.nz)
+   (subsort ℝ.nz ℝ)
+   (subsort ℚ.nz ℝ.nz)
+   (sort ℝ.p)
+   (subsort ℝ.p ℝ.nz)
+   (subsort ℚ.p ℝ.p)
+   (sort ℝ.nn)
+   (subsort ℝ.nn ℝ)
+   (subsort ℝ.p ℝ.nn)
+   (subsort ℚ.nn ℝ.nn)
    (op (_+ ℝ ℝ) ℝ)
-   (op (_+ ℝp ℝp) ℝp)
-   (op (_+ ℝnn ℝnn) ℝnn)
+   (op (_+ ℝ.p ℝ.p) ℝ.p)
+   (op (_+ ℝ.nn ℝ.nn) ℝ.nn)
    (op (_- ℝ ℝ) ℝ)
    (op (- ℝ) ℝ)
    (op (_× ℝ ℝ) ℝ)
-   (op (_× ℝp ℝp) ℝp)
-   (op (_× ℝnn ℝnn) ℝnn)
-   (op (_÷ ℝ ℝnz) ℝ)
-   (op (_÷ ℝnz ℝnz) ℝnz)
-   (op (_÷ ℝp ℝp) ℝp)
-   (op (_÷ ℝnn ℝp) ℝnn)
-   (op (^ ℝp ℝnz) ℝp)
-   (op (^ ℝnz ℤnz) ℝnz)
-   (op (^ ℝ ℕnz) ℝ)
-   (op (abs ℝ) ℝnn)
-   (op (abs ℝnz) ℝp)
-   (op (√ ℝnn) ℝnn)
-   (op (√ ℝp) ℝp)
+   (op (_× ℝ.p ℝ.p) ℝ.p)
+   (op (_× ℝ.nn ℝ.nn) ℝ.nn)
+   (op (_÷ ℝ ℝ.nz) ℝ)
+   (op (_÷ ℝ.nz ℝ.nz) ℝ.nz)
+   (op (_÷ ℝ.p ℝ.p) ℝ.p)
+   (op (_÷ ℝ.nn ℝ.p) ℝ.nn)
+   (op (^ ℝ.p ℝ.nz) ℝ.p)
+   (op (^ ℝ.nz ℤ.nz) ℝ.nz)
+   (op (^ ℝ ℕ.nz) ℝ)
+   (op (abs ℝ) ℝ.nn)
+   (op (abs ℝ.nz) ℝ.p)
+   (op (√ ℝ.nn) ℝ.nn)
+   (op (√ ℝ.p) ℝ.p)
    (op (_= ℝ ℝ) boolean)
    (op (_< ℝ ℝ) boolean)
    (op (_> ℝ ℝ) boolean)
@@ -406,14 +406,14 @@
    (-> #:vars ([X ℝ])
        (_× X 1) (return-X))
 
-   (=> #:vars ([X zero] [Y ℝnz])
+   (=> #:vars ([X zero] [Y ℝ.nz])
        (_÷ X Y) 0)
    (-> #:vars ([X ℝ])
        (_÷ X 1) (return-X))
 
-   (=> #:vars ([X ℝnz] [Y zero])
+   (=> #:vars ([X ℝ.nz] [Y zero])
        (^ X Y) 1)
-   (=> #:vars ([X ℝp])
+   (=> #:vars ([X ℝ.p])
        (^ 0 X) 0)))
 
 (define merged-real-number-rules
@@ -425,8 +425,8 @@
     (ss:signature
      (include real-number-signature)
      (op a-real ℝ)
-     (op a-nzreal ℝnz)
-     (op a-preal ℝp)))
+     (op a-nzreal ℝ.nz)
+     (op a-preal ℝ.p)))
   (with-rules real-number-signature+ merged-real-number-rules
     (chk
      #:= (RT (_+ 0 a-real)) (T a-real)

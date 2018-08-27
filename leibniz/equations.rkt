@@ -174,7 +174,7 @@
     (check-true (valid-rule? a-signature (rule (T IntVar) (T true) (T 2) #f)))
     (check-equal? (rule-sorts-str a-signature
                                   (make-rule a-signature (T IntVar) #f (T 2) #f #t))
-                  "[ℚ] ⇒ ℕnz")
+                  "[ℚ] ⇒ ℕ.nz")
     ; Term 'bar not allowed in signature
     (check-exn exn:fail? (thunk (make-rule a-signature 'bar #f (T 2) #f #t)))
     (check-exn exn:fail? (thunk (make-rule a-signature (T Avar) 'bar (T 2) #f #t)))
@@ -230,7 +230,7 @@
     (check-true (valid-equation? a-signature (equation (T IntVar) (T true) (T 2))))
     (check-equal? (equation-sorts-str a-signature
                                       (make-equation a-signature (T IntVar) #f (T 2)))
-                  "[ℚ] = ℕnz")
+                  "[ℚ] = ℕ.nz")
     ; Term 'bar not allowed in signature
     (check-exn exn:fail? (thunk (make-equation a-signature 'bar #f (T 2))))
     (check-exn exn:fail? (thunk (make-equation a-signature (T Avar) 'bar (T 2))))

@@ -74,9 +74,9 @@
 ; Integers and their subsets
 ;
 ; ℕ    natural
-; ℕnz  non-zero natural
+; ℕ.nz non-zero natural
 ; ℤ    integer
-; ℤnz  non-zero integer
+; ℤ.nz non-zero integer
 ;
 ; "truth" is included because comparisons have sort boolean.
 ;
@@ -86,39 +86,39 @@
       (add-sort 'ℕ)
       (add-sort 'zero)
       (add-subsort-relation 'zero 'ℕ)
-      (add-sort 'ℕnz)
-      (add-subsort-relation 'ℕnz 'ℕ)
+      (add-sort 'ℕ.nz)
+      (add-subsort-relation 'ℕ.nz 'ℕ)
       ; Integers
       (add-sort 'ℤ)
       (add-subsort-relation 'ℕ 'ℤ)
-      (add-sort 'ℤnz)
-      (add-subsort-relation 'ℤnz 'ℤ)
-      (add-subsort-relation 'ℕnz 'ℤnz)))
+      (add-sort 'ℤ.nz)
+      (add-subsort-relation 'ℤ.nz 'ℤ)
+      (add-subsort-relation 'ℕ.nz 'ℤ.nz)))
 
 (define integer-signature
   (~> (empty-signature integer-sorts #:builtins (set '*integer*))
       (merge-signatures truth-signature #f)
       (add-op '_+ (list 'ℤ 'ℤ) 'ℤ)
       (add-op '_+ (list 'ℕ 'ℕ) 'ℕ)
-      (add-op '_+ (list 'ℕnz 'ℕ) 'ℕnz)
-      (add-op '_+ (list 'ℕ 'ℕnz) 'ℕnz)
+      (add-op '_+ (list 'ℕ.nz 'ℕ) 'ℕ.nz)
+      (add-op '_+ (list 'ℕ 'ℕ.nz) 'ℕ.nz)
       (add-op '_- (list 'ℤ 'ℤ) 'ℤ)
       (add-op '- (list 'ℤ) 'ℤ)
       (add-op '_× (list 'ℤ 'ℤ) 'ℤ)
       (add-op '_× (list 'ℕ 'ℕ) 'ℕ)
-      (add-op '_× (list 'ℕnz 'ℕnz) 'ℕnz)
-      (add-op '_× (list 'ℤnz 'ℤnz) 'ℤnz)
-      (add-op '_div (list 'ℤ 'ℤnz) 'ℤ)
-      (add-op '_div (list 'ℕ 'ℕnz) 'ℕ)
-      (add-op '_rem (list 'ℤ 'ℤnz) 'ℤ)
-      (add-op '_rem (list 'ℕ 'ℕnz) 'ℕ)
-      (add-op '^ (list 'ℤ 'ℕnz) 'ℤ)
-      (add-op '^ (list 'ℕ 'ℕnz) 'ℕ)
-      (add-op '^ (list 'ℕnz 'ℕnz) 'ℕnz)
-      (add-op '^ (list 'ℤnz 'ℕnz) 'ℤnz)
-      (add-op '^ (list 'ℤnz 'zero) 'ℕnz)
+      (add-op '_× (list 'ℕ.nz 'ℕ.nz) 'ℕ.nz)
+      (add-op '_× (list 'ℤ.nz 'ℤ.nz) 'ℤ.nz)
+      (add-op '_div (list 'ℤ 'ℤ.nz) 'ℤ)
+      (add-op '_div (list 'ℕ 'ℕ.nz) 'ℕ)
+      (add-op '_rem (list 'ℤ 'ℤ.nz) 'ℤ)
+      (add-op '_rem (list 'ℕ 'ℕ.nz) 'ℕ)
+      (add-op '^ (list 'ℤ 'ℕ.nz) 'ℤ)
+      (add-op '^ (list 'ℕ 'ℕ.nz) 'ℕ)
+      (add-op '^ (list 'ℕ.nz 'ℕ.nz) 'ℕ.nz)
+      (add-op '^ (list 'ℤ.nz 'ℕ.nz) 'ℤ.nz)
+      (add-op '^ (list 'ℤ.nz 'zero) 'ℕ.nz)
       (add-op 'abs (list 'ℤ) 'ℕ)
-      (add-op 'abs (list 'ℤnz) 'ℕnz)
+      (add-op 'abs (list 'ℤ.nz) 'ℕ.nz)
       (add-op '_= (list 'ℤ 'ℤ) 'boolean)
       (add-op '_< (list 'ℤ 'ℤ) 'boolean)
       (add-op '_> (list 'ℤ 'ℤ) 'boolean)
@@ -126,24 +126,24 @@
       (add-op '_≥ (list 'ℤ 'ℤ) 'boolean)))
 
 (module+ test
-  (check-equal? (sort-of-numarg-term integer-signature '_+ (list 1 2)) 'ℕnz)
-  (check-equal? (sort-of-numarg-term integer-signature '_+ (list 0 2)) 'ℕnz)
+  (check-equal? (sort-of-numarg-term integer-signature '_+ (list 1 2)) 'ℕ.nz)
+  (check-equal? (sort-of-numarg-term integer-signature '_+ (list 0 2)) 'ℕ.nz)
   (check-equal? (sort-of-numarg-term integer-signature '_+ (list 0 0)) 'ℕ)
   (check-equal? (sort-of-numarg-term integer-signature '_+ (list -1 0)) 'ℤ)
   (check-equal? (sort-of-numarg-term integer-signature '_- (list 0 0)) 'ℤ)
   (check-equal? (sort-of-numarg-term integer-signature '- (list 1)) 'ℤ)
-  (check-equal? (sort-of-numarg-term integer-signature '_× (list 1 2)) 'ℕnz)
+  (check-equal? (sort-of-numarg-term integer-signature '_× (list 1 2)) 'ℕ.nz)
   (check-equal? (sort-of-numarg-term integer-signature '_× (list 0 2)) 'ℕ)
   (check-equal? (sort-of-numarg-term integer-signature '_× (list -2 0)) 'ℤ)
-  (check-equal? (sort-of-numarg-term integer-signature '_× (list -2 -2)) 'ℤnz)
+  (check-equal? (sort-of-numarg-term integer-signature '_× (list -2 -2)) 'ℤ.nz)
   (check-equal? (sort-of-numarg-term integer-signature '_div (list -2 -2)) 'ℤ)
   (check-equal? (sort-of-numarg-term integer-signature '_div (list 0 1)) 'ℕ)
   (check-equal? (sort-of-numarg-term integer-signature '_rem (list -2 -2)) 'ℤ)
   (check-equal? (sort-of-numarg-term integer-signature '_rem (list 0 1)) 'ℕ)
-  (check-equal? (sort-of-numarg-term integer-signature '^ (list 2 1)) 'ℕnz)
+  (check-equal? (sort-of-numarg-term integer-signature '^ (list 2 1)) 'ℕ.nz)
   (check-equal? (sort-of-numarg-term integer-signature '^ (list 2 0))
                 (number-term.sort 1))
-  (check-equal? (sort-of-numarg-term integer-signature '^ (list -2 1)) 'ℤnz)
+  (check-equal? (sort-of-numarg-term integer-signature '^ (list -2 1)) 'ℤ.nz)
   (check-equal? (sort-of-numarg-term integer-signature '^ (list -2 0))
                 (number-term.sort 1))
   (check-equal? (sort-of-numarg-term integer-signature '^ (list 0 0))
@@ -159,48 +159,48 @@
 ;
 ; Rationals and their subsets
 ; 
-; ℚ    rational
-; ℚnz  non-zero rational
-; ℚp   positive rational
-; ℚnn  non-negative rational
+; ℚ     rational
+; ℚ.nz  non-zero rational
+; ℚ.p   positive rational
+; ℚ.nn  non-negative rational
 ;
 (define rational-sorts
   (~> integer-sorts
       ; Rational numbers
       (add-sort 'ℚ)
       (add-subsort-relation 'ℤ 'ℚ)
-      (add-sort 'ℚnz)
-      (add-subsort-relation 'ℚnz 'ℚ)
-      (add-subsort-relation 'ℤnz 'ℚnz)
-      (add-sort 'ℚp)
-      (add-subsort-relation 'ℚp 'ℚnz)
-      (add-subsort-relation 'ℕnz 'ℚp)
-      (add-sort 'ℚnn)
-      (add-subsort-relation 'ℚnn 'ℚ)
-      (add-subsort-relation 'ℚp 'ℚnn)
-      (add-subsort-relation 'ℕ 'ℚnn)))
+      (add-sort 'ℚ.nz)
+      (add-subsort-relation 'ℚ.nz 'ℚ)
+      (add-subsort-relation 'ℤ.nz 'ℚ.nz)
+      (add-sort 'ℚ.p)
+      (add-subsort-relation 'ℚ.p 'ℚ.nz)
+      (add-subsort-relation 'ℕ.nz 'ℚ.p)
+      (add-sort 'ℚ.nn)
+      (add-subsort-relation 'ℚ.nn 'ℚ)
+      (add-subsort-relation 'ℚ.p 'ℚ.nn)
+      (add-subsort-relation 'ℕ 'ℚ.nn)))
 
 (define rational-signature
   (~> (empty-signature rational-sorts #:builtins (set '*rational*))
       (merge-signatures integer-signature #f)
       (add-op '_+ (list 'ℚ 'ℚ) 'ℚ)
-      (add-op '_+ (list 'ℚp 'ℚp) 'ℚp)
-      (add-op '_+ (list 'ℚnn 'ℚnn) 'ℚnn)
+      (add-op '_+ (list 'ℚ.p 'ℚ.p) 'ℚ.p)
+      (add-op '_+ (list 'ℚ.nn 'ℚ.nn) 'ℚ.nn)
       (add-op '_- (list 'ℚ 'ℚ) 'ℚ)
       (add-op '- (list 'ℚ) 'ℚ)
       (add-op '_× (list 'ℚ 'ℚ) 'ℚ)
-      (add-op '_× (list 'ℚp 'ℚp) 'ℚp)
-      (add-op '_× (list 'ℚnn 'ℚnn) 'ℚnn)
-      (add-op '_× (list 'ℚnz 'ℚnz) 'ℚnz)
-      (add-op '_÷ (list 'ℚ 'ℚnz) 'ℚ)
-      (add-op '_÷ (list 'ℚnz 'ℚnz) 'ℚnz)
-      (add-op '_÷ (list 'ℚnn 'ℚp) 'ℚnn)
-      (add-op '_÷ (list 'ℚp 'ℚp) 'ℚp)
-      (add-op '^ (list 'ℚnz 'ℤnz) 'ℚnz)
-      (add-op '^ (list 'ℚp 'ℤnz) 'ℚp)
-      (add-op '^ (list 'ℚnz 'zero) 'ℕnz)
-      (add-op 'abs (list 'ℚ) 'ℚnn)
-      (add-op 'abs (list 'ℚnz) 'ℚp)
+      (add-op '_× (list 'ℚ.p 'ℚ.p) 'ℚ.p)
+      (add-op '_× (list 'ℚ.nn 'ℚ.nn) 'ℚ.nn)
+      (add-op '_× (list 'ℚ.nz 'ℚ.nz) 'ℚ.nz)
+      (add-op '_÷ (list 'ℚ 'ℚ.nz) 'ℚ)
+      (add-op '_÷ (list 'ℚ.nz 'ℚ.nz) 'ℚ.nz)
+      (add-op '_÷ (list 'ℚ.nn 'ℚ.p) 'ℚ.nn)
+      (add-op '_÷ (list 'ℚ.p 'ℚ.p) 'ℚ.p)
+      (add-op '^ (list 'ℚ.nz 'ℤ.nz) 'ℚ.nz)
+      (add-op '^ (list 'ℚ.p 'ℤ.nz) 'ℚ.p)
+      (add-op '^ (list 'ℚ.nz 'zero) 'ℕ.nz)
+      (add-op 'abs (list 'ℚ) 'ℚ.nn)
+      (add-op 'abs (list 'ℚ.nz) 'ℚ.p)
       (add-op '_= (list 'ℚ 'ℚ) 'boolean)
       (add-op '_< (list 'ℚ 'ℚ) 'boolean)
       (add-op '_> (list 'ℚ 'ℚ) 'boolean)
@@ -209,7 +209,7 @@
 
 (module+ test
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '_+ (list 1/2 2/3)) 'ℚp)
+                                     '_+ (list 1/2 2/3)) 'ℚ.p)
   (check-equal? (sort-of-numarg-term rational-signature
                                      '_+ (list 1/2 -2/3)) 'ℚ)
   (check-equal? (sort-of-numarg-term rational-signature
@@ -217,26 +217,26 @@
   (check-equal? (sort-of-numarg-term rational-signature
                                      '- (list -2/3)) 'ℚ)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '_× (list 1/2 2/3)) 'ℚp)
+                                     '_× (list 1/2 2/3)) 'ℚ.p)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '_× (list 0 2/3)) 'ℚnn)
+                                     '_× (list 0 2/3)) 'ℚ.nn)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '_× (list 1/2 -2/3)) 'ℚnz)
+                                     '_× (list 1/2 -2/3)) 'ℚ.nz)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '_÷ (list 1/2 -2/3)) 'ℚnz)
+                                     '_÷ (list 1/2 -2/3)) 'ℚ.nz)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '_÷ (list 1/2 2/3)) 'ℚp)
+                                     '_÷ (list 1/2 2/3)) 'ℚ.p)
   (check-equal? (sort-of-numarg-term rational-signature
                                      '_÷ (list 1/2 0))
                 (kind rational-sorts 'ℚ))
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '^ (list 1/2 2)) 'ℚp)
+                                     '^ (list 1/2 2)) 'ℚ.p)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '^ (list 1/2 -2)) 'ℚp)
+                                     '^ (list 1/2 -2)) 'ℚ.p)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '^ (list -1/2 2)) 'ℚnz)
+                                     '^ (list -1/2 2)) 'ℚ.nz)
   (check-equal? (sort-of-numarg-term rational-signature
-                                     '^ (list -1/2 -2)) 'ℚnz)
+                                     '^ (list -1/2 -2)) 'ℚ.nz)
   (check-equal? (sort-of-numarg-term rational-signature '^ (list 1/2 0))
                 (number-term.sort 1))
   (check-equal? (sort-of-numarg-term rational-signature
@@ -259,12 +259,12 @@
 (define IEEE-float-sorts
   (~> empty-sort-graph
       (add-sort 'FP)
-      (add-sort 'FP-number)
-      (add-sort 'FP-NaN)
-      (add-sort 'FP-inf)
-      (add-subsort-relation 'FP-number 'FP)
-      (add-subsort-relation 'FP-NaN 'FP)
-      (add-subsort-relation 'FP-inf 'FP)
+      (add-sort 'FP.number)
+      (add-sort 'FP.NaN)
+      (add-sort 'FP.inf)
+      (add-subsort-relation 'FP.number 'FP)
+      (add-subsort-relation 'FP.NaN 'FP)
+      (add-subsort-relation 'FP.inf 'FP)
 
       (add-sort 'FP32)
       (add-sort 'FP32-number)
@@ -272,11 +272,11 @@
       (add-sort 'FP32-inf)
       (add-subsort-relation 'FP32 'FP)
       (add-subsort-relation 'FP32-number 'FP32)
-      (add-subsort-relation 'FP32-number 'FP-number)
+      (add-subsort-relation 'FP32-number 'FP.number)
       (add-subsort-relation 'FP32-NaN 'FP32)
-      (add-subsort-relation 'FP32-NaN 'FP-NaN)
+      (add-subsort-relation 'FP32-NaN 'FP.NaN)
       (add-subsort-relation 'FP32-inf 'FP32)
-      (add-subsort-relation 'FP32-inf 'FP-inf)
+      (add-subsort-relation 'FP32-inf 'FP.inf)
 
       (add-sort 'FP64)
       (add-sort 'FP64-number)
@@ -284,11 +284,11 @@
       (add-sort 'FP64-inf)
       (add-subsort-relation 'FP64 'FP)
       (add-subsort-relation 'FP64-number 'FP64)
-      (add-subsort-relation 'FP64-number 'FP-number)
+      (add-subsort-relation 'FP64-number 'FP.number)
       (add-subsort-relation 'FP64-NaN 'FP64)
-      (add-subsort-relation 'FP64-NaN 'FP-NaN)
+      (add-subsort-relation 'FP64-NaN 'FP.NaN)
       (add-subsort-relation 'FP64-inf 'FP64)
-      (add-subsort-relation 'FP64-inf 'FP-inf)))
+      (add-subsort-relation 'FP64-inf 'FP.inf)))
 
 (define IEEE-float-signature
   (~> (empty-signature IEEE-float-sorts #:builtins (set '*IEEE-floating-point*))
@@ -386,8 +386,8 @@
        [else 'FP64-number])]
     [(inexact? x) (error "not supported")]
     [(zero? x) 'zero]
-    [(integer? x) (if (positive? x) 'ℕnz 'ℤnz)]
-    [else (if (positive? x) 'ℚp 'ℚnz)]))
+    [(integer? x) (if (positive? x) 'ℕ.nz 'ℤ.nz)]
+    [else (if (positive? x) 'ℚ.p 'ℚ.nz)]))
 
 (define (number-term.builtin-type x)
   (cond

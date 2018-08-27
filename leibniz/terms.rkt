@@ -128,10 +128,10 @@
 
 (module+ test
   (check-equal? (term.sort 0) 'zero)
-  (check-equal? (term.sort 1) 'ℕnz)
-  (check-equal? (term.sort -1) 'ℤnz)
-  (check-equal? (term.sort 1/2) 'ℚp)
-  (check-equal? (term.sort -1/2) 'ℚnz)
+  (check-equal? (term.sort 1) 'ℕ.nz)
+  (check-equal? (term.sort -1) 'ℤ.nz)
+  (check-equal? (term.sort 1/2) 'ℚ.p)
+  (check-equal? (term.sort -1/2) 'ℚ.nz)
   (check-equal? (term.builtin-type 0) '*integer*)
   (check-equal? (term.builtin-type 1/2) '*rational*)
   (check-equal? (term.key 0) '*integer*)
@@ -304,7 +304,7 @@
       (get-output-string o)))
 
 (module+ test
-  (check-equal? (term->string 2) "ℕnz:2")
+  (check-equal? (term->string 2) "ℕ.nz:2")
   (check-equal? (term->string 'foo) "symbol:'foo")
   (check-equal? (term->string "foo") "string:\"foo\"")
   (check-equal? (term->string (make-term a-signature 'a-B empty))
@@ -428,7 +428,7 @@
         (add-var 'B-var 'B)
         (add-var 'Zero-var 'zero)
         (add-var 'Integer-var 'ℤ)
-        (add-var 'NonZeroInteger-var 'ℤnz)
+        (add-var 'NonZeroInteger-var 'ℤ.nz)
         (add-var 'StrangelyNamedVar 'zero)))
   (define A-var (make-var a-var-signature 'A-var))
   (define B-var (make-var a-var-signature 'B-var))

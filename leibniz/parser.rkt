@@ -39,9 +39,12 @@
 (define letter-or-symbol-or-digit/p
   (or/p letter/p some-symbolic/p some-punctuation/p digit/p))
 
+(define letter-or-symbol-or-digit-or-dot/p
+  (or/p letter/p some-symbolic/p some-punctuation/p digit/p (char/p #\.)))
+
 (define identifier/p
   (do [first <- letter-or-symbol/p]
-      [rest <-  (many/p letter-or-symbol-or-digit/p)]
+      [rest <- (many/p letter-or-symbol-or-digit-or-dot/p)]
       (pure (string->symbol (apply string (append (list first) rest))))))
 
 (define reserved-identifiers (set '⊆ '↣ '→ '⇒ '= '∀ 'if))
@@ -67,10 +70,15 @@
   (check-parse letter-or-symbol-or-digit/p "%" #\%)
   (check-parse letter-or-symbol-or-digit/p "1" #\1)
   (check-parse identifier/p "abc" 'abc)
+  (check-parse identifier/p "a.b" 'a.b)
+  (check-parse identifier/p "ab." 'ab.)
   (check-parse identifier/p "x1" 'x1)
   (check-parse identifier/p "=" '=)
   (check-parse-failure identifier/p "1x")
+  (check-parse-failure identifier/p ".x")
   (check-parse non-reserved-identifier/p "abc" 'abc)
+  (check-parse non-reserved-identifier/p "a.b" 'a.b)
+  (check-parse non-reserved-identifier/p "ab." 'ab.)
   (check-parse non-reserved-identifier/p "x1" 'x1)
   (check-parse-failure non-reserved-identifier/p "="))
 
