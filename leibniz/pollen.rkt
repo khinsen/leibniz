@@ -208,6 +208,7 @@
                                (get-elements main-text))))))
 
   (cond
+    ;; No error
     [(contexts:context? context-or-error)
      (define context context-or-error)
      (values (contexts:context->xexpr context context-name)
@@ -217,16 +218,24 @@
                               ;; use plain map and do recursive traversal
                               ;; in eval-contents.
                               (map eval-contents (get-elements contents)))
-             (documents:add-context document context-name context))]
+             (documents:add-context document context-name context)
+             ;; Continue processing
+             #t)]
+    ;; Error in processing the context after syntax checking
     [(contexts:exn:fail:leibniz? context-or-error)
      (match-define (contexts:exn:fail:leibniz msg cont decl) context-or-error)
      (values #f
              (row-for-context context-name
-                              (cons `(context-column
-                                      ,(leibniz-error msg decl))
+                              (list* `(context-column
+                                       ,(leibniz-error msg decl)
+                                       '(br))
                                     (map eval-contents
                                          (get-elements contents))))
-             document)]
+             document
+             ;; Don't continue processing because the following contexts
+             ;; might include the current one which had errors.
+             #f)]
+    ;; Syntax error in context definition
     [else
      (values #f
              (row-for-context context-name
@@ -235,7 +244,10 @@
                                             "not processed because of syntax errors in the document"))
                                     (map eval-contents
                                          (get-elements contents))))
-             document)]))
+             document
+             ;; Continue processing in order to check for syntax errors in the
+             ;; whole document.
+             #t)]))
 
 (define (root . elements)
 
@@ -296,18 +308,18 @@
                   (append* (reverse text)))
           (let*-values ([(contents next-context)
                          (splitf-at (rest todo) non-context-element?)]
-                        [(declarations processed-contents extended-document)
+                        [(declarations processed-contents extended-document continue?)
                          (process-context (extract-single-string (first todo))
                                           contents document has-syntax-errors?)])
             (if (not declarations)
                 (loop contexts
                       (cons processed-contents text)
                       document
-                      next-context)
+                      (if continue? next-context empty))
                 (loop (cons declarations contexts)
                       (cons processed-contents text)
                       extended-document
-                      next-context))))))
+                      (if continue? next-context empty)))))))
 
   (define errors
     (for/list ([i (range 1 (error-counter))])

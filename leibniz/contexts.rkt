@@ -966,7 +966,7 @@
   (check-equal? (eval-asset compiled-reference-context
                             '(term ((op "foo2bar"))
                                    (term-or-var ((name "a-bar")))))
-                '(term a-foo ()))
+                '(reduced-term (term a-foo ())))
   ;; failure for an asset list
   (check-exn exn:fail?
              (thunk (eval-asset compiled-reference-context
