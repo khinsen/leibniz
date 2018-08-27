@@ -5,14 +5,16 @@
          add-context
          get-context
          context-name-resolver
-         read-xhtml-document)
+         read-xhtml-document
+         library-path)
 
 (require (prefix-in builtins: "./builtin-contexts.rkt")
          (prefix-in contexts: "./contexts.rkt")
          "./lightweight-class.rkt"
          threading
          xml
-         txexpr)
+         txexpr
+         sha)
 
 (module+ test
   (require rackunit))
@@ -152,16 +154,36 @@
     (for/fold ([document empty-document])
               ([doc-ref (or docref-elements empty)])
       (define name (attr-ref doc-ref "id"))
-      (define filename (attr-ref doc-ref "filename"))
+      (define sha256-hex (attr-ref doc-ref "sha256"))
       (add-to-library document name
-                      (read-xhtml-document filename)
-                      filename)))
+                      (read-xhtml-document (library-path sha256-hex))
+                      sha256-hex)))
   (for/fold ([document document-with-imports])
             ([xexpr context-elements])
     (add-xexpr-context document xexpr)))
 
 (define (read-xhtml-document filename)
-  (~> filename
-      read-xhtml
-      xhtml->document))
+  (define document
+    (~> filename
+        read-xhtml
+        xhtml->document))
+  (define sha256-hex (copy-to-library filename))
+  (values document sha256-hex))
 
+;; Library management
+
+(define library-directory
+  (build-path (find-system-path 'home-dir) ".leibniz"))
+
+(define (library-path sha256-hex)
+  (build-path library-directory (string-append sha256-hex ".html")))
+
+(define (copy-to-library filename)
+  (define sha256-hex
+    (~> filename
+        (open-input-file #:mode 'binary)
+        port->bytes
+        sha256
+        bytes->hex-string))
+  (copy-file filename (library-path sha256-hex) #t)
+  sha256-hex)

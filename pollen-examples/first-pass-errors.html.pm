@@ -26,3 +26,8 @@ A missing result value in ◊+test{true ⊻ true ⇒}
 ◊section{Misplaced context declaration}
 
 ◊b{Attempt to define ◊+context{foo} inside a style element.}
+
+◊section{Errors in asset declarations}
+
+Equation without label (using ◊+sort{foo} and ◊+op{a-foo : foo}) :
+  ◊+equation{a-foo = a-foo}

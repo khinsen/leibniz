@@ -200,8 +200,8 @@
               (txexpr* 'div '((class "row"))
                        (txexpr 'div '((class "column context"))
                                (list*
-                                (txexpr* 'h4 empty
-                                         "Context " context-name)
+                                `(b "Context " (i ,context-name))
+                                '(br)
                                 (apply append
                                        (map get-elements context-column))))
                        (txexpr 'div '((class "column main"))
@@ -254,22 +254,35 @@
     (splitf-at document-elements non-context-element?))
   (define-values (library preamble-text)
     (partition (has-tag? 'document-ref) preamble))
-  (define-values (document-with-imports reverse-import-list)
+  (define-values (document-with-imports reverse-import-list reverse-library-xml)
     (for/fold ([document documents:empty-document]
-               [import-list empty])
+               [import-list empty]
+               [library-xml empty])
               ([doc-ref library])
       (define name (attr-ref doc-ref "id"))
       (define filename (attr-ref doc-ref "filename"))
+      (define-values (library-document sha256-hex)
+        (documents:read-xhtml-document filename))
+      ;; This choice of library-url is good only for demos using
+      ;; the Pollen Web server!
+      (define library-url (string-append "/library/" sha256-hex ".html"))
       (values (documents:add-to-library document name
-                                        (documents:read-xhtml-document filename)
+                                        library-document
                                         filename)
-              (cons `(@ (a ((href ,filename)) ,name) '(br)) import-list))))
+              (cons `(@ (a ((href ,library-url)) ,name)
+                        '(br))
+                    import-list)
+              (cons `(document-ref ((id ,name) (sha256 ,sha256-hex)))
+                    library-xml))))
   (define preamble-with-import-list
     (list
      (txexpr* 'div '((class "row"))
-              (txexpr 'div '((class "column context"))
-                      (list* '(h4 "Imported documents:")
-                             (reverse reverse-import-list)))
+              (if (empty? reverse-import-list)
+                  ""
+                  (txexpr 'div '((class "column context"))
+                          (list* '(b "Library documents:")
+                                 '(br)
+                                 (reverse reverse-import-list))))
               (txexpr 'div '((class "column main"))
                       preamble-text))))
 
@@ -314,7 +327,8 @@
   (txexpr* 'root empty
            (txexpr* 'leibniz empty
                     (txexpr 'leibniz-document empty
-                            (cons (txexpr 'library empty library)
+                            (cons (txexpr 'library empty
+                                          (reverse reverse-library-xml))
                                   contexts)))
            (txexpr 'doc empty decoded-text)))
 

@@ -5,6 +5,7 @@
                "functional-lib"
                "gui-lib"
                "megaparsack"
+               "sha"
                "rackunit-lib"
                "chk"
                "net-lib"
