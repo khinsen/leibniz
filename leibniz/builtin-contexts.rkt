@@ -13,14 +13,19 @@
   [IEEE-float-signature signature?]
   [merged-IEEE-float-rules rulelist?]
   [string-signature signature?]
-  [string-rules rulelist?]))
+  [string-rules rulelist?]
+  [context-signature signature?]
+  [context-rules rulelist?]
+  [current-context-name-resolver parameter?]))
 
 (require "./builtins.rkt"
+         "./sorts.rkt"
          "./operators.rkt"
          (prefix-in ss: "./signature-syntax.rkt")
          "./terms.rkt"
          "./equations.rkt"
          "./rewrite-syntax.rkt"
+         "./contexts.rkt"
          threading)
 
 (module+ test
@@ -555,3 +560,26 @@
 ;; Strings
 ;;
 (define string-rules empty-rulelist)
+
+;;
+;; Contexts
+;;
+(define context-sorts
+  (~> string-sorts
+      (add-sort 'context)))
+
+(define context-signature
+  (~> (empty-signature context-sorts #:builtins (set '*context*))
+      (merge-signatures string-signature #f)
+      (add-op 'context (list 'string) 'context)))
+
+(define current-context-name-resolver (make-parameter #f))
+
+(define context-rules
+  (rules context-signature
+         (-> #:vars ([name string])
+             (context name)
+             (λ (signature pattern condition substitution)
+               (define name (substitution-value substitution 'name))
+               (define context ((current-context-name-resolver) name))
+               context))))

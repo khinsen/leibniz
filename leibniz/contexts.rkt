@@ -116,11 +116,9 @@
 ;; plus optional names values (terms, equations, or rules) called assets
 ;;
 
-(define-class context
-
-  (field includes sorts subsorts vars ops rules assets
-         compiled-signature compiled-rules compiled-assets)
-
+(struct context (includes sorts subsorts vars ops rules assets
+                 compiled-signature compiled-rules compiled-assets)
+  #:transparent
   ; includes: a list of include declarations
   ; sorts: a set of declared sorts                          
   ; subsorts: a set of subsort declarations (pairs of sorts)   
@@ -131,8 +129,10 @@
   ; compiled-signature: optimized representation of sorts, subsorts, vars, and ops
   ; compiled-rules: optimized representation of rules
   ; compiled-assets: optimized representation of assets
-
-)
+  #:methods terms:gen:term
+  [(define (term.sort c) 'context)
+   (define (term.builtin-type c) '*context*)
+   (define term.key term.builtin-type)])
 
 (define empty-context
   (context empty (set) (set)  (hash) (set) (list) (hash)

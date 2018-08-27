@@ -110,7 +110,12 @@
                    (contexts:make-builtin-context
                     empty
                     builtins:string-signature
-                    builtins:string-rules))))
+                    builtins:string-rules))
+      (add-context "contexts"
+                   (contexts:make-builtin-context
+                    empty
+                    builtins:context-signature
+                    builtins:context-rules))))
 
 ;; An empty document has "builtins" in its library, ensuring that
 ;; it is always available.

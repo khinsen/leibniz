@@ -2,6 +2,7 @@
 
 (provide
  (struct-out var)
+ gen:term
  (contract-out
   [term?                  (any/c . -> . boolean?)]
   [term.sort              (term? . -> . sort-or-kind?)]
