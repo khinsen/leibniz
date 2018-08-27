@@ -30,6 +30,9 @@
          xml
          threading)
 
+(module+ test
+  (require rackunit))
+
 ;; Parsing
 
 (begin-for-syntax
@@ -414,7 +417,17 @@
     [`(term ,op-id ,args)
      `(term ((op ,(symbol->string op-id))) ,@(map term->xexpr args))]
     [(list (and number-type (or 'integer 'rational 'floating-point)) x)
-     `(,number-type ((value ,(number->string x))))]))
+     `(,number-type ((value ,(number->string x))))]
+    [(list 'string x)
+     `(string ((value ,x)))]))
+
+(module+ test
+  (check-equal? (term->xexpr '(term-or-var foo))
+                '(term-or-var ((name "foo"))))
+  (check-equal? (term->xexpr '(term a-foo ()))
+                '(term ((op "a-foo"))))
+  (check-equal? (term->xexpr '(term a-foo ((integer 2) (string "abc"))))
+                '(term ((op "a-foo")) (integer ((value "2"))) (string ((value "abc"))))))
 
 (define-leibniz-parser-with-optional-label +term term/p term-decl term-string term-label
   (define term-expr (term->xexpr term-decl))

@@ -217,6 +217,8 @@
            (map xexpr->asset args))]
     [`(term-or-var ((name ,name-string)))
      (list 'term-or-var (string->symbol name-string))]
+    [`(string ((value ,s)))
+     (list 'string s)]
     [`(,number-tag ((value ,v)))
      (list number-tag (read (open-input-string v)))]
     [`(as-equation ((ref ,asset-ref)))
@@ -372,6 +374,8 @@
                   (asset->xexpr arg)))]
       [(list (and number-tag (or 'integer 'rational 'floating-point)) x)
        `(,number-tag ((value ,(format "~a" x))))]
+      [(list 'string s)
+       `(string ((value ,s)))]
       [(list 'as-equation asset-ref)
        `(as-equation ((ref ,(symbol->string asset-ref))))]
       [(list 'as-rule asset-ref flip?)
@@ -510,9 +514,7 @@
                   (terms:make-var-or-term signature name)]
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
-                 [(list 'integer n) n]
-                 [(list 'rational r) r]
-                 [(list 'floating-point fp) fp])])
+                 [(list (or 'integer 'rational 'floating-point 'string) x) x])])
     fn))
 
 (define (compile-pattern signature local-vars)
@@ -523,9 +525,7 @@
                   (terms:make-var-or-term signature name local-vars)]
                  [(list 'term op args)
                   (terms:make-term signature op (map fn args))]
-                 [(list 'integer n) n]
-                 [(list 'rational r) r]
-                 [(list 'floating-point fp) fp])])
+                 [(list (or 'integer 'rational 'floating-point 'string) x) x])])
     fn))
 
 (define (compile-rule signature rule-expr check-equationality?)
@@ -876,10 +876,12 @@
      (list 'integer compiled-term)]
     [(rational? compiled-term)
      (list 'rational compiled-term)]
-    [(inexact? compiled-term)
+    [(inexact-real? compiled-term)
      (list 'floating-point compiled-term)]
+    [(string? compiled-term)
+     (list 'string compiled-term)]
     [else
-     (error "illegal term type")]))
+     (error (format "illegal term type: ~v" compiled-term))]))
 
 (define (check-asset cntxt xexpr-asset)
   (define signature (context-compiled-signature cntxt))

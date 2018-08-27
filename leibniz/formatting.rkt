@@ -116,6 +116,8 @@
      `(i ,(symbol->string (second term)))]
     [(integer rational floating-point)
      (format "~a" (second term))]
+    [(string)
+     (format "~v" (second term))]
     [(term)
      (define raw-op (second term))
      (define-values (op type) (op-string-and-type raw-op))
@@ -161,6 +163,7 @@
   (check-equal? (format-term '(integer 3)) "3")
   (check-equal? (format-term '(rational -3/2)) "-3/2")
   (check-equal? (format-term '(floating-point 1.5)) "1.5")
+  (check-equal? (format-term '(string "abc")) "\"abc\"")
   (check-equal? (format-term '(term a-foo ())) "a-foo")
   (check-equal? (format-term '(var a-foo)) '(i "a-foo"))
   (check-equal? (format-term* '(term a-foo ((term a-bar ()))))
@@ -368,7 +371,7 @@
                                       ,(format-term actual)))))]
     [(reduced-term)
      (leibniz-output (format-term (second asset)))]
-    [(term var integer rational floating-point)
+    [(term var integer rational floating-point string)
      (if label
          (leibniz-input (format-label label #t) (format-term asset))
          (leibniz-input (format-term asset)))]

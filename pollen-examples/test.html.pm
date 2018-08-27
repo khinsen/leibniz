@@ -7,7 +7,7 @@
 
 ◊b{Note:} There is nothing interesting in this document. It serves just for testing various features of the Pollen version of Leibniz.
 
-◊+import[#:filename "/home/hinsen/projects/leibniz/pollen-examples/functions.html"]{functions}
+◊+import[#:filename "/Users/hinsen/projects/leibniz/pollen-examples/functions.html"]{functions}
 
 ◊+context{test}
 ◊+use{functions/ℝ→ℝ}
@@ -28,6 +28,9 @@ Finally, a few useless assets:
 ◊+rule[#:label "rule1"]{a-foo ⇒ a-foo}
 
 ◊+context{another-test}
+◊+use{builtins/strings}
 ◊+extend{test}
 
 We define ◊+sort{baz} and ◊+sort{qoox}, and then ◊+var{ANY:baz}.
+
+We also use ◊+term{"a string constant"}

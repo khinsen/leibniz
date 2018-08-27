@@ -303,17 +303,28 @@
   (check-parse number/p "4.2" '(floating-point 4.2))
   (check-parse number/p "4/2" '(rational 2)))
 
+(define string-literal/p
+  (do (char/p #\")
+      [s <- (many/p (satisfy/p (λ (c) (not (equal? c #\")))))]
+    (char/p #\")
+    (pure `(string ,(apply string s)))))
+
+(module+ test
+  (check-parse string-literal/p "\"abc\"" '(string "abc"))
+  (check-parse string-literal/p "\"\"" '(string "")))
+
 (define simple-term/p
   (or/p (do (char/p #\()
             [t <- term/p]
-            (char/p #\))
-            (pure t))
+          (char/p #\))
+          (pure t))
         number/p
+        string-literal/p
         (do [op-id <- op-identifier/p]
             (or/p (do (char/p #\()
                       [args <- (many+/p term/p #:sep comma-with-whitespace/p)]
-                      (char/p #\))
-                      (pure `(term ,op-id ,args)))
+                    (char/p #\))
+                    (pure `(term ,op-id ,args)))
                   (pure `(term-or-var ,op-id))))))
 
 (define simple-term-suffix/p
@@ -368,6 +379,7 @@
   (check-parse term/p "foo" '(term-or-var foo))
   (check-parse term/p "foo(bar,baz)" '(term foo ((term-or-var bar) (term-or-var baz))))
   (check-parse term/p "foo(bar, baz)" '(term foo ((term-or-var bar) (term-or-var baz))))
+  (check-parse term/p "foo(bar, \"baz\")" '(term foo ((term-or-var bar) (string "baz"))))
   (check-parse term/p "foo(bar , baz)" '(term foo ((term-or-var bar) (term-or-var baz))))
   (check-parse term/p "foo[bar]" '(term |[]| ((term-or-var foo) (term-or-var bar))))
   (check-parse term/p "foo[bar, baz]" '(term |[]| ((term-or-var foo) (term-or-var bar) (term-or-var baz))))

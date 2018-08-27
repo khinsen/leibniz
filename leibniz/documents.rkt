@@ -105,7 +105,12 @@
                    (contexts:make-builtin-context
                     '((use . "integers"))
                     builtins:IEEE-float-signature
-                    builtins:merged-IEEE-float-rules))))
+                    builtins:merged-IEEE-float-rules))
+      (add-context "strings"
+                   (contexts:make-builtin-context
+                    empty
+                    builtins:string-signature
+                    builtins:string-rules))))
 
 ;; An empty document has "builtins" in its library, ensuring that
 ;; it is always available.

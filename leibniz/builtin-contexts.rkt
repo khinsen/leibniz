@@ -11,7 +11,9 @@
   [real-number-signature signature?]
   [merged-real-number-rules rulelist?]
   [IEEE-float-signature signature?]
-  [merged-IEEE-float-rules rulelist?]))
+  [merged-IEEE-float-rules rulelist?]
+  [string-signature signature?]
+  [string-rules rulelist?]))
 
 (require "./builtins.rkt"
          "./operators.rkt"
@@ -24,9 +26,9 @@
 (module+ test
   (require chk))
 
-;
-; Truth
-;
+;;
+;; Truth
+;;
 (define truth-rules
   (~> empty-rulelist
       (add-rule
@@ -51,9 +53,9 @@
      #:= (RT (_== false true)) (T false)
      #:= (RT (_== false false)) (T true))))
 
-;
-; Integers and rational numbers
-;
+;;
+;; Integers and rational numbers
+;;
 (define (return-X)
   (λ (signature pattern condition substitution)
     (substitution-value substitution 'X)))
@@ -337,14 +339,14 @@
      #:= (RT (^ a-nzrat 0)) (T 1)
      #:= (RT (^ a-rat 0)) (T (^ a-rat 0)))))
 
-;
-; Real numbers
-;
-; 'ℝ     real
-; 'ℝ.nz  non-zero real
-; 'ℝ.p   positive real
-; 'ℝ.nn  non-negative real
-;
+;;
+;; Real numbers
+;;
+;; 'ℝ     real
+;; 'ℝ.nz  non-zero real
+;; 'ℝ.p   positive real
+;; 'ℝ.nn  non-negative real
+;;
 (define real-number-signature
   (ss:signature
    (include rational-signature)
@@ -444,9 +446,9 @@
      #:= (RT (^ a-nzreal 0)) (T 1)
      #:= (RT (^ a-real 0)) (T (^ a-real 0)))))
 
-;
-; Floating-point numbers (IEEE binary32 and binary64)
-;
+;;
+;; Floating-point numbers (IEEE binary32 and binary64)
+;;
 (define IEEE-float-rules
   (rules IEEE-float-signature
          (-> #:vars ([X FP32] [Y FP32])
@@ -549,3 +551,7 @@
      #:= (RT (_== #x1l0 #x1l0)) (T true)
      #:= (RT (_== #x1l0 #x2l0)) (T false))))
 
+;;
+;; Strings
+;;
+(define string-rules empty-rulelist)
