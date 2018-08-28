@@ -571,15 +571,37 @@
 (define context-signature
   (~> (empty-signature context-sorts #:builtins (set '*context*))
       (merge-signatures string-signature #f)
-      (add-op 'context (list 'string) 'context)))
+      (add-op 'context (list 'string) 'context)
+      (add-op 'replace-sort (list 'context 'string 'string) 'context)
+      (add-op 'replace-sort-prefix (list 'context 'string 'string) 'context)))
 
 (define current-context-name-resolver (make-parameter #f))
 
 (define context-rules
   (rules context-signature
+         ;; Retrieve a context from the current document
          (-> #:vars ([name string])
              (context name)
              (λ (signature pattern condition substitution)
                (define name (substitution-value substitution 'name))
                (define context ((current-context-name-resolver) name))
-               context))))
+               context))
+         ;; Replace sorts
+         (-> #:vars ([context context] [current-sort string] [new-sort string])
+             (replace-sort context current-sort new-sort)
+             (λ (signature pattern condition substitution)
+               (define context (substitution-value substitution 'context))
+               (define current-sort (substitution-value substitution 'current-sort))
+               (define new-sort (substitution-value substitution 'new-sort))
+               (replace-sort context current-sort new-sort)))
+         (-> #:vars ([context context]
+                     [current-sort-prefix string]
+                     [new-sort-prefix string])
+             (replace-sort-prefix context current-sort-prefix new-sort-prefix)
+             (λ (signature pattern condition substitution)
+               (define context (substitution-value substitution 'context))
+               (define current-sort-prefix
+                 (substitution-value substitution 'current-sort-prefix))
+               (define new-sort-prefix
+                 (substitution-value substitution 'new-sort-prefix))
+               (replace-sort-prefix context current-sort-prefix new-sort-prefix)))))

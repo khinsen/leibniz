@@ -7,7 +7,7 @@
 
 ◊b{Note:} There is nothing interesting in this document. It serves just for testing various features of the Pollen version of Leibniz.
 
-◊+import[#:filename "/Users/hinsen/projects/leibniz/pollen-examples/functions.html"]{functions}
+◊+import[#:filename "~/projects/leibniz/pollen-examples/functions.html"]{functions}
 
 ◊+context{test}
 ◊+use{functions/ℝ→ℝ}
@@ -38,4 +38,4 @@ We also use ◊+term{"a string constant"}
 ◊+context{a-transformed-context}
 ◊+use{builtins/contexts}
 
-This context is the same as ◊+substitute-context{context("test")}
+This context is ◊+substitute-context{rename-sort(context("test"), "bar", "baz")}
