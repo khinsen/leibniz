@@ -8,6 +8,7 @@
   [in-reduction (signature? rulelist? term? . -> . (sequence/c term?))]
   [trace-reduce ((signature? rulelist? term? procedure?) (integer?)
                             . ->* . term?)]
+  [trace-printer (symbol? integer? any/c (or/c #f rule?) any/c . -> . void?)]
   [reduce-equation (signature? rulelist? equation? . -> . equation?)]
   [transform (signature? transformation? term? . -> . term?)]
   [transform-equation (signature? transformation? equation?
@@ -287,13 +288,68 @@
                                callback-procedure level)))
 
 (define (trace-rewrite-head-once signature rules term callback-procedure level)
-  (or (for*/first ([(rule substitution) (in-matching-rules signature rules term #t)]
+  (or (for*/first ([(rule substitution)
+                    (trace-in-matching-rules signature rules term
+                                             callback-procedure level)]
                    [re-term (maybe-result
-                             (apply-substitution signature rule substitution))])
-        (callback-procedure level term rule re-term)
+                             (trace-apply-substitution signature rule substitution
+                                                       callback-procedure level))])
+        (callback-procedure 'rewrite level term rule re-term)
         re-term)
-      term))
+      (begin
+        (callback-procedure 'rewrite level term #f term)
+        term)))
 
+(define (trace-in-matching-rules signature rules term callback-procedure level)
+  (define term-rules (lookup-rules rules term))
+  (unless (allowed-term? signature term)
+    (error (format "term ~s not allowed by signature\n~s" term signature)))
+  (in-generator #:arity 2
+   (for ([rule term-rules])
+     (callback-procedure 'try-rule level term rule #f)
+     (for ([s (term.match signature (rule-pattern rule) term)])
+       (callback-procedure 'match level term rule s)
+       (define condition? (test-condition signature rules (rule-condition rule) s))
+       (if condition?
+           (begin
+             (callback-procedure 'condition-true level term rule s)
+             (yield rule s))
+           (callback-procedure 'condition-false level term rule s))))))
+
+(define (trace-apply-substitution signature rule substitution callback-procedure level)
+  (define replacement (rule-replacement rule))
+  (cond
+    [(procedure? replacement)
+     (with-handlers ([exn:fail? (lambda (v) (callback-procedure
+                                              'procedure-call-exception level
+                                              substitution rule v)
+                                         #f)])
+        (replacement signature
+                     (rule-pattern rule)
+                     (rule-condition rule)
+                     substitution))]
+    [else
+     (define result (term.substitute signature replacement substitution))
+     (callback-procedure 'apply-substitution level substitution rule result)
+     result]))
+
+(define (trace-printer step level term rule re-term)
+  (case step
+    [(rewrite)
+     (println (format "At level ~a, rewriting ~a" level term))
+     (cond
+       [rule
+        (println (format "using rule ~a" rule))
+        (println (format "yielding ~a" re-term))]
+       [else
+        (writeln "no rule matches")])
+     (displayln "")]
+    [else
+     (displayln step)
+     (println (format "At level ~a for term ~a" level term))
+     (println (format "with rule ~a" rule))
+     (println (format "yielding ~a" re-term))
+     (displayln "")]))
 ;
 ; Reduction of equations: reduce left and right
 ;
