@@ -233,7 +233,8 @@
             (row-for-context context-name
                              (cons '(context-column
                                      (span ((class "LeibnizError"))
-                                           "not processed because of syntax errors in the document"))
+                                           "not processed because of syntax errors in the document"
+                                           (br)))
                                    evaluated-contents))
             document
             ;; Continue processing in order to check for syntax errors in the
@@ -270,15 +271,32 @@
     (define element (first substitute-contexts))
     (define source (attr-ref element 'source))
     (define expr (extract-single-element element))
-    (define substitute-context
+    (define substitute-context-or-error
       (with-handlers ([exn:fail? (λ (e) e)])
         (parameterize ([current-context-name-resolver name-resolver])
           (contexts:eval-context-expr context expr))))
-    (values (contexts:context->xexpr substitute-context context-name)
-            (row-for-context context-name cleaned-contents)
-            (documents:add-context document context-name substitute-context)
-            ;; Continue processing
-            #t)]))
+    (println substitute-context-or-error)
+    (cond
+      [(contexts:context? substitute-context-or-error)
+       (define substitute-context substitute-context-or-error)
+       (values (contexts:context->xexpr substitute-context context-name)
+               (row-for-context context-name cleaned-contents)
+               (documents:add-context document context-name substitute-context)
+               ;; Continue processing
+               #t)]
+      [else
+       (match-define (contexts:exn:fail:leibniz msg cont decl)
+                     substitute-context-or-error)
+       (values #f
+               (row-for-context context-name
+                                (list* `(context-column
+                                         ,(leibniz-error msg decl)
+                                         '(br))
+                                       evaluated-contents))
+               document
+               ;; Don't continue processing because the following contexts
+               ;; might include the current one which had errors.
+               #f)])]))
 
 (define (root . elements)
 
@@ -301,7 +319,7 @@
                [library-xml empty])
               ([doc-ref library])
       (define name (attr-ref doc-ref "id"))
-      (define filename (attr-ref doc-ref "filename"))
+      (define filename (expand-user-path (attr-ref doc-ref "filename")))
       (define-values (library-document sha256-hex)
         (documents:read-xhtml-document filename))
       ;; This choice of library-url is good only for demos using
