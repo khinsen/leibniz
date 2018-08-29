@@ -52,9 +52,10 @@
   [(define (term.sort c) 'context)
    (define (term.builtin-type c) '*context*)
    (define term.key term.builtin-type)]
-  #:methods gen:custom-write
-  [(define (write-proc term port [mode #f])
-     (display "<struct context>" port))])
+  ;; #:methods gen:custom-write
+  ;; [(define (write-proc term port [mode #f])
+  ;;    (display "<struct context>" port))]
+)
 
 (struct compiled-context context (compiled-signature compiled-rules compiled-assets)
   #:transparent
@@ -986,14 +987,8 @@
 (define (eval-context-expr cntxt xexpr)
   (define signature (compiled-context-compiled-signature cntxt))
   (define rules (compiled-context-compiled-rules cntxt))
-  (writeln "Rules")
-  (for ([r (equations:in-rules rules)])
-    (println r))
-  (writeln "")
   (define term (xexpr->asset xexpr))
   (define term* ((compile-term signature) term))
-  (rewrite:trace-reduce signature rules term*
-                        rewrite:trace-printer)
   (define reduced-term* (rewrite:reduce signature rules term*))
   (unless (context? reduced-term*)
     (raise (exn:fail:leibniz
