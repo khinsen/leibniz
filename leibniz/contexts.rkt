@@ -3,6 +3,7 @@
 (provide
  (struct-out exn:fail:leibniz)
  (struct-out context)
+ (struct-out compiled-context)
  re-raise-exn
  (contract-out
   [empty-context context?]
@@ -10,14 +11,14 @@
   [xexpr->context (xexpr/c . -> . context?)]
   [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
-  [compile-context (context? (string? . -> . context?)  . -> . context?)]
+  [compile-context (context? (string? . -> . context?)  . -> . compiled-context?)]
   [without-compiled-resources (context? . -> . context?)]
   [make-builtin-context
          ((listof pair?) operators:signature? equations:rulelist?
-         . -> . context?)]
-  [check-asset (context? xexpr/c . -> . any/c)]
-  [eval-asset (context? xexpr/c . -> . any/c)]
-  [eval-context-expr (context? xexpr/c . -> . context?)]))
+         . -> . compiled-context?)]
+  [check-asset (compiled-context? xexpr/c . -> . any/c)]
+  [eval-asset (compiled-context? xexpr/c . -> . any/c)]
+  [eval-context-expr (compiled-context? xexpr/c . -> . context?)]))
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -30,7 +31,42 @@
 
 (module+ test
   (require rackunit
-           racket/function)
+           racket/function))
+
+;;
+;; A context is the main unit of Leibniz code. It defines a term algebra
+;; (sort graph, operators, variables) and a list of rewrite rules,
+;; plus optional names values (terms, equations, or rules) called assets
+;;
+
+(struct context (includes sorts subsorts vars ops rules assets)
+  #:transparent
+  ; includes: a list of include declarations
+  ; sorts: a set of declared sorts                          
+  ; subsorts: a set of subsort declarations (pairs of sorts)   
+  ; vars: a hash mapping var names to sorts                
+  ; ops: a set of op declarations (sexps)                 
+  ; rules: a list of rules (sexps)                          
+  ; assets: a hash mapping labels to assets (sexps)          
+  #:methods terms:gen:term
+  [(define (term.sort c) 'context)
+   (define (term.builtin-type c) '*context*)
+   (define term.key term.builtin-type)]
+  #:methods gen:custom-write
+  [(define (write-proc term port [mode #f])
+     (display "<struct context>" port))])
+
+(struct compiled-context context (compiled-signature compiled-rules compiled-assets)
+  #:transparent
+  ; compiled-signature: optimized representation of sorts, subsorts, vars, and ops
+  ; compiled-rules: optimized representation of rules
+  ; compiled-assets: optimized representation of assets
+)
+
+(define empty-context
+  (context empty (set) (set)  (hash) (set) (list) (hash)))
+
+(module+ test
 
   (define (dummy-name-resolver name)
     (error "Call of dummy function"))
@@ -76,8 +112,7 @@
                              (assets
                               (asset ((id "nested"))
                                      (assets (asset ((id "asset"))
-                                                    (term-or-var ((name "a-foo"))))))))
-                      )))
+                                                    (term-or-var ((name "a-foo")))))))))))
 
   (define reference-context
     (context empty
@@ -107,39 +142,7 @@
                    'deeply (list 'assets (hash 'nested
                                                (list 'assets
                                                      (hash 'asset
-                                                           '(term-or-var a-foo))))))
-             #f #f #f)))
-
-;;
-;; A context is the main unit of Leibniz code. It defines a term algebra
-;; (sort graph, operators, variables) and a list of rewrite rules,
-;; plus optional names values (terms, equations, or rules) called assets
-;;
-
-(struct context (includes sorts subsorts vars ops rules assets
-                 compiled-signature compiled-rules compiled-assets)
-  #:transparent
-  ; includes: a list of include declarations
-  ; sorts: a set of declared sorts                          
-  ; subsorts: a set of subsort declarations (pairs of sorts)   
-  ; vars: a hash mapping var names to sorts                
-  ; ops: a set of op declarations (sexps)                 
-  ; rules: a list of rules (sexps)                          
-  ; assets: a hash mapping labels to assets (sexps)          
-  ; compiled-signature: optimized representation of sorts, subsorts, vars, and ops
-  ; compiled-rules: optimized representation of rules
-  ; compiled-assets: optimized representation of assets
-  #:methods terms:gen:term
-  [(define (term.sort c) 'context)
-   (define (term.builtin-type c) '*context*)
-   (define term.key term.builtin-type)]
-  #:methods gen:custom-write
-  [(define (write-proc term port [mode #f])
-     (display "<struct context>" port))])
-
-(define empty-context
-  (context empty (set) (set)  (hash) (set) (list) (hash)
-           #f #f #f))
+                                                           '(term-or-var a-foo)))))))))
 
 ;;
 ;; Create a context from an xexpr
@@ -295,8 +298,7 @@
                   (xexpr->asset rule)))
   (define assets (second (xexpr->asset (cons 'assets xexpr-assets))))
 
-  (values (context includes sorts subsorts vars ops rules assets
-                   #f #f #f)
+  (values (context includes sorts subsorts vars ops rules assets)
           name))
 
 (define (xexpr->context xexpr-context)
@@ -455,8 +457,7 @@
            vars
            (context-ops cntxt)
            (context-rules cntxt)
-           (context-assets cntxt)
-           #f #f #f))
+           (context-assets cntxt)))
 
 (module+ test
 
@@ -473,8 +474,7 @@
                   '(a-baz () baz)
                   '(bar2foo ((var X bar)) foo))
              empty
-             (hash)
-             #f #f #f))
+             (hash)))
 
   (define a-minimal-context
     (context empty
@@ -486,8 +486,7 @@
                   '(a-baz () baz)
                   '(bar2foo ((var X bar)) foo))
              empty
-             (hash)
-             #f #f #f))
+             (hash)))
 
   (check-equal? (add-implicit-declarations a-minimal-context)
                 a-full-context)
@@ -569,7 +568,7 @@
                 ([m/c includes])
         (sorts:merge-sort-graphs ms
                                  (operators:signature-sort-graph
-                                  (context-compiled-signature (cdr m/c))))))
+                                  (compiled-context-compiled-signature (cdr m/c))))))
     ;; Process the sort declarations.
     (define after-sorts
       (for/fold ([sorts after-includes])
@@ -593,7 +592,7 @@
     (define after-includes
       (for/fold ([msig (operators:empty-signature sort-graph)])
                 ([m/c includes])
-        (define csig (context-compiled-signature (cdr m/c)))
+        (define csig (compiled-context-compiled-signature (cdr m/c)))
         (define isig (case (car m/c)
                        [(use) (operators:remove-vars csig)]
                        [(extend) csig]))
@@ -627,7 +626,7 @@
       (for/fold ([mrl equations:empty-rulelist])
                 ([m/c includes])
         (equations:merge-rulelists mrl
-                                   (context-compiled-rules (cdr m/c))
+                                   (compiled-context-compiled-rules (cdr m/c))
                                    signature)))
     ;; Process the rule declarations
     (for/fold ([rl after-includes])
@@ -801,7 +800,7 @@
     (define after-includes
       (for/fold ([merged-assets (hash)])
                 ([m/c includes])
-        (hash-union merged-assets (context-compiled-assets (cdr m/c))
+        (hash-union merged-assets (compiled-context-compiled-assets (cdr m/c))
                     #:combine/key combine-compiled-assets)))
     ;; Process the asset declarations
     (define assets
@@ -819,26 +818,29 @@
 
   (define assets (compile-assets))
 
-  (struct-copy context cntxt
-               (compiled-signature signature)
-               (compiled-rules     rules)
-               (compiled-assets    assets)))
+  (compiled-context (context-includes cntxt)
+                    (context-sorts cntxt)
+                    (context-subsorts cntxt)
+                    (context-vars cntxt)
+                    (context-ops cntxt)
+                    (context-rules cntxt)
+                    (context-assets cntxt)
+                    signature
+                    rules
+                    assets))
 
 (define (without-compiled-resources cntxt)
-  (struct-copy context cntxt
-               (compiled-signature #f)
-               (compiled-rules     #f)
-               (compiled-assets    #f)))
+  (struct-copy context cntxt))
 
 (module+ test
  
   (define compiled-reference-context (compile-context reference-context
                                                       dummy-name-resolver))
   (let* ([c compiled-reference-context]
-         [signature (context-compiled-signature c)]
+         [signature (compiled-context-compiled-signature c)]
          [sort-graph (operators:signature-sort-graph signature)]
-         [rules (context-compiled-rules c)]
-         [assets (context-compiled-assets c)])
+         [rules (compiled-context-compiled-rules c)]
+         [assets (compiled-context-compiled-assets c)])
     (check-equal? (sorts:all-sorts sort-graph) (context-sorts c))
     (check-equal? (sorts:all-subsort-relations sort-graph) (context-subsorts c))
     (check-equal? (for/sum ([(symbol arity sort) (operators:all-ops signature)]) 1)
@@ -858,11 +860,16 @@
 ;;
 
 (define (make-builtin-context includes signature rules)
-  (struct-copy context empty-context
-               (includes           includes)
-               (compiled-signature signature)
-               (compiled-rules     rules)
-               (compiled-assets    (hash))))
+    (compiled-context includes
+                      (context-sorts empty-context)
+                      (context-subsorts empty-context)
+                      (context-vars empty-context)
+                      (context-ops empty-context)
+                      (context-rules empty-context)
+                      (context-assets empty-context)
+                      signature
+                      rules
+                      (hash)))
 
 ;;
 ;; Check and evaluate assets within a context
@@ -887,9 +894,7 @@
      (error (format "illegal term type: ~v" compiled-term))]))
 
 (define (check-asset cntxt xexpr-asset)
-  (define signature (context-compiled-signature cntxt))
-  (unless signature
-    (error "check-asset requires a compiled context"))
+  (define signature (compiled-context-compiled-signature cntxt))
   (define asset (xexpr->asset xexpr-asset))
   (match asset
     [(list (and tag
@@ -924,10 +929,8 @@
                                  '(term-or-var ((name "an-undefined-op")))))))
 
 (define (eval-asset cntxt xexpr-asset)
-  (define signature (context-compiled-signature cntxt))
-  (unless signature
-    (error "eval-asset requires a compiled context"))
-  (define rules (context-compiled-rules cntxt))
+  (define signature (compiled-context-compiled-signature cntxt))
+  (define rules (compiled-context-compiled-rules cntxt))
   (define asset (xexpr->asset xexpr-asset))
   (match asset
     [(list (and tag
@@ -981,10 +984,8 @@
 ;; Evaluate an expression yielding a context
 ;;
 (define (eval-context-expr cntxt xexpr)
-  (define signature (context-compiled-signature cntxt))
-  (unless signature
-    (error "eval-context-expr requires a compiled context"))
-  (define rules (context-compiled-rules cntxt))
+  (define signature (compiled-context-compiled-signature cntxt))
+  (define rules (compiled-context-compiled-rules cntxt))
   (writeln "Rules")
   (for ([r (equations:in-rules rules)])
     (println r))
