@@ -216,15 +216,15 @@
     (define-values (main-text context-column)
       (extract-elements 'context-column text))
     (list
-     (txexpr* 'hr '((style "border-top: dotted 1px;"))
-              (txexpr* 'div '((class "row"))
-                       (txexpr 'div '((class "column context"))
-                               (list*
-                                `(b "Context " (i ,context-name))
-                                '(br)
-                                (apply append
-                                       (map get-elements context-column))))
-                       (txexpr 'div '((class "column main")) main-text)))))
+     (txexpr* 'div '((class "row"))
+              (txexpr 'div '((class "column context"))
+                      (list*
+                       (txexpr* 'hr '((style "border-top: dotted 1px; border-bottom: none; margin: 0px;")))
+                       `(b "Context " (i ,context-name))
+                       '(br)
+                       (apply append
+                              (map get-elements context-column))))
+              (txexpr 'div '((class "column main")) main-text))))
 
   (condd
    ;; Syntax error in context definition
