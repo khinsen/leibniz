@@ -2,9 +2,9 @@
 
 (provide
  (struct-out exn:fail:leibniz)
+ (struct-out context)
  re-raise-exn
  (contract-out
-  [context? (any/c . -> . boolean?)]
   [empty-context context?]
   [xexpr->context+name (xexpr/c . -> . (values context? (or/c #f string?)))]
   [xexpr->context (xexpr/c . -> . context?)]
@@ -17,12 +17,9 @@
          . -> . context?)]
   [check-asset (context? xexpr/c . -> . any/c)]
   [eval-asset (context? xexpr/c . -> . any/c)]
-  [eval-context-expr (context? xexpr/c . -> . context?)]
-  [replace-sort (context? string? string? . -> . context?)]
-  [replace-sort-prefix (context? string? string? . -> . context?)]))
+  [eval-context-expr (context? xexpr/c . -> . context?)]))
 
-(require "./lightweight-class.rkt"
-         (prefix-in sorts: "./sorts.rkt")
+(require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
          (prefix-in terms: "./terms.rkt")
          (prefix-in equations: "./equations.rkt")
@@ -1004,126 +1001,3 @@
             (current-continuation-marks)
             xexpr)))
   reduced-term*)
-
-;;
-;; Context transformations
-;;
-(define (replace-sorts cntxt sort-transformer)
-
-  (define (transform-sorts sorts)
-    (for/set ([s sorts])
-      (sort-transformer s)))
-
-  (define (transform-subsorts subsorts)
-    (for/set ([ss subsorts])
-      (cons (sort-transformer (car ss)) (sort-transformer (cdr ss)))))
-
-  (define (transform-vars vars)
-    (for/hash ([(name sort) vars])
-      (values name (sort-transformer sort))))
-
-  (define (transform-arg x)
-    (match x
-      [(list 'var name sort)
-       (list 'var name (sort-transformer sort))]
-      [(list 'sort sort)
-       (list 'sort (sort-transformer sort))]))
-
-  (define (transform-ops ops)
-    (for/set ([op ops])
-      (match-define (list name arity rsort) op)
-      (list name
-            (map transform-arg arity)
-            (sort-transformer rsort))))
-
-  (define (transform-item item)
-    (match item
-      [(list (and type-tag (or 'equation 'rule 'transformation))
-             vars term1 term2 condition)
-       (list type-tag (transform-vars vars) term1 term2 condition)]
-      [(list 'assets assets)
-       (list 'assets
-             (for/hash ([(label value) assets])
-               (values label (transform-item value))))]
-      [(or (list 'as-equation _)
-           (list 'as-rule _ _)
-           (list 'substitute _ _)
-           (list 'transform _ _))
-       item]
-      [term
-       term]))
-
-  (define (transform-rules rules)
-    (map transform-item rules))
-
-  (define (transform-assets assets)
-    (second (transform-item (list 'assets assets))))
-
-  (context (context-includes cntxt)
-           (transform-sorts (context-sorts cntxt))
-           (transform-subsorts (context-subsorts cntxt))
-           (transform-vars (context-vars cntxt))
-           (transform-ops (context-ops cntxt))
-           (transform-rules (context-rules cntxt))
-           (transform-assets (context-assets cntxt))
-           #f #f #f))
-
-(define (replace-prefix sort-symbol prefix-str replacement-str)
-  (define sort-str (symbol->string sort-symbol))
-  (if (string-prefix? sort-str prefix-str)
-      (string->symbol (string-append replacement-str
-                                     (substring sort-str (string-length prefix-str))))
-      sort-symbol))
-
-(define (replace-sort cntxt current-sort-str new-sort-str)
-  (define current-sort (string->symbol current-sort-str))
-  (define new-sort (string->symbol new-sort-str))
-  (replace-sorts cntxt (λ (s) (if (equal? s current-sort) new-sort s))))
-
-(define (replace-sort-prefix cntxt current-prefix new-prefix)
-  (replace-sorts cntxt (λ (s) (replace-prefix s current-prefix new-prefix))))
-
-(module+ test
-
-  (check-equal? (replace-prefix 'a "b" "c")
-                'a)
-  (check-equal? (replace-prefix 'a "a" "c")
-                'c)
-  (check-equal? (replace-prefix 'a.b "b" "c")
-                'a.b)
-  (check-equal? (replace-prefix 'a.b "a" "c")
-                'c.b)
-
-  (define transformed-context
-    (context empty
-             (set 'foo 'baz)
-             (set (cons 'foo 'baz))
-             (hash 'X 'foo)
-             (set '(a-foo () foo)
-                  '(a-foo ((sort baz)) foo)
-                  '(a-bar () baz)
-                  '(foo2bar ((var X foo)) baz))
-             (list (list 'rule (hash)
-                         '(term foo2bar ((term-or-var a-bar)))
-                         '(term-or-var a-foo) #f))
-             (hash 'a-term '(term-or-var a-foo)
-                   'eq1 (list 'equation
-                              (hash)
-                              '(term-or-var a-foo)
-                              '(term a-foo ((term-or-var a-foo)))
-                              #f)
-                   'tr1 (list 'transformation
-                              (hash)
-                              '(term-or-var a-foo)
-                              '(term a-foo ((term-or-var a-foo)))
-                              #f)
-                   'nested (list 'assets (hash 'asset
-                                               '(term-or-var a-foo)))
-                   'deeply (list 'assets (hash 'nested
-                                               (list 'assets
-                                                     (hash 'asset
-                                                           '(term-or-var a-foo))))))
-             #f #f #f))
-
-  (check-equal? (replace-sort reference-context "bar" "baz")
-                transformed-context))

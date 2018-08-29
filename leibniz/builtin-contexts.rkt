@@ -26,6 +26,7 @@
          "./equations.rkt"
          "./rewrite-syntax.rkt"
          "./contexts.rkt"
+         "./context-transformations.rkt"
          threading)
 
 (module+ test
