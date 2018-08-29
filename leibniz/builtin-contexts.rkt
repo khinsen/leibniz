@@ -26,7 +26,7 @@
          "./equations.rkt"
          "./rewrite-syntax.rkt"
          "./contexts.rkt"
-         "./context-transformations.rkt"
+         (prefix-in ct: "./context-transformations.rkt")
          threading)
 
 (module+ test
@@ -574,7 +574,8 @@
       (merge-signatures string-signature #f)
       (add-op 'context (list 'string) 'context)
       (add-op 'replace-sort (list 'context 'string 'string) 'context)
-      (add-op 'replace-sort-prefix (list 'context 'string 'string) 'context)))
+      (add-op 'replace-sort-prefix (list 'context 'string 'string) 'context)
+      (add-op 'remove-vars (list 'context) 'context)))
 
 (define current-context-name-resolver (make-parameter #f))
 
@@ -594,7 +595,7 @@
                (define context (substitution-value substitution 'context))
                (define current-sort (substitution-value substitution 'current-sort))
                (define new-sort (substitution-value substitution 'new-sort))
-               (replace-sort context current-sort new-sort)))
+               (ct:replace-sort context current-sort new-sort)))
          (-> #:vars ([context context]
                      [current-sort-prefix string]
                      [new-sort-prefix string])
@@ -605,4 +606,10 @@
                  (substitution-value substitution 'current-sort-prefix))
                (define new-sort-prefix
                  (substitution-value substitution 'new-sort-prefix))
-               (replace-sort-prefix context current-sort-prefix new-sort-prefix)))))
+               (ct:replace-sort-prefix context current-sort-prefix new-sort-prefix)))
+         ;; Remove context-level vars
+         (-> #:vars ([context context])
+             (remove-vars context)
+             (λ (signature pattern condition substitution)
+               (define context (substitution-value substitution 'context))
+               (ct:remove-vars context)))))

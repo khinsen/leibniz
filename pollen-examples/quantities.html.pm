@@ -126,9 +126,14 @@ as ◊+rule{b ÷ a ⇒ 10}, we can test the simplification rules:
 
 A new context for a quantity is defined as ◊+op{define-quantity(string) : context}, using the rule
 ◊blockquote{◊+rule{define-quantity(name)
-                    ⇒ replace-sort-prefix(context("template"), "SQ", name)
+                    ⇒ replace-sort-prefix(remove-vars(context("template")), "SQ", name)
                     ∀ name:string}}
 
+This rule first retrieves the quantity template. Next, it removes the
+context-level vars, which are not needed and can lead to name clashes
+if several instantiations of the template are used together. In the
+end, it replaces the sorts with the prefix SQ by corresponding sorts
+whose prefix is the given quantity name.
 
 ◊section{Quantities defined via the template}
 
