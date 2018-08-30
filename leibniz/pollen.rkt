@@ -274,7 +274,8 @@
     (define substitute-context-or-error
       (with-handlers ([exn:fail? (λ (e) e)])
         (parameterize ([current-context-name-resolver name-resolver])
-          (contexts:eval-context-expr context expr))))
+          (~> (contexts:eval-context-expr context expr)
+              (contexts:compile-context name-resolver)))))
     (cond
       [(contexts:context? substitute-context-or-error)
        (define substitute-context substitute-context-or-error)

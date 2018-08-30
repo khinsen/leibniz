@@ -38,4 +38,4 @@ We also use ◊+term{"a string constant"}
 ◊+context{a-transformed-context}
 ◊+use{builtins/contexts}
 
-This context is ◊+substitute-context{rename-sort(context("test"), "bar", "baz")}
+This context is ◊+substitute-context{replace-sort(context("test"), "bar", "baz")}
