@@ -15,7 +15,7 @@
   [string-signature signature?]
   [string-rules rulelist?]
   [context-signature signature?]
-  [context-rules rulelist?]
+  [merged-context-rules rulelist?]
   [current-context-name-resolver parameter?]))
 
 (require "./builtins.rkt"
@@ -560,7 +560,20 @@
 ;;
 ;; Strings
 ;;
-(define string-rules empty-rulelist)
+(define string-rules
+  (rules string-signature
+         ;; String concatenation
+         (-> #:vars ([s1 string] [s2 string])
+             (_+ s1 s2)
+             (λ (signature pattern condition substitution)
+               (define s1 (substitution-value substitution 's1))
+               (define s2 (substitution-value substitution 's2))
+               (string-append s1 s2)))))
+
+(module+ test
+  (with-rules string-signature string-rules
+    (chk
+     #:= (RT (_+ "a" "b")) (T "ab"))))
 
 ;;
 ;; Contexts
@@ -613,3 +626,6 @@
              (λ (signature pattern condition substitution)
                (define context (substitution-value substitution 'context))
                (ct:remove-vars context)))))
+
+(define merged-context-rules
+  (merge-rulelists string-rules context-rules context-signature))

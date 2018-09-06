@@ -113,9 +113,9 @@
                     builtins:string-rules))
       (add-context "contexts"
                    (contexts:make-builtin-context
-                    empty
+                    '((use . "strings"))
                     builtins:context-signature
-                    builtins:context-rules))))
+                    builtins:merged-context-rules))))
 
 ;; An empty document has "builtins" in its library, ensuring that
 ;; it is always available.

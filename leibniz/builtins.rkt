@@ -68,7 +68,8 @@
       (add-sort 'string)))
 
 (define string-signature
-  (empty-signature string-sorts #:builtins (set '*string*)))
+  (~> (empty-signature string-sorts #:builtins (set '*string*))
+      (add-op '_+ (list 'string 'string) 'string)))
 
 ;
 ; Integers and their subsets
