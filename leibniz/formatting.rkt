@@ -312,7 +312,9 @@
    (list '@
          (format-term pattern)
          arrow
-         (format-term replacement)
+         (if (equal? replacement 'procedure)
+             "<procedure>"
+             (format-term replacement))
          (cons '@ (for/list ([(name sort) vars])
                     (list '@ " ∀ " (format-var name sort))))
          (if condition
@@ -343,6 +345,66 @@
              ""))))
 
 ;; Assets
+
+(define (trace->html trace)
+
+  (define (record->html record)
+    (define tag (first record))
+    (case tag
+      [(reduce)
+       (list '@ "rewriting term: "
+                (leibniz-output (format-term (third record))))]
+      [(reduce-args)
+       "reducing arguments"]
+      [(with-reduced-args)
+       (list '@ "after argument reduction: "
+                (leibniz-output (format-term (third record))))]
+      [(candidate-rules)
+       (define rules (fourth record))
+       (if (empty? rules)
+           "no applicable rules"
+           (list* '@
+            "Applicable rules:" '(br)
+            (for/list ([rule rules])
+              (list '@ (leibniz-output (format-rule rule))
+                       '(br)))))]
+      [(try-rule)
+       (list '@ "trying rule " (leibniz-output (format-rule (fourth record))))]
+      [(matching-rule)
+       (define substitution (fifth record))
+       (list '@ "rule matches with "
+                (list* '@
+                 (add-between
+                  (for/list ([(var value) substitution])
+                    (leibniz-output (list '@ (list 'i  (symbol->string var))
+                                             " = " (format-term value))))
+                  ", ")))]
+      [(rewrite-match)
+       (list '@ "new term: " (leibniz-output (format-term (fifth record))))]
+      [(rewrite-no-match)
+       "no rules match"]
+      [(apply-substitution)
+       ""]
+      [else
+       (symbol->string tag)]))
+
+  (define (nested-items* trace n-level)
+    (define-values (nested tail)
+      (splitf-at trace (λ (record) (> (second record) n-level))))
+    (cond
+      [(empty? trace)
+       empty]
+      [(empty? nested)
+       (cons (record->html (first trace))
+             (nested-items* (rest trace) n-level))]
+      [else
+       (cons (nested-items nested (+ 1 n-level))
+             (nested-items* tail n-level))]))
+
+  (define (nested-items trace n-level)
+    (cons 'ul (map (λ (x) (list 'li x)) (nested-items* trace n-level))))
+
+  (nested-items trace 0))
 
 (define (asset->html asset label)
   (case (first asset)
@@ -375,5 +437,7 @@
      (if label
          (leibniz-input (format-label label #t) (format-term asset))
          (leibniz-input (format-term asset)))]
+    [(trace)
+     (trace->html (second asset))]
     [else
      (error (format "not yet implemented: ~a" (first asset)))]))

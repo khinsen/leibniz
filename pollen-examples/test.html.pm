@@ -35,6 +35,8 @@ We define ◊+sort{baz} and ◊+sort{qoox}, and then ◊+var{ANY:baz}.
 
 We also use ◊+term{"a string constant"}
 
+◊+trace{"a " + "string"}
+
 ◊+context{a-transformed-context}
 ◊+use{builtins/contexts}
 

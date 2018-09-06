@@ -8,7 +8,7 @@
          +sort
          +op
          +var
-         +term +eval-term +substitute-context
+         +term +eval-term +trace +substitute-context
          +rule
          +equation
          +test
@@ -489,6 +489,13 @@
       " ⇒ "
       (leibniz-eval ((source ,term-string) (source-tag "eval-term"))
                     ,xexpr)))
+
+(define-leibniz-parser +trace term/p term-decl term-string
+  (define xexpr (term->xexpr term-decl))
+  `(@ (leibniz-check ((source ,term-string) (source-tag "trace"))
+                     ,xexpr)
+      (leibniz-eval ((source ,term-string) (source-tag "trace"))
+                    (trace ,xexpr))))
 
 (define-leibniz-parser +substitute-context term/p term-decl term-string
   (define xexpr (term->xexpr term-decl))

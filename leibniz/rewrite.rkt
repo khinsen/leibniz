@@ -8,6 +8,7 @@
   [in-reduction (signature? rulelist? term? . -> . (sequence/c term?))]
   [trace-reduce ((signature? rulelist? term? procedure?) (integer?)
                             . ->* . term?)]
+  [trace-logger (-> (any/c . -> . any/c))]
   [trace-printer (symbol? integer? any/c (or/c #f rule?) any/c . -> . void?)]
   [reduce-equation (signature? rulelist? equation? . -> . equation?)]
   [transform (signature? transformation? term? . -> . term?)]
@@ -269,6 +270,7 @@
 
 (define (trace-reduce signature rules term callback-procedure [level 0])
   (let loop ([term term])
+    (callback-procedure (list 'reduce level term))
     (let* ([rewritten-term (trace-rewrite-leftmost-innermost signature rules term
                                                              callback-procedure level)])
       (cond
@@ -277,15 +279,20 @@
 
 (define (trace-rewrite-leftmost-innermost signature rules term callback-procedure level)
   (define-values (op args) (term.op-and-args term))
-  (if op
-      (let* ([reduced-args (map (λ (arg) (trace-reduce signature rules arg
-                                                       callback-procedure (+ level 1)))
-                                args)]
-             [with-reduced-args (make-term* signature op reduced-args)])
-        (trace-rewrite-head-once signature rules with-reduced-args
-                                 callback-procedure level))
-      (trace-rewrite-head-once signature rules term
-                               callback-procedure level)))
+  (cond
+    [(and op
+          (not (empty? args)))
+     (callback-procedure (list 'reduce-args level term))
+     (let* ([reduced-args (map (λ (arg) (trace-reduce signature rules arg
+                                                      callback-procedure (+ level 1)))
+                               args)]
+            [with-reduced-args (make-term* signature op reduced-args)])
+       (callback-procedure (list 'with-reduced-args level with-reduced-args))
+       (trace-rewrite-head-once signature rules with-reduced-args
+                                callback-procedure level))]
+    [else
+     (trace-rewrite-head-once signature rules term
+                               callback-procedure level)]))
 
 (define (trace-rewrite-head-once signature rules term callback-procedure level)
   (or (for*/first ([(rule substitution)
@@ -294,35 +301,39 @@
                    [re-term (maybe-result
                              (trace-apply-substitution signature rule substitution
                                                        callback-procedure level))])
-        (callback-procedure 'rewrite level term rule re-term)
+        (callback-procedure (list 'rewrite-match level term rule re-term))
         re-term)
       (begin
-        (callback-procedure 'rewrite level term #f term)
+        (callback-procedure (list 'rewrite-no-match level term))
         term)))
 
 (define (trace-in-matching-rules signature rules term callback-procedure level)
   (define term-rules (lookup-rules rules term))
+  (callback-procedure (list 'candidate-rules level term term-rules))
   (unless (allowed-term? signature term)
     (error (format "term ~s not allowed by signature\n~s" term signature)))
   (in-generator #:arity 2
    (for ([rule term-rules])
-     (callback-procedure 'try-rule level term rule #f)
+     (callback-procedure (list 'try-rule level term rule))
      (for ([s (term.match signature (rule-pattern rule) term)])
-       (callback-procedure 'match level term rule s)
-       (define condition? (test-condition signature rules (rule-condition rule) s))
-       (if condition?
-           (begin
-             (callback-procedure 'condition-true level term rule s)
-             (yield rule s))
-           (callback-procedure 'condition-false level term rule s))))))
+       (callback-procedure (list 'matching-rule level term rule s))
+       (cond
+         [(not (rule-condition rule))
+          (yield rule s)]
+         [(test-condition signature rules (rule-condition rule) s)
+          (callback-procedure (list'condition-true level term))
+          (yield rule s)]
+         [else
+          (callback-procedure (list 'condition-false level term))])))))
 
 (define (trace-apply-substitution signature rule substitution callback-procedure level)
   (define replacement (rule-replacement rule))
   (cond
     [(procedure? replacement)
      (with-handlers ([exn:fail? (lambda (v) (callback-procedure
-                                              'procedure-call-exception level
-                                              substitution rule v)
+                                             (list 'procedure-call-exception
+                                                   level
+                                                   substitution rule v))
                                          #f)])
         (replacement signature
                      (rule-pattern rule)
@@ -330,7 +341,7 @@
                      substitution))]
     [else
      (define result (term.substitute signature replacement substitution))
-     (callback-procedure 'apply-substitution level substitution rule result)
+     (callback-procedure (list 'apply-substitution level substitution rule result))
      result]))
 
 (define (trace-printer step level term rule re-term)
@@ -350,6 +361,37 @@
      (println (format "with rule ~a" rule))
      (println (format "yielding ~a" re-term))
      (displayln "")]))
+
+(define (trace-logger)
+  (define log empty)
+  (λ (record)
+    (if (equal? record 'get-value)
+        (reverse log)
+        (set! log (cons record log)))))
+
+(module+ test
+
+  (define tl (trace-logger))
+  (tl 1)
+  (tl 2)
+  (tl 3)
+  (check-equal? (tl 'get-value) (list 1 2 3))
+
+  (with-signature test-signature
+    (define signature test-signature)
+    (define rules test-rules)
+    (define tl (trace-logger))
+    (define initial-term (T (not true)))
+    (define initial-term-arg (T true))
+
+    (check-equal? (trace-reduce signature rules initial-term tl)
+                  (T false))
+    (check-equal? (take (tl 'get-value) 4)
+                  (list (list 'reduce-args 0 initial-term)
+                        (list 'candidate-rules 1 initial-term-arg empty)
+                        (list 'rewrite-no-match 1 initial-term-arg)
+                        (list 'with-reduced-args 0 initial-term)))))
+
 ;
 ; Reduction of equations: reduce left and right
 ;

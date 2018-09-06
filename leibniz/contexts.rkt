@@ -249,7 +249,11 @@
     [`(test () ...
             (term ,t)
             (reduced-term ,rt))
-     (list 'test (xexpr->asset t) (xexpr->asset rt))]))
+     (list 'test (xexpr->asset t) (xexpr->asset rt))]
+    [`(trace () ... ,t)
+     (list 'trace (xexpr->asset t))]
+    [else
+     (error (format "Unknown xexpr type: ~a" xexpr-asset))]))
 
 (define (xexpr->context+name xexpr-context)
 
@@ -894,6 +898,32 @@
     [else
      (error (format "illegal term type: ~v" compiled-term))]))
 
+(define (decompile-item compiled-item)
+  (cond
+    [(list? compiled-item)
+     (map decompile-item compiled-item)]
+    [(equations:rule? compiled-item)
+     (define replacement (equations:rule-replacement compiled-item))
+     (define decompiled-replacement
+       (if (procedure? replacement)
+           'procedure
+           (decompile-pattern replacement)))
+     (list 'rule
+           (for/hash ([v (terms:term.vars (equations:rule-pattern compiled-item))])
+             (values (terms:var-name v) (terms:var-sort v)))
+           (decompile-pattern (equations:rule-pattern compiled-item))
+           decompiled-replacement
+           (and (equations:rule-condition compiled-item)
+                (decompile-pattern (equations:rule-condition compiled-item))))]
+    [(terms:term? compiled-item)
+     (decompile-pattern compiled-item)]
+    [(terms:substitution? compiled-item)
+     (for/hash ([(name value) compiled-item])
+       (values name (decompile-pattern value)))]
+    ;; TODO should test for all possible decompilable item types
+    [else
+     compiled-item]))
+
 (define (check-asset cntxt xexpr-asset)
   (define signature (compiled-context-compiled-signature cntxt))
   (define asset (xexpr->asset xexpr-asset))
@@ -948,6 +978,14 @@
            (decompile-pattern reduced-term*)
            (decompile-pattern actual-reduced-term*)
            (equal? reduced-term* actual-reduced-term*))]
+    [(list 'trace term)
+     (define term* ((compile-term signature) term))
+     (define logger (rewrite:trace-logger))
+     (define trace* (rewrite:trace-reduce signature rules term* logger))
+     (list 'trace
+           (for/list ([record (logger 'get-value)])
+             (list* (first record) (second record)
+                    (map decompile-item (drop record 2)))))]
     [term
      (define term* ((compile-term signature) term))
      (define reduced-term* (rewrite:reduce signature rules term*))
