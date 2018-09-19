@@ -14,19 +14,19 @@ The sort ◊+sort{ℝ→ℝ} describes real functions of one real variable.  Fun
 
 It is convenient to provide basic arithmetic on functions:
 ◊ul{
-  ◊li{◊+op{f:ℝ→ℝ + g:ℝ→ℝ : ℝ→ℝ} with
+  ◊li{◊+op{(f:ℝ→ℝ) + (g:ℝ→ℝ) : ℝ→ℝ} with
       ◊+rule{(f + g)[x] ⇒ f[x] + g[x] ∀ x:ℝ}}
-  ◊li{◊+op{f:ℝ→ℝ - g:ℝ→ℝ : ℝ→ℝ} with
+  ◊li{◊+op{(f:ℝ→ℝ) - (g:ℝ→ℝ) : ℝ→ℝ} with
       ◊+rule{(f - g)[x] ⇒ f[x] - g[x] ∀ x:ℝ}}
-  ◊li{◊+op{f:ℝ→ℝ × g:ℝ→ℝ : ℝ→ℝ} with
+  ◊li{◊+op{(f:ℝ→ℝ) × (g:ℝ→ℝ) : ℝ→ℝ} with
       ◊+rule{(f × g)[x] ⇒ f[x] × g[x] ∀ x:ℝ}}
-  ◊li{◊+op{s:ℝ × g:ℝ→ℝ : ℝ→ℝ} with
+  ◊li{◊+op{(s:ℝ) × (g:ℝ→ℝ) : ℝ→ℝ} with
       ◊+rule{(s × g)[x] ⇒ s × g[x] ∀ x:ℝ}}}
 
 We do not define division as this requires more elaborate definitions to handle the case of functions with zeros.
 
 Function composition is defined by
-  ◊blockquote{◊+op{f:ℝ→ℝ ○ g:ℝ→ℝ : ℝ→ℝ} with
+  ◊blockquote{◊+op{(f:ℝ→ℝ) ○ (g:ℝ→ℝ) : ℝ→ℝ} with
               ◊+rule{(f ○ g)[x] ⇒ f[g[x]] ∀ x:ℝ}}
 
 ◊+context{derivatives-ℝ→ℝ}

@@ -19,7 +19,7 @@
          pollen/decode
          pollen/tag
          pollen/unstable/typography
-         megaparsack megaparsack/text
+         megaparsack megaparsack/parser-tools/lex
          data/either
          "./condd.rkt"
          "./parser.rkt"
@@ -53,7 +53,8 @@
 
 (define (with-parsed-text tag label parser text-parts fn)
   (define text (string-normalize-spaces (apply string-append text-parts)))
-  (define result (parse-string (to-eof/p parser) text))
+  (define tokens (lex-leibniz text))
+  (define result (parse-tokens (to-eof/p parser) tokens))
   (if (failure? result)
       (match (from-failure #f result)
         [(message loc unexpected expected)

@@ -226,12 +226,14 @@
 (define (format-op* op-decl)
   (match-define (list raw-op arity v-sort) op-decl)
   (define-values (op type) (op-string-and-type raw-op))
-  (define (format-arg arg)
+  (define (format-arg arg parenthesize-vars?)
     (match arg
       [`(sort ,s)
        (format-sort s)]
       [`(var ,n ,s)
-       (format-var n s)]))
+       (if parenthesize-vars?
+           `(@ "(" ,(format-var n s) ")")
+           (format-var n s))]))
   (case type
     [(prefix-op)
      (flatten (list '@
@@ -240,36 +242,38 @@
                    ""
                    (list '@
                          "("
-                         (cons '@ (add-between (map format-arg arity) ", "))
+                         (cons '@ (add-between (for/list ([a arity]) (format-arg a #f))
+                                               ", "))
                          ")"))
                " : "
                (format-sort v-sort)))]
     [(infix-op)
      (flatten (list '@
-                    (format-arg (first arity))
+                    (format-arg (first arity)  #t)
                     " " op " "
-                    (format-arg (second arity))
+                    (format-arg (second arity) #t)
                     " : "
                     (format-sort v-sort)))]
     [(special-op)
      (case op
        [("[]")
         (flatten (list '@
-                       (format-arg (first arity))
+                       (format-arg (first arity) #t)
                        "["
-                       (cons '@ (add-between (map format-arg (rest arity)) ", "))
+                       (cons '@ (add-between (for/list ([a (rest arity)]) (format-arg a #f))
+                                             ", "))
                        "] : "
                        (format-sort v-sort)))]
        [("^")
         (flatten (list '@
-                       (format-arg (first arity))
-                       (list 'sup (format-arg (second arity)))
+                       (format-arg (first arity) #t)
+                       (list 'sup (format-arg (second arity) #f))
                        " : "
                        (format-sort v-sort)))]
        [("_")
         (flatten (list '@
-                       (format-arg (first arity))
-                       (list 'sub (format-arg (second arity)))
+                       (format-arg (first arity) #t)
+                       (list 'sub (format-arg (second arity) #f))
                        " : "
                        (format-sort v-sort)))])]))
 
