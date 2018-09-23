@@ -4,6 +4,7 @@
  (contract-out
   [replace-sort (context? string? string? . -> . context?)]
   [replace-sort-prefix (context? string? string? . -> . context?)]
+  [replace-include (context? string? string? . -> . context?)]
   [remove-vars (context? . -> . context?)]))
 
 (require "./contexts.rkt"
@@ -142,6 +143,31 @@
                                      '(term bar2foo ((term-or-var Y)))
                                      '(term a-foo ((term-or-var Y))) #f))
                          (hash))))
+
+;;
+;; Replace includes
+;;
+(define (replace-include cntxt current-include new-include)
+
+  (define transformed-includes
+    (for/list ([mode/name (context-includes cntxt)])
+      (match-define (cons mode name) mode/name)
+      (cons mode (if (equal? name current-include)
+                     new-include
+                     name))))
+
+  (struct-copy context cntxt
+               [includes transformed-includes]))
+
+(module+ test
+  (define cntxt1 (struct-copy context empty-context
+                              [includes '((use . "foo")
+                                          (extend . "baz"))]))
+  (define cntxt2 (struct-copy context empty-context
+                              [includes '((use . "bar")
+                                          (extend . "baz"))]))
+  (check-equal? (replace-include cntxt1 "foo" "bar")
+                cntxt2))
 
 ;;
 ;; Remove context-level vars by pushing them into rule/equation definitions

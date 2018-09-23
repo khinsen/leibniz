@@ -588,6 +588,7 @@
       (add-op 'context (list 'string) 'context)
       (add-op 'replace-sort (list 'context 'string 'string) 'context)
       (add-op 'replace-sort-prefix (list 'context 'string 'string) 'context)
+      (add-op 'replace-include (list 'context 'string 'string) 'context)
       (add-op 'remove-vars (list 'context) 'context)))
 
 (define current-context-name-resolver (make-parameter #f))
@@ -620,6 +621,15 @@
                (define new-sort-prefix
                  (substitution-value substitution 'new-sort-prefix))
                (ct:replace-sort-prefix context current-sort-prefix new-sort-prefix)))
+         ;; Replace includes
+         (-> #:vars ([context context] [current-include string] [new-include string])
+             (replace-include context current-include new-include)
+             (λ (signature pattern condition substitution)
+               (define context (substitution-value substitution 'context))
+               (define current-include
+                 (substitution-value substitution 'current-include))
+               (define new-include (substitution-value substitution 'new-include))
+               (ct:replace-include context current-include new-include)))
          ;; Remove context-level vars
          (-> #:vars ([context context])
              (remove-vars context)
