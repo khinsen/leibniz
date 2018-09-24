@@ -1,7 +1,9 @@
 #lang racket
 
 (provide
+ (struct-out exn:no-rewrite)
  (contract-out
+  [error-no-rewrite (string? . -> . void?)]
   [all-matching-rules (signature? rulelist? term? boolean?
                           . -> . (sequence/c (cons/c rule? hash?)))]
   [reduce (signature? rulelist? term? . -> . term?)]
@@ -89,6 +91,16 @@
                              [(equal? op 'not)
                               (first args)])))))))
 
+;;
+;; An exception that is raised when a rewrite procedure
+;; declares itself inapplicable.
+;;
+(struct exn:no-rewrite exn:fail ())
+
+(define (error-no-rewrite msg)
+  (raise (exn:no-rewrite msg (current-continuation-marks))))
+
+
 ;
 ; Rule matching and basic term rewriting
 ;
@@ -138,7 +150,7 @@
 (define (apply-substitution signature rule substitution)
   (define replacement (rule-replacement rule))
   (if (procedure? replacement)
-      (with-handlers ([exn:fail? (lambda (v) #f)])
+      (with-handlers ([exn:no-rewrite? (lambda (v) #f)])
         (replacement signature
                      (rule-pattern rule)
                      (rule-condition rule)

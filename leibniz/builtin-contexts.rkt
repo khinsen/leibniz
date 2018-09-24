@@ -24,6 +24,7 @@
          (prefix-in ss: "./signature-syntax.rkt")
          "./terms.rkt"
          "./equations.rkt"
+         (only-in "./rewrite.rkt" error-no-rewrite)
          "./rewrite-syntax.rkt"
          "./contexts.rkt"
          (prefix-in ct: "./context-transformations.rkt")
@@ -74,7 +75,7 @@
   (λ (signature pattern condition substitution)
     (let ([x (substitution-value substitution 'X)])
       (unless (predicate x) 
-        (error "argument not a number"))
+        (error-no-rewrite "argument not a number"))
       (proc x))))
 
 (define (binary-op predicate/s proc)
@@ -84,7 +85,7 @@
     (let ([x (substitution-value substitution 'X)]
           [y (substitution-value substitution 'Y)])
       (unless (and (x-predicate x) (y-predicate y))
-        (error "arguments not numbers"))
+        (error-no-rewrite "arguments not numbers"))
       (proc x y))))
 
 (define (comparison-op predicate proc)
@@ -92,7 +93,7 @@
     (let ([x (substitution-value substitution 'X)]
           [y (substitution-value substitution 'Y)])
       (unless (and (predicate x) (predicate y))
-        (error "arguments not numbers"))
+        (error-no-rewrite "arguments not numbers"))
       (make-term signature
                  (if (proc x y) 'true 'false)
                  empty))))
@@ -100,8 +101,23 @@
 (define (expt-with-fix-for-zero x y)
   (when (and (eq? x 0)
              (eq? y 0))
-    (error "expt: undefined for 0 and 0"))
+    (error-no-rewrite "expt: undefined for 0 and 0"))
   (expt x y))
+
+(define (div-with-fix-for-zero x y)
+  (when (eq? y 0)
+    (error-no-rewrite "/: division by 0"))
+  (/ x y))
+
+(define (quotient-with-fix-for-zero x y)
+  (when (eq? y 0)
+    (error-no-rewrite "/: division by 0"))
+  (quotient x y))
+
+(define (remainder-with-fix-for-zero x y)
+  (when (eq? y 0)
+    (error-no-rewrite "/: division by 0"))
+  (remainder x y))
 
 (define integer-rules
   (rules integer-signature
@@ -135,14 +151,14 @@
          (-> #:vars ([X ℤ])
              (_div X 1) (return-X))
          (-> #:vars ([X ℤ] [Y ℤ.nz])
-             (_div X Y) (binary-op integer? quotient))
+             (_div X Y) (binary-op integer? quotient-with-fix-for-zero))
 
          (=> #:vars ([X zero] [Y ℤ.nz])
              (_rem X Y) 0)
          (=> #:vars ([X ℤ])
              (_rem X 1) 0)
          (-> #:vars ([X ℤ] [Y ℤ])
-             (_rem X Y) (binary-op integer? remainder))
+             (_rem X Y) (binary-op integer? remainder-with-fix-for-zero))
 
          (=> #:vars ([X ℤ.nz] [Y zero])
              (^ X Y) 1)
@@ -176,7 +192,9 @@
      #:= (RT (- 3)) (T -3)
      #:= (RT (_× 2 3)) (T 6)
      #:= (RT (_div 2 3)) (T 0)
+     #:= (RT (_div 2 0)) (T (_div 2 0))  ; Exception -> no rewrite
      #:= (RT (_rem 2 3)) (T 2)
+     #:= (RT (_rem 2 0)) (T (_rem 2 0))  ; Exception -> no rewrite
      #:= (RT (^ 2 3)) (T 8)
      #:= (RT (^ 2 0)) (T 1)
      #:= (RT (^ 0 0)) (T (^ 0 0)) ; Exception -> no rewrite
@@ -221,35 +239,35 @@
 (define rational-rules
   (rules rational-signature
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_+ X Y) (binary-op exact? +))
+             (_+ X Y) (binary-op rational? +))
 
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_- X Y) (binary-op exact? -))
+             (_- X Y) (binary-op rational? -))
          (-> #:vars ([X ℚ])
-             (- X) (unary-op exact? -))
+             (- X) (unary-op rational? -))
 
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_× X Y) (binary-op exact? *))
+             (_× X Y) (binary-op rational? *))
 
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_÷ X Y) (binary-op exact? /))
+             (_÷ X Y) (binary-op rational? div-with-fix-for-zero))
 
          (-> #:vars ([X ℚ] [Y ℚ])
-             (^ X Y) (binary-op exact? expt-with-fix-for-zero))
+             (^ X Y) (binary-op rational? expt-with-fix-for-zero))
 
          (-> #:vars ([X ℚ])
-             (abs X) (unary-op exact? abs))
+             (abs X) (unary-op rational? abs))
 
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_= X Y) (comparison-op exact? =))
+             (_= X Y) (comparison-op rational? =))
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_< X Y) (comparison-op exact? <))
+             (_< X Y) (comparison-op rational? <))
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_> X Y) (comparison-op exact? >))
+             (_> X Y) (comparison-op rational? >))
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_≤ X Y) (comparison-op exact? <=))
+             (_≤ X Y) (comparison-op rational? <=))
          (-> #:vars ([X ℚ] [Y ℚ])
-             (_≥ X Y) (comparison-op exact? >=))
+             (_≥ X Y) (comparison-op rational? >=))
          (-> #:vars ([X ℤ] [Y ℤ])
              (_div X Y) (binary-op integer? quotient))
          (-> #:vars ([X ℤ] [Y ℤ])
@@ -600,8 +618,8 @@
              (context name)
              (λ (signature pattern condition substitution)
                (define name (substitution-value substitution 'name))
-               (define context ((current-context-name-resolver) name))
-               context))
+               (with-handlers ([exn:fail? (re-raise-exn `(context ,name))])
+                 ((current-context-name-resolver) name))))
          ;; Replace sorts
          (-> #:vars ([context context] [current-sort string] [new-sort string])
              (replace-sort context current-sort new-sort)

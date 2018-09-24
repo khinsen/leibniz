@@ -8,7 +8,8 @@
          format-rule format-transformation
          asset->html)
 
-(require "./condd.rkt")
+(require "./condd.rkt"
+         racket/exn)
 
 (module+ test
   (require rackunit))
@@ -389,6 +390,9 @@
        "no rules match"]
       [(apply-substitution)
        ""]
+      [(procedure-call-exception)
+       (define exception (fifth record))
+       (list '@ "Exception raised:" (exn->string exception))]
       [else
        (symbol->string tag)]))
 
