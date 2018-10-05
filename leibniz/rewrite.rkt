@@ -399,10 +399,10 @@
     (check-equal? (trace-reduce signature rules initial-term tl)
                   (T false))
     (check-equal? (take (tl 'get-value) 4)
-                  (list (list 'reduce-args 0 initial-term)
-                        (list 'candidate-rules 1 initial-term-arg empty)
-                        (list 'rewrite-no-match 1 initial-term-arg)
-                        (list 'with-reduced-args 0 initial-term)))))
+                  (list (list 'reduce 0 initial-term)
+                        (list 'reduce-args 0 initial-term)
+                        (list 'reduce 1 initial-term-arg)
+                        (list 'candidate-rules 1 initial-term-arg empty)))))
 
 ;
 ; Reduction of equations: reduce left and right
