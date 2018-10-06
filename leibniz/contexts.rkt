@@ -564,7 +564,10 @@
 
   (define includes
     (for/list ([mode/name (context-includes cntxt)])
-      (cons (car mode/name) (name-resolver (cdr mode/name)))))
+      (match-define (cons mode name) mode/name)
+      (cons mode
+            (with-handlers ([exn:fail? (re-raise-exn (list mode name))])
+              (name-resolver name)))))
 
   (define (compile-sort-graph)
     ;; Merge the sort graphs of the included contexts.
@@ -896,7 +899,7 @@
     [(string? compiled-term)
      (list 'string compiled-term)]
     [else
-     (error (format "illegal term type: ~v" compiled-term))]))
+     (error (format "cannot decompile term: ~v" compiled-term))]))
 
 (define (decompile-item compiled-item)
   (cond

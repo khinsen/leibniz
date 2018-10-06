@@ -297,6 +297,21 @@
                document
                ;; Don't continue processing because the following contexts
                ;; might include the current one which had errors.
+               #f)]
+      ;; This shouldn't happen, as all errors to be signalled to the
+      ;; document author should be of type exn:fail:leibniz. Consider
+      ;; this section a debugging aid.
+      [(exn:fail? substitute-context-or-error)
+       (match-define (exn:fail msg cont) substitute-context-or-error)
+       (values #f
+               (row-for-context context-name
+                                (list* `(context-column
+                                         ,(leibniz-error msg '(unknown))
+                                         '(br))
+                                       evaluated-contents))
+               document
+               ;; Don't continue processing because the following contexts
+               ;; might include the current one which had errors.
                #f)])]))
 
 (define (root . elements)

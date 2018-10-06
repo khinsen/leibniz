@@ -624,36 +624,53 @@
          (-> #:vars ([context context] [current-sort string] [new-sort string])
              (replace-sort context current-sort new-sort)
              (λ (signature pattern condition substitution)
-               (define context (substitution-value substitution 'context))
+               (define cntxt (substitution-value substitution 'context))
                (define current-sort (substitution-value substitution 'current-sort))
                (define new-sort (substitution-value substitution 'new-sort))
-               (ct:replace-sort context current-sort new-sort)))
+               (with-handlers ([exn:fail? (re-raise-exn
+                                           `(replace-sort context
+                                                          ,current-sort
+                                                          ,new-sort))])
+                 (ct:replace-sort cntxt current-sort new-sort))))
          (-> #:vars ([context context]
                      [current-sort-prefix string]
                      [new-sort-prefix string])
              (replace-sort-prefix context current-sort-prefix new-sort-prefix)
              (λ (signature pattern condition substitution)
-               (define context (substitution-value substitution 'context))
+               (define cntxt (substitution-value substitution 'context))
                (define current-sort-prefix
                  (substitution-value substitution 'current-sort-prefix))
                (define new-sort-prefix
                  (substitution-value substitution 'new-sort-prefix))
-               (ct:replace-sort-prefix context current-sort-prefix new-sort-prefix)))
+               (with-handlers
+                 ([exn:fail? (re-raise-exn
+                              `(replace-sort-prefix context
+                                                    ,current-sort-prefix
+                                                    ,new-sort-prefix))])
+                 (ct:replace-sort-prefix cntxt current-sort-prefix new-sort-prefix))))
          ;; Replace includes
          (-> #:vars ([context context] [current-include string] [new-include string])
              (replace-include context current-include new-include)
              (λ (signature pattern condition substitution)
-               (define context (substitution-value substitution 'context))
+               (define cntxt (substitution-value substitution 'context))
                (define current-include
                  (substitution-value substitution 'current-include))
                (define new-include (substitution-value substitution 'new-include))
-               (ct:replace-include context current-include new-include)))
+               (with-handlers
+                 ([exn:fail? (re-raise-exn
+                              `(replace-include context
+                                                ,current-include
+                                                ,new-include))])
+                 (ct:replace-include cntxt current-include new-include))))
          ;; Remove context-level vars
          (-> #:vars ([context context])
              (remove-vars context)
              (λ (signature pattern condition substitution)
-               (define context (substitution-value substitution 'context))
-               (ct:remove-vars context)))))
+               (define cntxt (substitution-value substitution 'context))
+               (with-handlers
+                 ([exn:fail? (re-raise-exn
+                              `(remove-vars context))])
+                 (ct:remove-vars cntxt))))))
 
 (define merged-context-rules
   (merge-rulelists string-rules context-rules context-signature))
