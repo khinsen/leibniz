@@ -39,7 +39,7 @@
 ;; plus optional names values (terms, equations, or rules) called assets
 ;;
 
-(struct context (includes sorts subsorts vars ops rules assets)
+(struct context (includes context-refs sorts subsorts vars ops rules assets)
   #:transparent
   ; includes: a list of include declarations
   ; sorts: a set of declared sorts                          
@@ -65,7 +65,7 @@
 )
 
 (define empty-context
-  (context empty (set) (set)  (hash) (set) (list) (hash)))
+  (context empty (hash) (set) (set)  (hash) (set) (list) (hash)))
 
 (module+ test
 
@@ -75,6 +75,7 @@
   (define xexpr-context
     '(context ((id "test"))
               (includes)
+              (context-refs)
               (sorts (sort ((id "foo")))
                      (sort ((id "bar"))))
               (subsorts (subsort ((subsort "foo")
@@ -117,6 +118,7 @@
 
   (define reference-context
     (context empty
+             (hash)
              (set 'foo 'bar)
              (set (cons 'foo 'bar))
              (hash 'X 'foo)
@@ -260,6 +262,7 @@
   (match-define
     `(context (,attrs ...) ...
               (includes () ... ,xexpr-includes ...)
+              (context-refs () ... ,xexpr-context-refs ...)
               (sorts () ... ,xexpr-sorts ...)
               (subsorts () ... ,xexpr-subsorts ...)
               (vars () ... ,xexpr-vars ...)
@@ -280,6 +283,12 @@
                         (cons (string->symbol mode) ref)]
                        [`(include ((ref ,ref) (mode ,mode)))
                         (cons (string->symbol mode) ref)])))
+  (define context-refs (for/hash ([cref xexpr-context-refs])
+                         (match cref
+                           [`(context-ref ((name ,name) (ref ,ref)))
+                            (values (string->symbol name) ref)]
+                           [`(context-ref ((ref ,ref) (name ,name)))
+                            (values (string->symbol name) ref)])))
   (define sorts (for/set ([sort xexpr-sorts])
                   (match sort
                     [`(sort ((id ,s)))
@@ -303,7 +312,7 @@
                   (xexpr->asset rule)))
   (define assets (second (xexpr->asset (cons 'assets xexpr-assets))))
 
-  (values (context includes sorts subsorts vars ops rules assets)
+  (values (context includes context-refs sorts subsorts vars ops rules assets)
           name))
 
 (define (xexpr->context xexpr-context)
@@ -314,6 +323,7 @@
 (module+ test
 
   (check-equal? (xexpr->context '(context (includes)
+                                          (context-refs)
                                           (sorts)
                                           (subsorts)
                                           (vars)
@@ -408,6 +418,9 @@
             (includes ,@(for/list ([mode/name (context-includes cntxt)])
                           `(include ((mode ,(symbol->string (car mode/name)))
                                      (ref ,(cdr mode/name))))))
+            (context-refs ,@(for/list ([(name ref) (context-context-refs cntxt)])
+                              `(context-ref ((name ,(symbol->string name))
+                                             (ref ,ref)))))
             (sorts ,@(for/list ([s (context-sorts cntxt)])
                        `(sort ((id ,(symbol->string s))))))
             (subsorts ,@(for/list ([sd (context-subsorts cntxt)])
@@ -456,11 +469,19 @@
                       ; combine avoiding name clashes
                       #:combine/key combine-varsets))
 
+  (define ops
+    (set-union ; the original op declarations
+               (context-ops cntxt)
+               ; the names from context refs, with sort context
+               (for/set ([(name cref) (context-context-refs cntxt)])
+                 (list name empty 'context))))
+
   (context (context-includes cntxt)
+           (context-context-refs cntxt)
            sorts
            (context-subsorts cntxt)
            vars
-           (context-ops cntxt)
+           ops
            (context-rules cntxt)
            (context-assets cntxt)))
 
@@ -471,6 +492,7 @@
 
   (define a-full-context
     (context empty
+             (hash)
              (set 'foo 'bar 'baz)
              (set (cons 'foo 'bar))
              (hash 'X 'bar)
@@ -483,6 +505,7 @@
 
   (define a-minimal-context
     (context empty
+             (hash)
              (set)
              (set (cons 'foo 'bar))
              (hash)
@@ -636,8 +659,19 @@
         (equations:merge-rulelists mrl
                                    (compiled-context-compiled-rules (cdr m/c))
                                    signature)))
+    ;; Process the context-ref declarations
+    (define after-context-refs
+      (for/fold ([rl after-includes])
+                ([(name cref) (context-context-refs cntxt)])
+        (equations:add-rule
+         rl
+         (equations:make-rule signature
+                              (terms:make-term signature name empty)
+                              #f
+                              (name-resolver cref)
+                              #f #t))))
     ;; Process the rule declarations
-    (for/fold ([rl after-includes])
+    (for/fold ([rl after-context-refs])
               ([rd (context-rules cntxt)])
       (with-handlers ([exn:fail? (re-raise-exn rd)])
         (equations:add-rule rl (compile-rule signature rd #t)))))
@@ -827,6 +861,7 @@
   (define assets (compile-assets))
 
   (compiled-context (context-includes cntxt)
+                    (context-context-refs cntxt)
                     (context-sorts cntxt)
                     (context-subsorts cntxt)
                     (context-vars cntxt)
@@ -869,6 +904,7 @@
 
 (define (make-builtin-context includes signature rules)
     (compiled-context includes
+                      (context-context-refs empty-context)
                       (context-sorts empty-context)
                       (context-subsorts empty-context)
                       (context-vars empty-context)
@@ -898,6 +934,8 @@
      (list 'floating-point compiled-term)]
     [(string? compiled-term)
      (list 'string compiled-term)]
+    [(context? compiled-term)
+     (list 'context)]
     [else
      (error (format "cannot decompile term: ~v" compiled-term))]))
 

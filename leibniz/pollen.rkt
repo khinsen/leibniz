@@ -4,7 +4,7 @@
 
 (provide root
          +import
-         +context +use +extend
+         +context +use +extend +context-ref
          +sort
          +op
          +var
@@ -147,6 +147,7 @@
       (hash-set by-tag key (append (hash-ref by-tag key empty) (list decl)))))
 
   (list (txexpr 'includes empty (hash-ref by-tag 'include empty))
+        (txexpr 'context-refs empty (hash-ref by-tag 'context-ref empty))
         (txexpr 'sorts empty (hash-ref by-tag 'sort  empty))
         (txexpr 'subsorts empty (hash-ref by-tag 'subsort empty))
         (txexpr 'vars empty (hash-ref by-tag 'var empty))
@@ -431,6 +432,10 @@
   (syntax-parse stx
     [(_ context-ref:string)
      #`(include* "extend" #,(source-loc #'context-ref) context-ref)]))
+
+(define (+context-ref symbol ref)
+  `(leibniz-decl (context-ref ((name ,(symbol->string symbol))
+                               (ref ,ref)))))
 
 ;; Sort and subsort declarations
 

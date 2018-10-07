@@ -17,6 +17,7 @@
 
   (define test-context
     (context empty
+             (hash)
              (set 'foo 'bar)
              (set (cons 'foo 'bar))
              (hash 'X 'foo
@@ -92,6 +93,7 @@
     (second (transform-item (list 'assets assets))))
 
   (context (context-includes cntxt)
+           (context-context-refs cntxt)
            (transform-sorts (context-sorts cntxt))
            (transform-subsorts (context-subsorts cntxt))
            (transform-vars (context-vars cntxt))
@@ -127,6 +129,7 @@
 
   (check-equal? (replace-sort test-context "bar" "baz")
                 (context empty
+                         (hash)
                          (set 'foo 'baz)
                          (set (cons 'foo 'baz))
                          (hash 'X 'foo
@@ -251,6 +254,7 @@
 (module+ test
   (check-equal? (remove-vars test-context)
                 (context empty
+                         (hash)
                          (set 'foo 'bar)
                          (set (cons 'foo 'bar))
                          (hash)
