@@ -26,19 +26,26 @@
 ;;
 (define-class document
 
-  (field contexts order library library-refs)
+  (field contexts order sha256 library library-refs)
   ;; contexts: a hash mapping context names to hashes with keys
   ;;           'includes 'sorts 'ops 'vars 'rules 'assets,
   ;;           values are lists/sets/hashes of the declarations in
   ;;            each category
   ;; order: a list of context names in the inverse order of definition
+  ;; sha256: the sha256 hash of the HTML file from which the
+  ;;         document was created, or #f if the document was created
+  ;;         by other means
   ;; library: a hash mapping document names to documents
   ;; library-refs: a hash mapping document names to external references
   ;;               (filenames for now, later maybe DOIs or hashes)
 
+  ;; Set the sha256 hash for the document
+  (define (set-sha256 sha256-from-file)
+    (document contexts order sha256-from-file library library-refs))
+
   ;; Add another document to the library.
   (define (add-to-library name library-document external-ref)
-    (document contexts order
+    (document contexts order sha256
               (hash-set library name library-document)
               (hash-set library-refs name external-ref)))
 
@@ -46,12 +53,13 @@
   (define (add-context name cntxt)
     (document (hash-set contexts name cntxt)
               (cons name order)
+              sha256
               library
               library-refs))
 
   ;; Add a context defined by an xexpr
   (define (add-xexpr-context xexpr)
-    (define-values (cntxt name) (contexts:xexpr->context+name xexpr))
+    (define-values (cntxt name) (contexts:xexpr->context+name xexpr sha256))
     (add-context name (contexts:compile-context cntxt (context-name-resolver))))
 
   ;; Retrieve a context by name
@@ -80,7 +88,7 @@
 ;; A document containing the builtin contexts
 
 (define builtins
-  (~> (document (hash) empty (hash) (hash))
+  (~> (document (hash) empty #f (hash) (hash))
       (add-context "truth"
                    (contexts:make-builtin-context
                     empty
@@ -121,7 +129,7 @@
 ;; it is always available.
 
 (define empty-document
-  (~> (document (hash) empty  (hash) (hash))
+  (~> (document (hash) empty #f (hash) (hash))
       (add-to-library "builtins" builtins #f)))
 
 ;; Read document from an HTML file
@@ -145,7 +153,7 @@
       (findf-txexpr (has-tag? 'leibniz-document))
       (findf*-txexpr (has-tag? 'context))))
 
-(define (xhtml->document xexpr)
+(define (xhtml->document xexpr sha256-hex)
   (define document-element
     (~> xexpr
         (findf-txexpr
@@ -161,7 +169,7 @@
     (~> document-element
         (findf*-txexpr (has-tag? 'context))))
   (define document-with-imports
-    (for/fold ([document empty-document])
+    (for/fold ([document (set-sha256 empty-document sha256-hex)])
               ([doc-ref (or docref-elements empty)])
       (define name (attr-ref doc-ref "id"))
       (define sha256-hex (attr-ref doc-ref "sha256"))
@@ -173,11 +181,11 @@
     (add-xexpr-context document xexpr)))
 
 (define (read-xhtml-document filename)
+  (define sha256-hex (copy-to-library filename))
   (define document
     (~> filename
         read-xhtml
-        xhtml->document))
-  (define sha256-hex (copy-to-library filename))
+        (xhtml->document sha256-hex)))
   (values document sha256-hex))
 
 ;; Library management

@@ -169,7 +169,7 @@
                (map extract-single-element _)
                preprocess-decls
                (txexpr 'context empty _)
-               contexts:xexpr->context
+               (contexts:xexpr->context #f)
                contexts:add-implicit-declarations
                (contexts:compile-context name-resolver)))))
 
@@ -344,6 +344,7 @@
       (define library-url (string-append "/library/" sha256-hex ".html"))
       (values (documents:add-to-library document name
                                         library-document
+                                        sha256-hex
                                         filename)
               (cons `(@ (a ((href ,library-url)) ,name)
                         '(br))

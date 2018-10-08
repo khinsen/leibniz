@@ -7,8 +7,9 @@
  re-raise-exn
  (contract-out
   [empty-context context?]
-  [xexpr->context+name (xexpr/c . -> . (values context? (or/c #f string?)))]
-  [xexpr->context (xexpr/c . -> . context?)]
+  [xexpr->context+name (xexpr/c (or/c #f string?)
+                       . -> . (values context? (or/c #f string?)))]
+  [xexpr->context (xexpr/c (or/c #f string?) . -> . context?)]
   [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
   [compile-context (context? (string? . -> . context?)  . -> . compiled-context?)]
@@ -39,15 +40,18 @@
 ;; plus optional names values (terms, equations, or rules) called assets
 ;;
 
-(struct context (includes context-refs sorts subsorts vars ops rules assets)
+(struct context (includes context-refs sorts subsorts vars ops rules assets
+                 origin)
   #:transparent
-  ; includes: a list of include declarations
-  ; sorts: a set of declared sorts                          
-  ; subsorts: a set of subsort declarations (pairs of sorts)   
-  ; vars: a hash mapping var names to sorts                
-  ; ops: a set of op declarations (sexps)                 
-  ; rules: a list of rules (sexps)                          
-  ; assets: a hash mapping labels to assets (sexps)          
+  ;; includes: a list of include declarations
+  ;; sorts: a set of declared sorts
+  ;; subsorts: a set of subsort declarations (pairs of sorts)
+  ;; vars: a hash mapping var names to sorts
+  ;; ops: a set of op declarations (sexps)
+  ;; rules: a list of rules (sexps)
+  ;; assets: a hash mapping labels to assets (sexps)
+  ;; origin: #f or the sha256 hash (hex string) of the HTML document
+  ;;         in which the context is defined
   #:methods terms:gen:term
   [(define (term.sort c) 'context)
    (define (term.builtin-type c) '*context*)
@@ -65,7 +69,7 @@
 )
 
 (define empty-context
-  (context empty (hash) (set) (set)  (hash) (set) (list) (hash)))
+  (context empty (hash) (set) (set)  (hash) (set) (list) (hash) #f))
 
 (module+ test
 
@@ -145,7 +149,8 @@
                    'deeply (list 'assets (hash 'nested
                                                (list 'assets
                                                      (hash 'asset
-                                                           '(term-or-var a-foo)))))))))
+                                                           '(term-or-var a-foo))))))
+             #f)))
 
 ;;
 ;; Create a context from an xexpr
@@ -257,7 +262,7 @@
     [else
      (error (format "Unknown xexpr type: ~a" xexpr-asset))]))
 
-(define (xexpr->context+name xexpr-context)
+(define (xexpr->context+name xexpr-context origin)
 
   (match-define
     `(context (,attrs ...) ...
@@ -312,12 +317,13 @@
                   (xexpr->asset rule)))
   (define assets (second (xexpr->asset (cons 'assets xexpr-assets))))
 
-  (values (context includes context-refs sorts subsorts vars ops rules assets)
+  (values (context includes context-refs sorts subsorts vars ops rules assets
+                   origin)
           name))
 
-(define (xexpr->context xexpr-context)
+(define (xexpr->context xexpr-context origin)
   (define-values (cntxt name)
-    (xexpr->context+name xexpr-context))
+    (xexpr->context+name xexpr-context origin))
   cntxt)
 
 (module+ test
@@ -329,17 +335,18 @@
                                           (vars)
                                           (ops)
                                           (rules)
-                                          (assets)))
+                                          (assets))
+                                #f)
                 empty-context)
 
-  (check-equal? (xexpr->context xexpr-context)
+  (check-equal? (xexpr->context xexpr-context #f)
                 reference-context)
 
   (let-values ([(cntxt name)
                 (~> xexpr-context
                     xexpr->string
                     string->xexpr
-                    xexpr->context+name)])
+                    (xexpr->context+name #f))])
     (check-equal? name "test")
     (check-equal? cntxt reference-context)))
 
@@ -437,7 +444,7 @@
   (let-values ([(cntxt name)
                 (~> reference-context
                     (context->xexpr "test")
-                    xexpr->context+name)])
+                    (xexpr->context+name #f))])
     (check-equal? name "test")
     (check-equal? cntxt reference-context)))
 
@@ -483,7 +490,8 @@
            vars
            ops
            (context-rules cntxt)
-           (context-assets cntxt)))
+           (context-assets cntxt)
+           (context-origin cntxt)))
 
 (module+ test
 
@@ -501,7 +509,8 @@
                   '(a-baz () baz)
                   '(bar2foo ((var X bar)) foo))
              empty
-             (hash)))
+             (hash)
+             #f))
 
   (define a-minimal-context
     (context empty
@@ -514,7 +523,8 @@
                   '(a-baz () baz)
                   '(bar2foo ((var X bar)) foo))
              empty
-             (hash)))
+             (hash)
+             #f))
 
   (check-equal? (add-implicit-declarations a-minimal-context)
                 a-full-context)
@@ -868,6 +878,7 @@
                     (context-ops cntxt)
                     (context-rules cntxt)
                     (context-assets cntxt)
+                    (context-origin cntxt)
                     signature
                     rules
                     assets))
@@ -911,6 +922,7 @@
                       (context-ops empty-context)
                       (context-rules empty-context)
                       (context-assets empty-context)
+                      (context-origin empty-context)
                       signature
                       rules
                       (hash)))

@@ -33,7 +33,8 @@
                    (list 'rule (hash)
                          '(term bar2foo ((term-or-var Y)))
                          '(term a-foo ((term-or-var Y))) #f))
-             (hash)))
+             (hash)
+             #f))
 
   (define compiled-test-context
     (compile-context test-context (λ (name) (error "don't call this")))))
@@ -99,7 +100,8 @@
            (transform-vars (context-vars cntxt))
            (transform-ops (context-ops cntxt))
            (transform-rules (context-rules cntxt))
-           (transform-assets (context-assets cntxt))))
+           (transform-assets (context-assets cntxt))
+           (context-origin cntxt)))
 
 (define (replace-prefix sort-symbol prefix-str replacement-str)
   (define sort-str (symbol->string sort-symbol))
@@ -145,7 +147,8 @@
                                (list 'rule (hash)
                                      '(term bar2foo ((term-or-var Y)))
                                      '(term a-foo ((term-or-var Y))) #f))
-                         (hash))))
+                         (hash)
+                         #f)))
 
 ;;
 ;; Replace includes
@@ -269,4 +272,5 @@
                                (list 'rule (hash 'Y 'bar)
                                      '(term bar2foo ((term-or-var Y)))
                                      '(term a-foo ((term-or-var Y))) #f))
-                         (hash))))
+                         (hash)
+                         #f)))
