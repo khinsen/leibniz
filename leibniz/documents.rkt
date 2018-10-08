@@ -5,6 +5,7 @@
          add-context
          get-context
          context-name-resolver
+         (rename-out [document-dependency-paths include-prefixes])
          read-xhtml-document
          library-path)
 
@@ -26,7 +27,7 @@
 ;;
 (define-class document
 
-  (field contexts order sha256 library library-refs)
+  (field contexts order sha256 library library-refs dependency-paths)
   ;; contexts: a hash mapping context names to hashes with keys
   ;;           'includes 'sorts 'ops 'vars 'rules 'assets,
   ;;           values are lists/sets/hashes of the declarations in
@@ -38,16 +39,30 @@
   ;; library: a hash mapping document names to documents
   ;; library-refs: a hash mapping document names to external references
   ;;               (filenames for now, later maybe DOIs or hashes)
+  ;; dependency-paths: a hash mapping sha256 hashes to include prefixes
 
   ;; Set the sha256 hash for the document
   (define (set-sha256 sha256-from-file)
-    (document contexts order sha256-from-file library library-refs))
+    (document contexts order sha256-from-file
+              library library-refs dependency-paths))
 
   ;; Add another document to the library.
   (define (add-to-library name library-document external-ref)
+    (define (hash-set* h k v)
+      (if k
+          (hash-set h k v)
+          h))
     (document contexts order sha256
               (hash-set library name library-document)
-              (hash-set library-refs name external-ref)))
+              (hash-set library-refs name external-ref)
+              (for/fold ([dp (hash-set* dependency-paths
+                                        (document-sha256 library-document)
+                                        name)])
+                        ([(lib-sha256 include-prefix)
+                          (document-dependency-paths library-document)])
+                (hash-set* dp
+                           lib-sha256
+                           (string-append name "/" include-prefix)))))
 
   ;; Add a context defined by a context data structure.
   (define (add-context name cntxt)
@@ -55,7 +70,8 @@
               (cons name order)
               sha256
               library
-              library-refs))
+              library-refs
+              dependency-paths))
 
   ;; Add a context defined by an xexpr
   (define (add-xexpr-context xexpr)
@@ -88,7 +104,7 @@
 ;; A document containing the builtin contexts
 
 (define builtins
-  (~> (document (hash) empty #f (hash) (hash))
+  (~> (document (hash) empty #f (hash) (hash) (hash))
       (add-context "truth"
                    (contexts:make-builtin-context
                     empty
@@ -129,7 +145,7 @@
 ;; it is always available.
 
 (define empty-document
-  (~> (document (hash) empty #f (hash) (hash))
+  (~> (document (hash) empty #f (hash) (hash) (hash))
       (add-to-library "builtins" builtins #f)))
 
 ;; Read document from an HTML file

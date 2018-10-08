@@ -19,7 +19,8 @@
          . -> . compiled-context?)]
   [check-asset (compiled-context? xexpr/c . -> . any/c)]
   [eval-asset (compiled-context? xexpr/c . -> . any/c)]
-  [eval-context-expr (compiled-context? xexpr/c . -> . context?)]))
+  [eval-context-expr (compiled-context? xexpr/c (hash/c string? string?)
+                     . -> . context?)]))
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -1075,7 +1076,7 @@
 ;;
 ;; Evaluate an expression yielding a context
 ;;
-(define (eval-context-expr cntxt xexpr)
+(define (eval-context-expr cntxt xexpr include-prefixes)
   (define signature (compiled-context-compiled-signature cntxt))
   (define rules (compiled-context-compiled-rules cntxt))
   (define term (xexpr->asset xexpr))
@@ -1087,4 +1088,13 @@
                     reduced-term*)
             (current-continuation-marks)
             xexpr)))
-  reduced-term*)
+  (define prefix (hash-ref include-prefixes (context-origin reduced-term*) #f))
+  (define extended-includes
+    (for/list ([inc (context-includes reduced-term*)])
+      (match-define (cons mode name) inc)
+      (cons mode (if prefix
+                     (string-append prefix "/" name)
+                     name))))
+  (struct-copy context reduced-term*
+               [origin #f]
+               [includes extended-includes]))
