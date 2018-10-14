@@ -3,7 +3,6 @@
 (provide empty-document
          add-to-library
          add-context
-         get-context
          context-name-resolver
          (rename-out [document-dependency-paths include-prefixes])
          read-xhtml-document
@@ -75,36 +74,63 @@
 
   ;; Add a context defined by an xexpr
   (define (add-xexpr-context xexpr)
-    (define-values (cntxt name) (contexts:xexpr->context+name xexpr sha256))
-    (add-context name (contexts:compile-context cntxt (context-name-resolver))))
+    (define cntxt (contexts:xexpr->context xexpr sha256))
+    (define name (contexts:context-name cntxt))
+    (define compiled (contexts:compile-context cntxt (context-name-resolver)))
+    (add-context name compiled))
 
-  ;; Retrieve a context by name
-  (define (get-document-and-context name)
-    (define elements (map string-trim (string-split name "/")))
-    (case (length elements)
-      [(1)
-       (unless (hash-has-key? contexts (first elements))
-         (error (format "no context named ~a" name)))
-       (values this (hash-ref contexts (first elements)))]
-      [(2)
-       (unless (hash-has-key? library (first elements))
-         (error (format "no library named ~a" (first elements))))
-       (define library-doc (hash-ref library (first elements)))
-       (values library-doc (send library-doc get-context (second elements)))]
+  ;; Document and context lookup
+  (define (include-path->doc-sha256-and-name path-elements doc-sha256)
+    (define path (if doc-sha256
+                     (~> (hash-ref dependency-paths doc-sha256)
+                         (string-split "/")
+                         (map string-trim _)
+                         (append path-elements))
+                     path-elements))
+    (cond
+      [(= 1 (length path))
+       (unless (hash-has-key? contexts (first path))
+         (error (format "no context named ~a" (string-join path "/"))))
+       (values this sha256 (first path))]
       [else
-       (error (format "illegal context specification ~a" name))]))
+       (unless (hash-has-key? library (first path))
+         (error (format "no library named ~a" (first path))))
+       (define library-doc (hash-ref library (first path)))
+       (send library-doc include-path->doc-sha256-and-name
+             (rest path) #f)]))
 
-  (define (get-context name)
-    (define-values (document context) (get-document-and-context name))
-    context)
+  ;; (define (include-path->sha256-and-name path doc-sha256)
+  ;;   (define path-elements (map string-trim (string-split path "/")))
+  ;;   (define-values (doc sha256 name)
+  ;;     (include-path->doc-sha256-and-name* path-elements doc-sha256))
+  ;;   (values sha256 name))
+
+  ;; (define (get-document-and-context name doc-sha256)
+  ;;   (define path-elements (map string-trim (string-split name "/")))
+  ;;   (define-values (doc sha256 name)
+  ;;     (include-path->doc-sha256-and-name* path-elements doc-sha256))
+  ;;   (values doc (send doc get-local-context name)))
+
+  (define (get-local-context name)
+    (hash-ref contexts name))
 
   (define (context-name-resolver)
-    (λ (name) (get-context name))))
+    (λ (path doc-sha256 request-type)
+      (define path-elements (map string-trim (string-split path "/")))
+      (define-values (doc sha256 name)
+        (include-path->doc-sha256-and-name path-elements doc-sha256))
+      (case request-type
+        [(context)
+         (send doc get-local-context name)]
+        [(doc+name)
+         (list sha256 name)]))))
 
 ;; A document containing the builtin contexts
 
 (define builtins
-  (~> (document (hash) empty #f (hash) (hash) (hash))
+  (~> (document (hash) empty
+                (~> #"builtins" sha256 bytes->hex-string)
+                (hash) (hash) (hash))
       (add-context "truth"
                    (contexts:make-builtin-context
                     empty

@@ -7,12 +7,15 @@
  re-raise-exn
  (contract-out
   [empty-context context?]
-  [xexpr->context+name (xexpr/c (or/c #f string?)
-                       . -> . (values context? (or/c #f string?)))]
+  [context-name (context? . -> . (or/c #f string?))]
+  [context-document (context? . -> . (or/c #f string?))]
   [xexpr->context (xexpr/c (or/c #f string?) . -> . context?)]
   [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
-  [compile-context (context? (string? . -> . context?)  . -> . compiled-context?)]
+  [compile-context (context? (string? string? symbol?
+                             . -> . (or/c context?
+                                          (list/c (or/c string? #f) string?)))
+                   . -> . compiled-context?)]
   [without-compiled-resources (context? . -> . context?)]
   [make-builtin-context
          ((listof pair?) operators:signature? equations:rulelist?
@@ -51,8 +54,10 @@
   ;; ops: a set of op declarations (sexps)
   ;; rules: a list of rules (sexps)
   ;; assets: a hash mapping labels to assets (sexps)
-  ;; origin: #f or the sha256 hash (hex string) of the HTML document
-  ;;         in which the context is defined
+  ;; origin: a (document . name) pair, where document is the sha256 hash
+  ;;         (hex string) of the HTML document in which the context is
+  ;;         defined, and name is the local name of the context in that
+  ;;         document. Eith item can be #f if the information is not available.
   #:methods terms:gen:term
   [(define (term.sort c) 'context)
    (define (term.builtin-type c) '*context*)
@@ -69,12 +74,18 @@
   ; compiled-assets: optimized representation of assets
 )
 
+(define (context-name cntxt)
+  (cdr (context-origin cntxt)))
+
+(define (context-document cntxt)
+  (car (context-origin cntxt)))
+
 (define empty-context
-  (context empty (hash) (set) (set)  (hash) (set) (list) (hash) #f))
+  (context empty (hash) (set) (set)  (hash) (set) (list) (hash) (cons #f #f)))
 
 (module+ test
 
-  (define (dummy-name-resolver name)
+  (define (dummy-name-resolver path doc-sha256 request-type)
     (error "Call of dummy function"))
 
   (define xexpr-context
@@ -151,7 +162,7 @@
                                                (list 'assets
                                                      (hash 'asset
                                                            '(term-or-var a-foo))))))
-             #f)))
+             (cons #f "test"))))
 
 ;;
 ;; Create a context from an xexpr
@@ -263,7 +274,7 @@
     [else
      (error (format "Unknown xexpr type: ~a" xexpr-asset))]))
 
-(define (xexpr->context+name xexpr-context origin)
+(define (xexpr->context xexpr-context origin-sha256)
 
   (match-define
     `(context (,attrs ...) ...
@@ -318,14 +329,8 @@
                   (xexpr->asset rule)))
   (define assets (second (xexpr->asset (cons 'assets xexpr-assets))))
 
-  (values (context includes context-refs sorts subsorts vars ops rules assets
-                   origin)
-          name))
-
-(define (xexpr->context xexpr-context origin)
-  (define-values (cntxt name)
-    (xexpr->context+name xexpr-context origin))
-  cntxt)
+  (context includes context-refs sorts subsorts vars ops rules assets
+           (cons origin-sha256 name)))
 
 (module+ test
 
@@ -343,13 +348,11 @@
   (check-equal? (xexpr->context xexpr-context #f)
                 reference-context)
 
-  (let-values ([(cntxt name)
+  (check-equal? reference-context
                 (~> xexpr-context
                     xexpr->string
                     string->xexpr
-                    (xexpr->context+name #f))])
-    (check-equal? name "test")
-    (check-equal? cntxt reference-context)))
+                    (xexpr->context #f))))
 
 ;;
 ;; Make an xexpr representation of a context
@@ -442,12 +445,10 @@
             ,(assets->xexpr (context-assets cntxt))))
 
 (module+ test
-  (let-values ([(cntxt name)
+  (check-equal? reference-context
                 (~> reference-context
                     (context->xexpr "test")
-                    (xexpr->context+name #f))])
-    (check-equal? name "test")
-    (check-equal? cntxt reference-context)))
+                    (xexpr->context #f))))
 
 ;;
 ;; Take a context generated from a source file, and add
@@ -601,7 +602,7 @@
       (match-define (cons mode name) mode/name)
       (cons mode
             (with-handlers ([exn:fail? (re-raise-exn (list mode name))])
-              (name-resolver name)))))
+              (name-resolver name #f 'context)))))
 
   (define (compile-sort-graph)
     ;; Merge the sort graphs of the included contexts.
@@ -674,12 +675,18 @@
     (define after-context-refs
       (for/fold ([rl after-includes])
                 ([(name cref) (context-context-refs cntxt)])
+        (match-define (list document c-name) (name-resolver cref #f 'doc+name))
+        (define c-term
+          (terms:make-term signature 'context
+                           (if document
+                               (list document c-name)
+                               (list c-name))))
         (equations:add-rule
          rl
          (equations:make-rule signature
                               (terms:make-term signature name empty)
                               #f
-                              (name-resolver cref)
+                              c-term
                               #f #t))))
     ;; Process the rule declarations
     (for/fold ([rl after-context-refs])
@@ -1088,7 +1095,9 @@
                     reduced-term*)
             (current-continuation-marks)
             xexpr)))
-  (define prefix (hash-ref include-prefixes (context-origin reduced-term*) #f))
+  (define prefix (hash-ref include-prefixes
+                           (car (context-origin reduced-term*))
+                           #f))
   (define extended-includes
     (for/list ([inc (context-includes reduced-term*)])
       (match-define (cons mode name) inc)

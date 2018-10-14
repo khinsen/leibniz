@@ -36,8 +36,11 @@
              (hash)
              #f))
 
+  (define (dummy-name-resolver path doc-sha256 request-type)
+    (error "Call of dummy function"))
+
   (define compiled-test-context
-    (compile-context test-context (λ (name) (error "don't call this")))))
+    (compile-context test-context dummy-name-resolver)))
 
 ;;
 ;; Sort replacement by name or by prefix
