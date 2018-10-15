@@ -99,18 +99,6 @@
        (send library-doc include-path->doc-sha256-and-name
              (rest path) #f)]))
 
-  ;; (define (include-path->sha256-and-name path doc-sha256)
-  ;;   (define path-elements (map string-trim (string-split path "/")))
-  ;;   (define-values (doc sha256 name)
-  ;;     (include-path->doc-sha256-and-name* path-elements doc-sha256))
-  ;;   (values sha256 name))
-
-  ;; (define (get-document-and-context name doc-sha256)
-  ;;   (define path-elements (map string-trim (string-split name "/")))
-  ;;   (define-values (doc sha256 name)
-  ;;     (include-path->doc-sha256-and-name* path-elements doc-sha256))
-  ;;   (values doc (send doc get-local-context name)))
-
   (define (get-local-context name)
     (hash-ref contexts name))
 

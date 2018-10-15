@@ -190,7 +190,7 @@
       (define label (attr-ref element 'label #f))
       (define expr (extract-single-element element))
       (define result
-        (with-handlers ([exn:fail? (λ (e) e)])
+        (with-handlers ([contexts:exn:fail:leibniz? (λ (e) e)])
           (case tag
             [(leibniz-check)
              (contexts:check-asset context-or-error expr)]
@@ -274,7 +274,7 @@
     (define source (attr-ref element 'source))
     (define expr (extract-single-element element))
     (define substitute-context-or-error
-      (with-handlers ([exn:fail? (λ (e) e)])
+      (with-handlers ([contexts:exn:fail:leibniz? (λ (e) e)])
         (parameterize ([current-context-name-resolver name-resolver])
           (~> (contexts:eval-context-expr context expr
                                           (documents:include-prefixes document))
@@ -287,7 +287,7 @@
                (documents:add-context document context-name substitute-context)
                ;; Continue processing
                #t)]
-      [else
+      [(contexts:exn:fail:leibniz? substitute-context-or-error)
        (match-define (contexts:exn:fail:leibniz msg cont decl)
                      substitute-context-or-error)
        (values #f

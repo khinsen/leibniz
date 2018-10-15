@@ -119,6 +119,8 @@
      (format "~a" (second term))]
     [(string)
      (format "~v" (second term))]
+    [(context)
+     "<context>"]
     [(term)
      (define raw-op (second term))
      (define-values (op type) (op-string-and-type raw-op))
