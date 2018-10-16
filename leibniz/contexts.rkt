@@ -12,9 +12,7 @@
   [xexpr->context (xexpr/c (or/c #f string?) . -> . context?)]
   [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
-  [compile-context (context? (string? (or/c #f string?) symbol?
-                             . -> . (or/c context?
-                                          (list/c (or/c string? #f) string?)))
+  [compile-context (context? (string? (or/c #f string?) . -> . context?)
                    . -> . compiled-context?)]
   [without-compiled-resources (context? . -> . context?)]
   [make-builtin-context
@@ -86,7 +84,7 @@
 
 (module+ test
 
-  (define (dummy-name-resolver path doc-sha256 request-type)
+  (define (dummy-name-resolver path doc-sha256)
     (error "Call of dummy function"))
 
   (define xexpr-context
@@ -610,7 +608,7 @@
       (match-define (list mode c-name document) inc)
       (cons mode
             (with-handlers ([exn:fail? (re-raise-exn (list mode c-name document))])
-              (name-resolver c-name document 'context)))))
+              (name-resolver c-name document)))))
 
   (define (compile-sort-graph)
     ;; Merge the sort graphs of the included contexts.

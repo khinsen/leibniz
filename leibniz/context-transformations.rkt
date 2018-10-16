@@ -36,7 +36,7 @@
              (hash)
              (cons #f #f)))
 
-  (define (dummy-name-resolver path doc-sha256 request-type)
+  (define (dummy-name-resolver path doc-sha256)
     (error "Call of dummy function"))
 
   (define compiled-test-context

@@ -620,7 +620,7 @@
              (λ (signature pattern condition substitution)
                (define name (substitution-value substitution 'name))
                (with-handlers ([exn:fail? (re-raise-exn `(context ,name))])
-                 ((current-context-name-resolver) name #f 'context))))
+                 ((current-context-name-resolver) name #f))))
          ;; Retrieve a context from another document
          (-> #:vars ([document string] [name string])
              (context document name)
@@ -628,7 +628,7 @@
                (define document (substitution-value substitution 'document))
                (define name (substitution-value substitution 'name))
                (with-handlers ([exn:fail? (re-raise-exn `(context ,name))])
-                 ((current-context-name-resolver) name document 'context))))
+                 ((current-context-name-resolver) name document))))
          ;; Replace sorts
          (-> #:vars ([context context] [current-sort string] [new-sort string])
              (replace-sort context current-sort new-sort)

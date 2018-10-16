@@ -111,15 +111,10 @@
     (values sha256 name))
 
   (define (context-name-resolver)
-    (λ (path doc-sha256 request-type)
-      (define path-elements (map string-trim (string-split path "/")))
+    (λ (path doc-sha256)
       (define-values (doc sha256 name)
-        (include-path->doc-sha256-and-name path-elements doc-sha256))
-      (case request-type
-        [(context)
-         (send doc get-local-context name)]
-        [(doc+name)
-         (list sha256 name)]))))
+        (include-path->doc-sha256-and-name (list path) doc-sha256))
+      (send doc get-local-context name))))
 
 ;; A document containing the builtin contexts
 
