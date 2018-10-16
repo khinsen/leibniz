@@ -12,7 +12,7 @@
   [xexpr->context (xexpr/c (or/c #f string?) . -> . context?)]
   [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
-  [compile-context (context? (string? string? symbol?
+  [compile-context (context? (string? (or/c #f string?) symbol?
                              . -> . (or/c context?
                                           (list/c (or/c string? #f) string?)))
                    . -> . compiled-context?)]
@@ -22,8 +22,7 @@
          . -> . compiled-context?)]
   [check-asset (compiled-context? xexpr/c . -> . any/c)]
   [eval-asset (compiled-context? xexpr/c . -> . any/c)]
-  [eval-context-expr (compiled-context? xexpr/c (hash/c string? string?)
-                     . -> . context?)]))
+  [eval-context-expr (compiled-context? xexpr/c . -> . context?)]))
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -31,6 +30,7 @@
          (prefix-in equations: "./equations.rkt")
          (prefix-in rewrite: "./rewrite.rkt")
          (only-in racket/hash hash-union)
+         txexpr
          xml
          threading)
 
@@ -48,6 +48,7 @@
                  origin)
   #:transparent
   ;; includes: a list of include declarations
+  ;; context-refs: a hash mapping op names to context references
   ;; sorts: a set of declared sorts
   ;; subsorts: a set of subsort declarations (pairs of sorts)
   ;; vars: a hash mapping var names to sorts
@@ -294,18 +295,16 @@
                         (equal? (first (first (first attrs))) 'id))
                    (second (first (first attrs)))
                    #f))
-  (define includes (for/list ([include xexpr-includes])
-                     (match include
-                       [`(include ((mode ,mode) (ref ,ref)))
-                        (cons (string->symbol mode) ref)]
-                       [`(include ((ref ,ref) (mode ,mode)))
-                        (cons (string->symbol mode) ref)])))
+  (define includes (for/list ([inc xexpr-includes])
+                     (define attrs (attrs->hash (get-attrs inc)))
+                     (list (string->symbol (hash-ref attrs 'mode))
+                           (hash-ref attrs 'context)
+                           (hash-ref attrs 'document origin-sha256))))
   (define context-refs (for/hash ([cref xexpr-context-refs])
-                         (match cref
-                           [`(context-ref ((name ,name) (ref ,ref)))
-                            (values (string->symbol name) ref)]
-                           [`(context-ref ((ref ,ref) (name ,name)))
-                            (values (string->symbol name) ref)])))
+                         (define attrs (attrs->hash (get-attrs cref)))
+                         (values (string->symbol (hash-ref attrs 'op))
+                                 (cons (hash-ref attrs 'context)
+                                       (hash-ref attrs 'document origin-sha256)))))
   (define sorts (for/set ([sort xexpr-sorts])
                   (match sort
                     [`(sort ((id ,s)))
@@ -426,12 +425,21 @@
                  `(asset ((id ,(symbol->string label))) ,(asset->xexpr asset)))))
 
   `(context ((id ,name))
-            (includes ,@(for/list ([mode/name (context-includes cntxt)])
-                          `(include ((mode ,(symbol->string (car mode/name)))
-                                     (ref ,(cdr mode/name))))))
-            (context-refs ,@(for/list ([(name ref) (context-context-refs cntxt)])
-                              `(context-ref ((name ,(symbol->string name))
-                                             (ref ,ref)))))
+            (includes ,@(for/list ([inc (context-includes cntxt)])
+                          (match-define (list mode c-name document) inc)
+                          (define attrs `((mode ,(symbol->string mode))
+                                          (context ,c-name)))
+                          `(include ,(if document
+                                         (cons `(document ,document) attrs)
+                                         attrs))))
+            (context-refs ,@(for/list ([(op ref) (context-context-refs cntxt)])
+                              (match-define (cons c-name document) ref)
+                              (define attrs `((op ,(symbol->string op))
+                                              (context ,c-name)))
+                              `(context-ref ,(if document
+                                                 (cons `(document ,document)
+                                                       attrs)
+                                                 attrs))))
             (sorts ,@(for/list ([s (context-sorts cntxt)])
                        `(sort ((id ,(symbol->string s))))))
             (subsorts ,@(for/list ([sd (context-subsorts cntxt)])
@@ -512,7 +520,7 @@
                   '(bar2foo ((var X bar)) foo))
              empty
              (hash)
-             #f))
+             (cons #f #f)))
 
   (define a-minimal-context
     (context empty
@@ -526,7 +534,7 @@
                   '(bar2foo ((var X bar)) foo))
              empty
              (hash)
-             #f))
+             (cons #f #f)))
 
   (check-equal? (add-implicit-declarations a-minimal-context)
                 a-full-context)
@@ -598,11 +606,11 @@
 (define (compile-context cntxt name-resolver)
 
   (define includes
-    (for/list ([mode/name (context-includes cntxt)])
-      (match-define (cons mode name) mode/name)
+    (for/list ([inc (context-includes cntxt)])
+      (match-define (list mode c-name document) inc)
       (cons mode
-            (with-handlers ([exn:fail? (re-raise-exn (list mode name))])
-              (name-resolver name #f 'context)))))
+            (with-handlers ([exn:fail? (re-raise-exn (list mode c-name document))])
+              (name-resolver c-name document 'context)))))
 
   (define (compile-sort-graph)
     ;; Merge the sort graphs of the included contexts.
@@ -675,7 +683,7 @@
     (define after-context-refs
       (for/fold ([rl after-includes])
                 ([(name cref) (context-context-refs cntxt)])
-        (match-define (list document c-name) (name-resolver cref #f 'doc+name))
+        (match-define (cons c-name document) cref)
         (define c-term
           (terms:make-term signature 'context
                            (if document
@@ -955,7 +963,7 @@
     [(string? compiled-term)
      (list 'string compiled-term)]
     [(context? compiled-term)
-     (list 'context)]
+     (list 'context (context-name compiled-term) (context-document compiled-term))]
     [else
      (error (format "cannot decompile term: ~v" compiled-term))]))
 
@@ -1083,7 +1091,7 @@
 ;;
 ;; Evaluate an expression yielding a context
 ;;
-(define (eval-context-expr cntxt xexpr include-prefixes)
+(define (eval-context-expr cntxt xexpr)
   (define signature (compiled-context-compiled-signature cntxt))
   (define rules (compiled-context-compiled-rules cntxt))
   (define term (xexpr->asset xexpr))
@@ -1095,15 +1103,7 @@
                     reduced-term*)
             (current-continuation-marks)
             xexpr)))
-  (define prefix (hash-ref include-prefixes
-                           (car (context-origin reduced-term*))
-                           #f))
-  (define extended-includes
-    (for/list ([inc (context-includes reduced-term*)])
-      (match-define (cons mode name) inc)
-      (cons mode (if prefix
-                     (string-append prefix "/" name)
-                     name))))
+  ;; This function is used only in substitute-context, so the origin
+  ;; of the evaluated context is the defining context's origin.
   (struct-copy context reduced-term*
-               [origin #f]
-               [includes extended-includes]))
+               [origin (context-origin cntxt)]))

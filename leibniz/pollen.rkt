@@ -155,6 +155,37 @@
         (txexpr 'rules empty (hash-ref by-tag 'rule empty))
         (txexpr 'assets empty (hash-ref by-tag 'asset empty))))
 
+(define (preprocess-includes decls document)
+  (define includes (get-elements (first decls)))
+  (define processed-includes
+    (for/list ([inc includes])
+      (define-values (doc name)
+        (documents:lookup-context document (attr-ref inc "ref")))
+      (if doc
+          `(include ((mode ,(attr-ref inc "mode"))
+                     (document ,doc)
+                     (context ,name)))
+          `(include ((mode ,(attr-ref inc "mode"))
+                     (context ,name))))))
+  (cons (txexpr 'includes empty processed-includes)
+        (rest decls)))
+
+(define (preprocess-context-refs decls document)
+  (define context-refs (get-elements (second decls)))
+  (define processed-crefs
+    (for/list ([cref context-refs])
+      (define-values (doc name)
+        (documents:lookup-context document (attr-ref cref "ref")))
+      (if doc
+          `(context-ref ((op ,(attr-ref cref "op"))
+                         (document ,doc)
+                         (context ,name)))
+          `(context-ref ((op ,(attr-ref cref "op"))
+                         (context ,name))))))
+  (list* (first decls)
+         (txexpr 'context-refs empty processed-crefs)
+         (rest (rest decls))))
+
 (define (process-context context-name context-elements document has-syntax-errors?)
 
   (define name-resolver (documents:context-name-resolver document))
@@ -168,7 +199,9 @@
            (~> decls
                (map extract-single-element _)
                preprocess-decls
-               (txexpr 'context empty _)
+               (preprocess-includes document)
+               (preprocess-context-refs document)
+               (txexpr 'context `((id ,context-name)) _)
                (contexts:xexpr->context #f)
                contexts:add-implicit-declarations
                (contexts:compile-context name-resolver)))))
@@ -276,8 +309,7 @@
     (define substitute-context-or-error
       (with-handlers ([contexts:exn:fail:leibniz? (λ (e) e)])
         (parameterize ([current-context-name-resolver name-resolver])
-          (~> (contexts:eval-context-expr context expr
-                                          (documents:include-prefixes document))
+          (~> (contexts:eval-context-expr context expr)
               (contexts:compile-context name-resolver)))))
     (cond
       [(contexts:context? substitute-context-or-error)
@@ -435,7 +467,7 @@
      #`(include* "extend" #,(source-loc #'context-ref) context-ref)]))
 
 (define (+context-ref symbol ref)
-  `(leibniz-decl (context-ref ((name ,(symbol->string symbol))
+  `(leibniz-decl (context-ref ((op ,(symbol->string symbol))
                                (ref ,ref)))))
 
 ;; Sort and subsort declarations

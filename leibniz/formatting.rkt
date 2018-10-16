@@ -120,7 +120,7 @@
     [(string)
      (format "~v" (second term))]
     [(context)
-     "<context>"]
+     (format "<context ~a ~a>" (second term) (third term))]
     [(term)
      (define raw-op (second term))
      (define-values (op type) (op-string-and-type raw-op))

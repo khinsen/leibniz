@@ -3,6 +3,7 @@
 (provide empty-document
          add-to-library
          add-context
+         lookup-context
          context-name-resolver
          (rename-out [document-dependency-paths include-prefixes])
          read-xhtml-document
@@ -81,7 +82,8 @@
 
   ;; Document and context lookup
   (define (include-path->doc-sha256-and-name path-elements doc-sha256)
-    (define path (if doc-sha256
+    (define path (if (and doc-sha256
+                          (not (equal? doc-sha256 sha256)))
                      (~> (hash-ref dependency-paths doc-sha256)
                          (string-split "/")
                          (map string-trim _)
@@ -101,6 +103,12 @@
 
   (define (get-local-context name)
     (hash-ref contexts name))
+
+  (define (lookup-context path)
+    (define path-elements (map string-trim (string-split path "/")))
+    (define-values (doc sha256 name)
+      (include-path->doc-sha256-and-name path-elements #f))
+    (values sha256 name))
 
   (define (context-name-resolver)
     (λ (path doc-sha256 request-type)

@@ -4,7 +4,7 @@
  (contract-out
   [replace-sort (context? string? string? . -> . context?)]
   [replace-sort-prefix (context? string? string? . -> . context?)]
-  [replace-include (context? string? string? . -> . context?)]
+  [replace-include (context? context? context? . -> . context?)]
   [remove-vars (context? . -> . context?)]))
 
 (require "./contexts.rkt"
@@ -34,7 +34,7 @@
                          '(term bar2foo ((term-or-var Y)))
                          '(term a-foo ((term-or-var Y))) #f))
              (hash)
-             #f))
+             (cons #f #f)))
 
   (define (dummy-name-resolver path doc-sha256 request-type)
     (error "Call of dummy function"))
@@ -151,31 +151,50 @@
                                      '(term bar2foo ((term-or-var Y)))
                                      '(term a-foo ((term-or-var Y))) #f))
                          (hash)
-                         #f)))
+                         (cons #f #f))))
 
 ;;
 ;; Replace includes
 ;;
 (define (replace-include cntxt current-include new-include)
 
+  (for ([c (list cntxt current-include new-include)])
+    (unless (context? c)
+      (raise (exn:fail:leibniz
+            (format "does not reduce to a context structure: ~a" c)
+            (current-continuation-marks)
+            '(replace-include)))))
+
+  (define current-document (context-document current-include))
+  (define current-cname (context-name current-include))
+  (define new-document (context-document new-include))
+  (define new-cname (context-name new-include))
+
   (define transformed-includes
-    (for/list ([mode/name (context-includes cntxt)])
-      (match-define (cons mode name) mode/name)
-      (cons mode (if (equal? name current-include)
-                     new-include
-                     name))))
+    (for/list ([inc (context-includes cntxt)])
+      (match-define (list mode cname document) inc)
+      (if (and (equal? document current-document)
+               (equal? cname current-cname))
+          (list mode new-cname new-document)
+          inc)))
 
   (struct-copy context cntxt
                [includes transformed-includes]))
 
 (module+ test
+  (define foo-cntxt (struct-copy context empty-context
+                                 [origin (cons #f "foo")]))
+  (define bar-cntxt (struct-copy context empty-context
+                                 [origin (cons #f "bar")]))
+  (define baz-cntxt (struct-copy context empty-context
+                                 [origin (cons #f "baz")]))
   (define cntxt1 (struct-copy context empty-context
-                              [includes '((use . "foo")
-                                          (extend . "baz"))]))
+                              [includes '((use "foo" #f)
+                                          (extend "baz" #f))]))
   (define cntxt2 (struct-copy context empty-context
-                              [includes '((use . "bar")
-                                          (extend . "baz"))]))
-  (check-equal? (replace-include cntxt1 "foo" "bar")
+                              [includes '((use "bar" #f)
+                                          (extend "baz" #f))]))
+  (check-equal? (replace-include cntxt1 foo-cntxt bar-cntxt)
                 cntxt2))
 
 ;;
@@ -276,4 +295,4 @@
                                      '(term bar2foo ((term-or-var Y)))
                                      '(term a-foo ((term-or-var Y))) #f))
                          (hash)
-                         #f)))
+                         (cons #f #f))))
