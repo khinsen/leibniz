@@ -376,8 +376,7 @@
       ;; the Pollen Web server!
       (define library-url (string-append "/library/" sha256-hex ".html"))
       (values (documents:add-to-library document name
-                                        library-document
-                                        filename)
+                                        library-document)
               (cons `(@ (a ((href ,library-url)) ,name)
                         '(br))
                     import-list)

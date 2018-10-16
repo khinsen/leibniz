@@ -5,7 +5,6 @@
          add-context
          lookup-context
          context-name-resolver
-         (rename-out [document-dependency-paths include-prefixes])
          read-xhtml-document
          library-path)
 
@@ -27,42 +26,33 @@
 ;;
 (define-class document
 
-  (field contexts order sha256 library library-refs dependency-paths)
-  ;; contexts: a hash mapping context names to hashes with keys
-  ;;           'includes 'sorts 'ops 'vars 'rules 'assets,
-  ;;           values are lists/sets/hashes of the declarations in
-  ;;            each category
+  (field contexts order sha256 library library-by-name)
+  ;; contexts: a hash mapping context names to contexts
   ;; order: a list of context names in the inverse order of definition
   ;; sha256: the sha256 hash of the HTML file from which the
-  ;;         document was created, or #f if the document was created
-  ;;         by other means
-  ;; library: a hash mapping document names to documents
-  ;; library-refs: a hash mapping document names to external references
-  ;;               (filenames for now, later maybe DOIs or hashes)
-  ;; dependency-paths: a hash mapping sha256 hashes to include prefixes
+  ;;         document was created, or #f for the document under
+  ;;         construction from a Pollen source file
+  ;; library: a hash mapping sha256 hashes to documents
+  ;; library-by-name: a hash mapping document names to sha256 hashes
 
   ;; Set the sha256 hash for the document
   (define (set-sha256 sha256-from-file)
-    (document contexts order sha256-from-file
-              library library-refs dependency-paths))
+    (document contexts order sha256-from-file library library-by-name))
 
   ;; Add another document to the library.
-  (define (add-to-library name library-document external-ref)
+  (define (add-to-library name library-document)
+    (define library-document-sha256 (document-sha256 library-document))
     (define (hash-set* h k v)
       (if k
           (hash-set h k v)
           h))
     (document contexts order sha256
-              (hash-set library name library-document)
-              (hash-set library-refs name external-ref)
-              (for/fold ([dp (hash-set* dependency-paths
-                                        (document-sha256 library-document)
-                                        name)])
-                        ([(lib-sha256 include-prefix)
-                          (document-dependency-paths library-document)])
-                (hash-set* dp
-                           lib-sha256
-                           (string-append name "/" include-prefix)))))
+              (for/fold ([l (hash-set library
+                                      library-document-sha256
+                                      library-document)])
+                        ([(lib-sha256 lib-doc) (document-library library-document)])
+                (hash-set l lib-sha256 lib-doc))
+              (hash-set library-by-name name library-document-sha256)))
 
   ;; Add a context defined by a context data structure.
   (define (add-context name cntxt)
@@ -70,8 +60,7 @@
               (cons name order)
               sha256
               library
-              library-refs
-              dependency-paths))
+              library-by-name))
 
   ;; Add a context defined by an xexpr
   (define (add-xexpr-context xexpr)
@@ -80,40 +69,34 @@
     (define compiled (contexts:compile-context cntxt (context-name-resolver)))
     (add-context name compiled))
 
-  ;; Document and context lookup
-  (define (include-path->doc-sha256-and-name path-elements doc-sha256)
-    (define path (if (and doc-sha256
-                          (not (equal? doc-sha256 sha256)))
-                     (~> (hash-ref dependency-paths doc-sha256)
-                         (string-split "/")
-                         (map string-trim _)
-                         (append path-elements))
-                     path-elements))
-    (cond
-      [(= 1 (length path))
-       (unless (hash-has-key? contexts (first path))
-         (error (format "no context named ~a" (string-join path "/"))))
-       (values this sha256 (first path))]
-      [else
-       (unless (hash-has-key? library (first path))
-         (error (format "no library named ~a" (first path))))
-       (define library-doc (hash-ref library (first path)))
-       (send library-doc include-path->doc-sha256-and-name
-             (rest path) #f)]))
-
   (define (get-local-context name)
     (hash-ref contexts name))
 
   (define (lookup-context path)
     (define path-elements (map string-trim (string-split path "/")))
-    (define-values (doc sha256 name)
-      (include-path->doc-sha256-and-name path-elements #f))
-    (values sha256 name))
+    (cond
+      ;; local context
+      [(= 1 (length path-elements))
+       (define name (first path-elements))
+       (unless (hash-has-key? contexts name)
+         (error (format "no context named ~a" path)))
+       (values sha256 name)]
+      ;; context from a library document
+      [(= 2 (length path-elements))
+       (define doc-sha256 (hash-ref library-by-name (first path-elements) #f))
+       (define name (second path-elements))
+       (unless doc-sha256
+         (error (format "no library document named ~a" (first path-elements))))
+       (send (hash-ref library doc-sha256) lookup-context name)]
+      [else
+       (error (format "illegal context reference: ~a" path))]))
 
   (define (context-name-resolver)
-    (λ (path doc-sha256)
-      (define-values (doc sha256 name)
-        (include-path->doc-sha256-and-name (list path) doc-sha256))
+    (λ (name doc-sha256)
+      (define doc (if (and doc-sha256
+                           (not (equal? doc-sha256 sha256)))
+                      (hash-ref library doc-sha256)
+                      this))
       (send doc get-local-context name))))
 
 ;; A document containing the builtin contexts
@@ -121,7 +104,7 @@
 (define builtins
   (~> (document (hash) empty
                 (~> #"builtins" sha256 bytes->hex-string)
-                (hash) (hash) (hash))
+                (hash) (hash))
       (add-context "truth"
                    (contexts:make-builtin-context
                     empty
@@ -162,8 +145,8 @@
 ;; it is always available.
 
 (define empty-document
-  (~> (document (hash) empty #f (hash) (hash) (hash))
-      (add-to-library "builtins" builtins #f)))
+  (~> (document (hash) empty #f (hash) (hash))
+      (add-to-library "builtins" builtins)))
 
 ;; Read document from an HTML file
 
