@@ -465,9 +465,13 @@
     [(_ context-ref:string)
      #`(include* "extend" #,(source-loc #'context-ref) context-ref)]))
 
-(define (+context-ref symbol ref)
-  `(leibniz-decl (context-ref ((op ,(symbol->string symbol))
-                               (ref ,ref)))))
+(define-leibniz-parser +context-ref context-ref/p cref-decl cref-string
+  (writeln cref-decl)
+  (match cref-decl
+    [`(context-ref ,op-symbol ,context-name)
+     `(@ (leibniz-decl (context-ref ((op ,(symbol->string op-symbol)) (ref ,context-name))))
+         ,(leibniz-input cref-string)
+         (context-column "refers to: " (i ,context-name) (br)))]))
 
 ;; Sort and subsort declarations
 

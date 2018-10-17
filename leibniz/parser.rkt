@@ -4,7 +4,8 @@
          to-eof/p
          sort-or-subsort/p var/p operator/p
          term/p
-         rule/p equation/p transformation/p)
+         rule/p equation/p transformation/p
+         context-ref/p)
 
 (require parser-tools/lex (prefix-in : parser-tools/lex-sre)
          megaparsack megaparsack/parser-tools/lex
@@ -473,3 +474,20 @@
                '(equation (term-or-var a) 
                          (term-or-var b)
                           ((var foo bar) (var bar baz) (term test ((term-or-var a)))))))
+
+(define context-ref/p
+  (do [op <- identifier/p]
+      (token/p 'REWRITE-TO)
+      (guard/p identifier/p
+               (λ (x) (equal? x 'context)))
+      open-paren/p
+      [context-name <- string-literal/p]
+      close-paren/p
+      (pure `(context-ref ,op ,(second context-name)))))
+
+(module+ test
+  (check-parse context-ref/p "template ⇒ context(\"template\")"
+               '(context-ref template "template"))
+  (check-parse-failure context-ref/p "template ⇒ cntxt(\"template\")")
+  (check-parse-failure context-ref/p "template ⇒ context(foo)")
+  (check-parse-failure context-ref/p "template ⇒ context(42)"))
