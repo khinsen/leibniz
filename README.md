@@ -12,7 +12,7 @@ The best way to get an impression of what Leibniz is and what
 you can do with it is to read the one-page introduction
 ["Leibniz by example"](http://khinsen.net/leibniz-examples/examples/leibniz-by-example.html).
 Then you can move on to the [other examples](http://khinsen.net/leibniz-examples/)
-and to[the manual](http://khinsen.net/leibniz/). Readers interested
+and to [the manual](http://khinsen.net/leibniz/). Readers interested
 in the studying the implementation (which needs and will get
 a serious cleanup) should start by looking at the file `notes.md` for
 an overview of the code structure.
@@ -111,6 +111,8 @@ Leibniz is developed:
    [Nature Physics](http://www.nature.com/nphys/index.html), under the
    title
    [Digital Science](http://www.nature.com/doifinder/10.1038/nphys3815).
+
+ - My article [Verifiability in computer-aided research: the role of digital scientific notations at the human-computer interface](https://peerj.com/articles/cs-158/) reports on the research that has lead to the development of Leibniz.
 
  - I have written two short essays on related topics:
    [Scientific communication in the digital age](http://dx.doi.org/10.1063/PT.3.3181)
