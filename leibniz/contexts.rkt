@@ -468,10 +468,7 @@
                ; both sets referenced in a subsort declaration
                (apply set-union (set)
                       (for/list ([pair (context-subsorts cntxt)])
-                        (set (car pair) (cdr pair))))
-               ; the result sorts of all op declarations
-               (apply set (for/list ([op (context-ops cntxt)])
-                            (third op)))))
+                        (set (car pair) (cdr pair))))))
 
   (define vars
     (apply hash-union ; the original var declarations
@@ -523,7 +520,7 @@
   (define a-minimal-context
     (context empty
              (hash)
-             (set)
+             (set 'baz)
              (set (cons 'foo 'bar))
              (hash)
              (set '(a-foo () foo)

@@ -51,7 +51,7 @@ The derivatives of products and compositions of two functions are given by:
 
 In numerical calculations, derivatives must often be approximated by finite differences. Since there are many possible schemes for computing finite differences, we define multiple ◊+sort{finite-difference-operator}s with ◊+op{finite-difference-operator[fn:ℝ→ℝ, h:ℝ] : ℝ→ℝ}, where ◊+term{h} is the step size.
 
-Next, we define ◊+op{Δ : finite-difference-family} and ◊+sort{finite-difference-scheme} such that ◊+op{finite-difference-family_{finite-difference-scheme} : finite-difference-operator}.
+Next, we define the ◊+sort{finite-difference-family} ◊+op{Δ : finite-difference-family} and several ◊+sort{finite-difference-scheme}s such that ◊+op{finite-difference-family_{finite-difference-scheme} : finite-difference-operator}.
 
 With these definitions, the three most common finite-difference schemes are:
 ◊ul{
