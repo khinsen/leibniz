@@ -1001,25 +1001,26 @@
      compiled-item]))
 
 (define (check-asset cntxt xexpr-asset)
-  (define signature (compiled-context-compiled-signature cntxt))
-  (define asset (xexpr->asset xexpr-asset))
-  (match asset
-    [(list (and tag
-                (or 'transformation 'assets 'test
-                    'as-equation 'as-rule 'substitute 'transform)) _ ...)
-     (error (format "not yet implemented: ~a" tag))]
-    [(list (and type (or 'rule 'equation)) vars pattern1 pattern2 condition)
-     (define make (compile-pattern signature vars))
-     (define pattern1* (make pattern1))
-     (define pattern2* (make pattern2))
-     (define condition* (and condition (make condition)))
-     (list type vars
-           (decompile-pattern pattern1*)
-           (decompile-pattern pattern2*)
-           (and condition (decompile-pattern condition*)))]
-    [pattern
-     (define pattern* ((compile-pattern signature (hash)) asset))
-     (decompile-pattern pattern*)]))
+  (with-handlers ([exn:fail? (re-raise-exn xexpr-asset)])
+    (define signature (compiled-context-compiled-signature cntxt))
+    (define asset (xexpr->asset xexpr-asset))
+    (match asset
+      [(list (and tag
+                  (or 'transformation 'assets 'test
+                      'as-equation 'as-rule 'substitute 'transform)) _ ...)
+       (error (format "not yet implemented: ~a" tag))]
+      [(list (and type (or 'rule 'equation)) vars pattern1 pattern2 condition)
+       (define make (compile-pattern signature vars))
+       (define pattern1* (make pattern1))
+       (define pattern2* (make pattern2))
+       (define condition* (and condition (make condition)))
+       (list type vars
+             (decompile-pattern pattern1*)
+             (decompile-pattern pattern2*)
+             (and condition (decompile-pattern condition*)))]
+      [pattern
+       (define pattern* ((compile-pattern signature (hash)) asset))
+       (decompile-pattern pattern*)])))
 
 (module+ test
   (check-equal? (check-asset compiled-reference-context
@@ -1036,36 +1037,37 @@
                                  '(term-or-var ((name "an-undefined-op")))))))
 
 (define (eval-asset cntxt xexpr-asset)
-  (define signature (compiled-context-compiled-signature cntxt))
-  (define rules (compiled-context-compiled-rules cntxt))
-  (define asset (xexpr->asset xexpr-asset))
-  (match asset
-    [(list (and tag
-                (or 'equation 'transformation 'assets
-                    'as-equation 'as-rule 'substitute 'transform)) _ ...)
-     (error (format "asset of type ~a cannot be evaluated" tag))]
-    [(list 'test term reduced-term)
-     (define make (compile-term signature))
-     (define term* (make term))
-     (define reduced-term* (make reduced-term))
-     (define actual-reduced-term* (rewrite:reduce signature rules term*))
-     (list 'test-result
-           (decompile-pattern term*)
-           (decompile-pattern reduced-term*)
-           (decompile-pattern actual-reduced-term*)
-           (equal? reduced-term* actual-reduced-term*))]
-    [(list 'trace term)
-     (define term* ((compile-term signature) term))
-     (define logger (rewrite:trace-logger))
-     (define trace* (rewrite:trace-reduce signature rules term* logger))
-     (list 'trace
-           (for/list ([record (logger 'get-value)])
-             (list* (first record) (second record)
-                    (map decompile-item (drop record 2)))))]
-    [term
-     (define term* ((compile-term signature) term))
-     (define reduced-term* (rewrite:reduce signature rules term*))
-     (list 'reduced-term (decompile-pattern reduced-term*))]))
+  (with-handlers ([exn:fail? (re-raise-exn xexpr-asset)])
+    (define signature (compiled-context-compiled-signature cntxt))
+    (define rules (compiled-context-compiled-rules cntxt))
+    (define asset (xexpr->asset xexpr-asset))
+    (match asset
+      [(list (and tag
+                  (or 'equation 'transformation 'assets
+                      'as-equation 'as-rule 'substitute 'transform)) _ ...)
+       (error (format "asset of type ~a cannot be evaluated" tag))]
+      [(list 'test term reduced-term)
+       (define make (compile-term signature))
+       (define term* (make term))
+       (define reduced-term* (make reduced-term))
+       (define actual-reduced-term* (rewrite:reduce signature rules term*))
+       (list 'test-result
+             (decompile-pattern term*)
+             (decompile-pattern reduced-term*)
+             (decompile-pattern actual-reduced-term*)
+             (equal? reduced-term* actual-reduced-term*))]
+      [(list 'trace term)
+       (define term* ((compile-term signature) term))
+       (define logger (rewrite:trace-logger))
+       (define trace* (rewrite:trace-reduce signature rules term* logger))
+       (list 'trace
+             (for/list ([record (logger 'get-value)])
+               (list* (first record) (second record)
+                      (map decompile-item (drop record 2)))))]
+      [term
+       (define term* ((compile-term signature) term))
+       (define reduced-term* (rewrite:reduce signature rules term*))
+       (list 'reduced-term (decompile-pattern reduced-term*))])))
 
 (module+ test
   ;; a successful test
@@ -1099,21 +1101,24 @@
 ;; Evaluate an expression yielding a context
 ;;
 (define (eval-context-expr cntxt xexpr)
-  (define signature (compiled-context-compiled-signature cntxt))
-  (define rules (compiled-context-compiled-rules cntxt))
-  (define term (xexpr->asset xexpr))
-  (define term* ((compile-term signature) term))
-  (define reduced-term* (rewrite:reduce signature rules term*))
-  (unless (context? reduced-term*)
-    (raise (exn:fail:leibniz
-            (format "does not reduce to a context structure: ~a"
-                    reduced-term*)
-            (current-continuation-marks)
-            xexpr)))
-  ;; This function is used only in substitute-context, so the origin
-  ;; of the evaluated context is the defining context's origin.
-  (struct-copy context reduced-term*
-               [origin (context-origin cntxt)]))
+  (with-handlers ([exn:fail? (re-raise-exn xexpr)])
+    (define signature (compiled-context-compiled-signature cntxt))
+    (define rules (compiled-context-compiled-rules cntxt))
+    (define term (xexpr->asset xexpr))
+    (define term* ((compile-term signature) term))
+    (define reduced-term* (rewrite:reduce signature rules term*))
+    (unless (context? reduced-term*)
+      (raise (exn:fail:leibniz
+              (format "does not reduce to a context structure: ~a"
+                      reduced-term*)
+              (current-continuation-marks)
+              xexpr)))
+    ;; This function is used only in substitute-context, so the origin
+    ;; of the evaluated context is the defining context's origin.
+    (struct-copy context reduced-term*
+                 [origin (context-origin cntxt)])))
+
+;;
 ;; Retrieve an asset
 ;;
 (define (get-asset cntxt asset-ref)

@@ -159,7 +159,8 @@
   (define processed-includes
     (for/list ([inc includes])
       (define-values (doc name)
-        (documents:lookup-context document (attr-ref inc "ref")))
+        (with-handlers ([exn:fail? (contexts:re-raise-exn inc)])
+          (documents:lookup-context document (attr-ref inc "ref"))))
       (if doc
           `(include ((mode ,(attr-ref inc "mode"))
                      (document ,doc)
@@ -478,7 +479,6 @@
      #`(include* "extend" #,(source-loc #'context-ref) context-ref)]))
 
 (define-leibniz-parser +context-ref context-ref/p cref-decl cref-string
-  (writeln cref-decl)
   (match cref-decl
     [`(context-ref ,op-symbol ,context-name)
      `(@ (leibniz-decl (context-ref ((op ,(symbol->string op-symbol)) (ref ,context-name))))
