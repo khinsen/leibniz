@@ -20,7 +20,8 @@
          . -> . compiled-context?)]
   [check-asset (compiled-context? xexpr/c . -> . any/c)]
   [eval-asset (compiled-context? xexpr/c . -> . any/c)]
-  [eval-context-expr (compiled-context? xexpr/c . -> . context?)]))
+  [eval-context-expr (compiled-context? xexpr/c . -> . context?)]
+  [get-asset (compiled-context? string? . -> . any/c)]))
 
 (require (prefix-in sorts: "./sorts.rkt")
          (prefix-in operators: "./operators.rkt")
@@ -979,6 +980,17 @@
            decompiled-replacement
            (and (equations:rule-condition compiled-item)
                 (decompile-pattern (equations:rule-condition compiled-item))))]
+    [(equations:equation? compiled-item)
+     (define left (equations:equation-left compiled-item))
+     (define right (equations:equation-right compiled-item))
+     (define vars (set-union (terms:term.vars left) (terms:term.vars right)))
+     (list 'equation
+           (for/hash ([v vars])
+             (values (terms:var-name v) (terms:var-sort v)))
+           (decompile-pattern left)
+           (decompile-pattern right)
+           (and (equations:equation-condition compiled-item)
+                (decompile-pattern (equations:equation-condition compiled-item))))]
     [(terms:term? compiled-item)
      (decompile-pattern compiled-item)]
     [(terms:substitution? compiled-item)
@@ -1102,3 +1114,28 @@
   ;; of the evaluated context is the defining context's origin.
   (struct-copy context reduced-term*
                [origin (context-origin cntxt)]))
+;; Retrieve an asset
+;;
+(define (get-asset cntxt asset-ref)
+  (define assets (compiled-context-compiled-assets cntxt))
+  (define ref-path (map string->symbol (string-split asset-ref ".")))
+  (define value (and (not (empty? ref-path))
+                     (for/fold ([a assets])
+                               ([r ref-path])
+                       (and a (hash? a) (hash-ref a r #f)))))
+  (define unboxed-value (if (box? value) (unbox value) value))
+  (decompile-item unboxed-value))
+
+(module+ test
+  (check-equal? (get-asset compiled-reference-context "a-term")
+                '(term a-foo ()))
+  (check-equal? (get-asset compiled-reference-context "eq1")
+                (list 'equation (hash) '(term a-foo ()) '(term a-foo ((term a-foo ()))) #f))
+  (check-equal? (get-asset compiled-reference-context "eq1.x")
+                #f)
+  (check-equal? (get-asset compiled-reference-context "deeply.nested.asset")
+                '(term a-foo ()))
+  (check-equal? (get-asset compiled-reference-context "deeply.nested.dummy")
+                #f)
+  (check-equal? (get-asset compiled-reference-context "")
+                #f))

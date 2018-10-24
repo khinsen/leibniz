@@ -9,8 +9,7 @@
          +op
          +var
          +term +eval-term +trace +substitute-context
-         +rule
-         +equation
+         +rule +equation +asset-ref
          +test
          section subsection subsubsection subsubsubsection)
 
@@ -234,6 +233,19 @@
          (leibniz-error msg (format "◊+~a{~a}" source-tag source))]
         [else
          (asset->html result label)])]
+
+     [(and (contexts:context? context-or-error)
+           (member tag '(leibniz-asset-ref)))
+      (writeln (contexts:context-assets context-or-error))
+      (define ref (attr-ref element 'ref))
+      (define asset (contexts:get-asset context-or-error ref))
+      (cond
+        [(not asset)
+         (leibniz-error (format "no such asset: ~a" ref)
+                        (format "◊+asset-ref[\"~a\"]" ref))]
+        [else
+         (define prefix (hash-ref (hash 'equation "=." 'rule "⇒.") (first asset) ""))
+         (leibniz-input `(@ ,prefix (b ,ref)))])]
 
      [else
       (txexpr tag
@@ -611,6 +623,10 @@
       (leibniz-check ((source ,equation-string) (source-tag "equation")
                       (label ,equation-label))
                      ,equation-expr)))
+
+;; Asset references
+(define (+asset-ref label)
+  `(leibniz-asset-ref ((ref ,label))))
 
 ;; Tests
 
