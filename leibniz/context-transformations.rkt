@@ -40,7 +40,7 @@
     (error "Call of dummy function"))
 
   (define compiled-test-context
-    (compile-context test-context dummy-name-resolver)))
+    (compile-context test-context dummy-name-resolver #t)))
 
 ;;
 ;; Sort replacement by name or by prefix

@@ -12,7 +12,7 @@
   [xexpr->context (xexpr/c (or/c #f string?) . -> . context?)]
   [context->xexpr ((context?) (string?) . ->* . xexpr/c)]
   [add-implicit-declarations (context? . -> . context?)]
-  [compile-context (context? (string? (or/c #f string?) . -> . context?)
+  [compile-context (context? (string? (or/c #f string?) . -> . context?) boolean?
                    . -> . compiled-context?)]
   [without-compiled-resources (context? . -> . context?)]
   [make-builtin-context
@@ -599,7 +599,7 @@
                                 (mp right)))]
     [_ #f]))
 
-(define (compile-context cntxt name-resolver)
+(define (compile-context cntxt name-resolver full-error-check?)
 
   (define includes
     (for/list ([inc (context-includes cntxt)])
@@ -658,11 +658,12 @@
         (with-handlers ([exn:fail? (re-raise-exn `(var ,vname ,vsort))])
           (operators:add-var sig vname vsort))))
     ;; Check for non-regularity.
-    (define non-regular (operators:non-regular-op-example signature))
-    (when non-regular
-      (match-let ([(list op arity rsorts) non-regular])
-        (displayln (format "Warning: operator ~a~a has ambiguous sorts ~a"
-                           op arity rsorts))))
+    (when full-error-check?
+      (define non-regular (operators:non-regular-op-example signature))
+      (when non-regular
+        (match-let ([(list op arity rsorts) non-regular])
+          (displayln (format "Warning: operator ~a~a has ambiguous sorts ~a"
+                             op arity rsorts)))))
     signature)
 
   (define signature (compile-signature))
@@ -900,7 +901,7 @@
 (module+ test
  
   (define compiled-reference-context (compile-context reference-context
-                                                      dummy-name-resolver))
+                                                      dummy-name-resolver #t))
   (let* ([c compiled-reference-context]
          [signature (compiled-context-compiled-signature c)]
          [sort-graph (operators:signature-sort-graph signature)]

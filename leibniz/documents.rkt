@@ -66,7 +66,7 @@
   (define (add-xexpr-context xexpr)
     (define cntxt (contexts:xexpr->context xexpr sha256))
     (define name (contexts:context-name cntxt))
-    (define compiled (contexts:compile-context cntxt (context-name-resolver)))
+    (define compiled (contexts:compile-context cntxt (context-name-resolver) #f))
     (add-context name compiled))
 
   (define (get-local-context name)

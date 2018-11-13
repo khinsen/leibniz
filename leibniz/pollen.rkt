@@ -204,7 +204,7 @@
                (txexpr 'context `((id ,context-name)) _)
                (contexts:xexpr->context #f)
                contexts:add-implicit-declarations
-               (contexts:compile-context name-resolver)))))
+               (contexts:compile-context name-resolver #t)))))
 
   (define (eval-contents element)
     (condd
@@ -323,7 +323,7 @@
       (with-handlers ([contexts:exn:fail:leibniz? (λ (e) e)])
         (parameterize ([current-context-name-resolver name-resolver])
           (~> (contexts:eval-context-expr context expr)
-              (contexts:compile-context name-resolver)))))
+              (contexts:compile-context name-resolver #t)))))
     (cond
       [(contexts:context? substitute-context-or-error)
        (define substitute-context substitute-context-or-error)
