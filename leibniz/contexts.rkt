@@ -670,11 +670,10 @@
   (define (compile-rules)
     ;; Merge the rule lists of the included contexts.
     (define after-includes
-      (for/fold ([mrl equations:empty-rulelist])
-                ([m/c includes])
-        (equations:merge-rulelists mrl
-                                   (compiled-context-compiled-rules (cdr m/c))
-                                   signature)))
+      (equations:merge-rulelists
+       (for/list ([m/c includes])
+         (compiled-context-compiled-rules (cdr m/c)))
+       signature))
     ;; Process the context-ref declarations
     (define after-context-refs
       (for/fold ([rl after-includes])

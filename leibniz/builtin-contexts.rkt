@@ -182,7 +182,7 @@
              (_≥ X Y) (comparison-op integer? >=))))
 
 (define merged-integer-rules
-  (merge-rulelists truth-rules integer-rules integer-signature))
+  (merge-rulelists (list truth-rules integer-rules) integer-signature))
 
 (module+ test
   (with-rules integer-signature merged-integer-rules
@@ -274,7 +274,7 @@
              (_rem X Y) (binary-op integer? remainder))))
 
 (define merged-rational-rules**
-  (merge-rulelists truth-rules rational-rules rational-signature))
+  (merge-rulelists (list truth-rules rational-rules) rational-signature))
 
 (define rational-special-rules
   (rules rational-signature
@@ -308,8 +308,7 @@
              (^ 0 X) 0)))
 
 (define merged-rational-rules
-  (merge-rulelists merged-rational-rules**
-                   rational-special-rules
+  (merge-rulelists (list merged-rational-rules** rational-special-rules)
                    rational-signature))
 
 (module+ test
@@ -443,7 +442,7 @@
        (^ 0 X) 0)))
 
 (define merged-real-number-rules
-  (merge-rulelists merged-rational-rules** real-number-rules
+  (merge-rulelists (list merged-rational-rules** real-number-rules)
                    real-number-signature))
 
 (module+ test
@@ -533,7 +532,7 @@
              (_≥ X Y) (comparison-op double-flonum? >=))))
 
 (define merged-IEEE-float-rules
-  (merge-rulelists merged-integer-rules IEEE-float-rules IEEE-float-signature))
+  (merge-rulelists (list merged-integer-rules IEEE-float-rules) IEEE-float-signature))
 
 (module+ test
   (with-rules IEEE-float-signature merged-IEEE-float-rules
@@ -685,4 +684,4 @@
                  (ct:remove-vars cntxt))))))
 
 (define merged-context-rules
-  (merge-rulelists string-rules context-rules context-signature))
+  (merge-rulelists (list string-rules context-rules) context-signature))

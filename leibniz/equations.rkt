@@ -14,7 +14,7 @@
   [in-rules (rulelist? . -> . stream?)]
   [add-rule (rulelist? rule? . -> . rulelist?)]
   [lookup-rules (rulelist? term? . -> . list?)]
-  [merge-rulelists (rulelist? rulelist? signature? . -> . rulelist?)]
+  [merge-rulelists ((listof  rulelist?) signature? . -> . rulelist?)]
   [display-rule (rule? output-port? . -> . void?)]
   [rule-sorts-str (signature? rule? . -> . string?)]
   [make-equation (signature? term? (or/c #f term?) term? . -> . equation?)]
@@ -303,9 +303,9 @@
                 [rule rules])
      rule))
 
-(define (merge-rulelists rl1 rl2 merged-signature)
+(define (merge-rulelists rls merged-signature)
   (for/fold ([rules empty-rulelist])
-            ([rule (stream-append (in-rules rl1) (in-rules rl2))])
+            ([rule (apply stream-append (map in-rules rls))])
     (add-rule rules (in-signature rule merged-signature))))
 
 (module+ test
@@ -325,9 +325,9 @@
     (check-equal? (stream-length (in-rules some-rules)) 3)
     (check-equal? (list->set (stream->list (in-rules some-rules)))
                   (set rule1 rule2 rule3))
-    (check-equal? (merge-rulelists empty-rulelist some-rules a-signature)
+    (check-equal? (merge-rulelists (list empty-rulelist some-rules) a-signature)
                   some-rules)
-    (check-equal? (merge-rulelists some-rules empty-rulelist a-signature)
+    (check-equal? (merge-rulelists (list some-rules empty-rulelist) a-signature)
                   some-rules)))
 
 ;
