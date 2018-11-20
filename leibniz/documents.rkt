@@ -190,19 +190,20 @@
       (define name (attr-ref doc-ref "id"))
       (define sha256-hex (attr-ref doc-ref "sha256"))
       (add-to-library document name
-                      (read-xhtml-document (library-path sha256-hex))
-                      sha256-hex)))
+                      (read-library-document sha256-hex))))
   (for/fold ([document document-with-imports])
             ([xexpr context-elements])
     (add-xexpr-context document xexpr)))
 
 (define (read-xhtml-document filename)
   (define sha256-hex (copy-to-library filename))
-  (define document
-    (~> filename
-        read-xhtml
-        (xhtml->document sha256-hex)))
-  (values document sha256-hex))
+  (values (read-library-document sha256-hex) sha256-hex))
+
+(define (read-library-document sha256-hex)
+  (~> sha256-hex
+      library-path
+      read-xhtml
+      (xhtml->document sha256-hex)))
 
 ;; Library management
 
