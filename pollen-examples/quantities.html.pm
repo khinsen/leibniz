@@ -8,9 +8,14 @@
 ◊+context{quantities}
 ◊+use{builtins/real-numbers}
 
+This document defines a framework for working with physical quantities, including functions from quantities to quantities, derivatives of these functions, and numerical finite differences. It does not define any specific quantities. For an example of the use of this framework, see the document
+◊a[#:href "mechanics.html"]{◊i{mechanics}}.
+
 ◊section{Generic quantities}
 
-We define ◊+sort{Q} to represent any physical quantity, and ◊+sort{Q.nz ⊆ Q} to represent the subset of non-zero quantities by which it is admissible to divide. The product and quotient of any two quantities is then again a quantity, with appropriate special cases for quantities that can be proven to be non-zero:
+We define ◊+sort{Q} to represent any physical quantity, and ◊+sort{Q.nz ⊆ Q} to represent the subset of non-zero quantities by which it is admissible to divide. All quantities will be subsorts of ◊+sort{Q}.
+
+The product and quotient of any two quantities is then again a quantity, with appropriate special cases for quantities that can be proven to be non-zero:
   ◊blockquote{◊+op{Q × Q : Qℝ}
               ◊+op{Q.nz × Q.nz : Qℝ.nz}
               ◊+op{Q ÷ Q.nz : Qℝ}
@@ -57,7 +62,7 @@ Remove quantities of zero magnitude from sums:
 
 ◊section{Defining specific quantities}
 
-The definitions and rules for specific quantities such as mass or time are essentially the same. We define a template for a generic quantity plus a context for defining the real quantities by substitution.
+The definitions and rules for specific quantities such as mass or time are essentially the same. We define a template for a generic quantity plus a context for defining the real quantities by name substitution.
 
 ◊subsection{The quantity template}
 
@@ -112,81 +117,17 @@ Given two quantities ◊+op{a : SQ} and ◊+op{b : SQ} whose quotient we define 
 ◊+context{apply-quantity-template}
 ◊+use{builtins/contexts}
 
-◊subsection{Handling the name substitution}
+◊subsection{Using the quantity template}
+
 
 A new context for a quantity is defined as ◊+op{define-quantity(string) : context}, using the rule
 ◊blockquote{◊+rule{define-quantity(name)
-                    ⇒ replace-sort-prefix(remove-vars(context("quantity-template")),
-                                           "SQ", name)
+                    ⇒ replace-sort-prefix(remove-vars(template), "SQ", name)
                     ∀ name:string}}
 
-This rule first retrieves the quantity template. Next, it removes the context-level vars, which are not needed and can lead to name clashes if several instantiations of the template are used together. In the end, it replaces the sorts with the prefix SQ by corresponding sorts whose prefix is the given quantity name.
+where ◊+context-ref{template ⇒ context("quantity-template")} is the template context. This rule removes the context-level vars, which are not needed and can lead to name clashes if several instantiations of the template are used together. Next, it replaces the sorts with the prefix SQ, i.e. SQ and SQ.nz by corresponding sorts whose prefix is the given quantity name.
 
-◊section{Quantities defined via the template}
-
-◊+context{mass}
-◊+use{apply-quantity-template}
-◊b{Mass:} ◊+substitute-context{define-quantity("M")}
-
-◊+context{time}
-◊+use{apply-quantity-template}
-◊b{Time:} ◊+substitute-context{define-quantity("T")}
-
-◊+context{length}
-◊+use{apply-quantity-template}
-◊b{Length:} ◊+substitute-context{define-quantity("L")}
-
-◊+context{velocity}
-◊+use{apply-quantity-template}
-◊b{Velocity:} ◊+substitute-context{define-quantity("V")}
-
-◊+context{acceleration}
-◊+use{apply-quantity-template}
-◊b{Acceleration:} ◊+substitute-context{define-quantity("A")}
-
-◊+context{force}
-◊+use{apply-quantity-template}
-◊b{Force:} ◊+substitute-context{define-quantity("F")}
-
-◊+context{angle-base}
-◊+use{apply-quantity-template}
-◊b{Angle:} ◊+substitute-context{define-quantity("angle")}
-
-◊+context{angle}
-◊+use{angle-base}
-
-A useful constant for dealing with angles is ◊+op{π : angle}.
-
-◊+context{frequency-base}
-◊+use{apply-quantity-template}
-◊b{Frequency:} ◊+substitute-context{define-quantity("frequency")}
-
-◊+context{frequency}
-◊+use{frequency-base}
-◊+use{time}
-
-Frequency is the inverse of time:
-◊blockquote{◊+op{frequency × T : ℝ}
-            ◊+op{frequency.nz × T.nz : ℝ.nz}
-            ◊+op{T × frequency : ℝ}
-            ◊+op{T.nz × frequency.nz : ℝ.nz}}
-
-◊+context{angular-frequency-base}
-◊+use{apply-quantity-template}
-◊b{Angular frequency:} ◊+substitute-context{define-quantity("angular-frequency")}
-
-◊+context{angular-frequency}
-◊+use{angular-frequency-base}
-◊+use{time}
-
-Angular frequency is angle per time:
-◊blockquote{◊;◊+op{angular-frequency × T : angle}
-            ◊;◊+op{angular-frequency.nz × T.nz : angle.nz}
-            ◊;◊+op{T × angular-frequency : angle}
-            ◊;◊+op{T.nz × angular-frequency.nz : angle.nz}
-            }
-
-◊+context{function-template-SQD}
+◊+context{-function-template-domain-quantity}
 ◊+use{apply-quantity-template}
 
 ◊section{A template for functions from one quantity to another}
@@ -194,14 +135,14 @@ Angular frequency is angle per time:
 This template defines functions from a domain quantity  ◊+substitute-context{define-quantity("SQD")} ...
 
 
-◊+context{function-template-SQI}
+◊+context{-function-template-image-quantity}
 ◊+use{apply-quantity-template}
 ...to an image quantity ◊+substitute-context{define-quantity("SQI")}
 
 
-◊+context{function-template}
-◊+use{function-template-SQD}
-◊+use{function-template-SQI}
+◊+context{quantity-function-template}
+◊+use{-function-template-domain-quantity}
+◊+use{-function-template-image-quantity}
 
 The sort for such functions is ◊+sort{SQD→SQI ⊆ Q→Q}. Function application is defined by ◊+op{SQD→SQI[SQD] : SQI}.
 
@@ -233,18 +174,99 @@ It is convenient to provide some arithmetic:
 ◊+context{apply-quantity-function-template}
 ◊+use{builtins/contexts}
 
-◊subsection{Handling the name substitution}
+◊subsection{Using the quantity function template}
 
-A new context for a quantity-to-quantity function is defined as ◊+op{define-quantity-function(sqd:string, sqi:string) : context}, using the rule
+A new context for a quantity function is defined via ◊+op{define-quantity-function(domain-quantity-sort:string, domain-quantity-context:context, image-quantity-sort:string, image-quantity-context:context) : context}. This involves several steps:
+◊ol{
+  ◊li{Retrieve ◊+context-ref{template ⇒ context("quantity-function-template")} and remove its variables.}
+  ◊li{Replace the template sort prefix SQD by the domain quantity sort ◊+term{domain-quantity-sort}.}
+  ◊li{Replace the template sort SQI prefix by the image quantity sort ◊+term{image-quantity-sort}.}
+  ◊li{Replace ◊+context-ref{sqd-context ⇒ context("-function-template-domain-quantity")} by ◊+term{domain-quantity-context}.}
+  ◊li{Replace ◊+context-ref{sqi-context ⇒ context("-function-template-image-quantity")} by ◊+term{image-quantity-context}.}
+  ◊li{Replace the function sort SQD→SQI by a sort constructed from ◊+term{domain-quantity-sort} and ◊+term{image-quantity-sort}.}}
 
-◊;◊+op{sqd-to-sqi(string, string) : string}
-◊;◊+rule{sqd-to-sqi(sqd, sqi) ⇒ sqd + "→" + sqi}
+These steps are performed by the following somewhat lengthy rule:
+◊blockquote{
+  ◊+rule{define-quantity-function(domain-quantity-sort, domain-quantity-context, image-quantity-sort, image-quantity-context)
+         ⇒ replace-sort-prefix(
+              replace-sort-prefix(
+                replace-sort(
+                  replace-include(
+                    replace-include(
+                      remove-vars(template),
+                      sqd-context, domain-quantity-context),
+                    sqi-context, image-quantity-context),
+                  "SQD→SQI", domain-quantity-sort + "→" + image-quantity-sort),
+                "SQI", image-quantity-sort),
+              "SQD", domain-quantity-sort)}}
 
-◊blockquote{◊+rule{define-quantity-function(sqd, sqi)
-                    ⇒ replace-sort-prefix(
-                         replace-sort-prefix(
-                           replace-sort(
-                             remove-vars(context("quantity-function-template")),
-                                         "SQD→SQI", sqd + "→" + sqi),
-                             "SQI", sqi),
-                           "SQD", sqd)}}
+
+◊section{A template for derivatives of quantity functions}
+
+◊+context{-function-template-image-div-domain-quantity}
+◊+use{apply-quantity-template}
+
+Given SQI as a function of SQD, the derivative function has the image quantity SQID defined as the quotient of SQI and SQD. Therefore we must first define SQID:
+
+◊blockquote{
+◊+substitute-context{define-quantity("SQID")}}
+
+◊+context{-function-template-SQD→SQID}
+◊+use{apply-quantity-function-template}
+
+Next, we define the new quantity function ◊+sort{SQD→SQID}:
+
+◊blockquote{
+◊+substitute-context{define-quantity-function("SQD", domain-quantity, "SQID", image-div-domain-quantity)}}
+
+Like all quantity functions, its definition relies on the contexts defining its domain and image quantities:
+◊blockquote{
+◊+context-ref{domain-quantity ⇒ context("-function-template-domain-quantity")} ◊br{}
+◊+context-ref{image-div-domain-quantity ⇒ context("-function-template-image-div-domain-quantity")}}
+
+◊+context{quantity-derivative-template}
+◊+use{quantity-function-template}
+◊+use{-function-template-SQD→SQID}
+
+The derivative of a function is given by ◊+op{𝒟(SQD→SQI) : SQD→SQID}. The derivative operator is linear, i.e. for ◊+var{f:SQD→SQI}, ◊+var{g:SQD→SQI}, and ◊+var{s:ℝ} we have
+  ◊blockquote{◊+rule{𝒟(f + g) ⇒ 𝒟(f) + 𝒟(g)}
+              ◊+rule{𝒟(f - g) ⇒ 𝒟(f) - 𝒟(g)}
+              ◊+rule{𝒟(s × f) ⇒ s × 𝒟(f)}}
+
+In numerical approximations, the derivative operator ◊+op{𝒟(SQD→SQI) : SQD→SQID} is replaced by the finite-difference operator ◊+op{Δ(f:SQD→SQI, h:SQD.nz) : SQD→SQID}. A finite-difference approximation is characterized by a parameter ◊+var{h:SQD.nz} that is assumed to be a sufficiently small quantity.
+
+Like the derivative operator, the finite-difference operator is linear:
+  ◊blockquote{◊+rule{Δ(f + g, h) ⇒ Δ(f, h) + Δ(g, h)}
+              ◊+rule{Δ(f - g, h) ⇒ Δ(f, h) - Δ(g, h)}
+              ◊+rule{Δ(s × f, h) ⇒ s × Δ(f, h)}}
+
+◊+context{apply-quantity-derivative-template}
+◊+use{builtins/contexts}
+
+A new context for a quantity function is defined via ◊+op{define-quantity-derivative(domain-quantity-sort:string, domain-quantity-context:context, quantity-function-sort:string, quantity-function-context:context, quantity-derivative-sort:string, quantity-derivative-context:context) : context}. This involves several steps:
+◊ol{
+  ◊li{Retrieve ◊+context-ref{template ⇒ context("quantity-derivative-template")} and remove its variables.}
+  ◊li{Replace the template sort SQD by ◊+term{domain-quantity-sort}.}
+  ◊li{Replace the template sort SQD→SQI by ◊+term{quantity-function-sort}.}
+  ◊li{Replace the template sort SQD→SQID by ◊+term{quantity-derivative-sort}.}
+  ◊li{Replace ◊+context-ref{dq-template ⇒ context("-function-template-domain-quantity")} by
+◊+term{domain-quantity-context}.}
+  ◊li{Replace ◊+context-ref{qf-template ⇒ context("quantity-function-template")} by ◊+term{quantity-function-context}.}
+  ◊li{Replace ◊+context-ref{qd-template ⇒ context("-function-template-SQD→SQID")} by ◊+term{quantity-derivative-context}.}}
+
+These steps are performed by the following somewhat lengthy rule:
+◊blockquote{
+  ◊+rule{define-quantity-derivative(domain-quantity-sort, domain-quantity-context, quantity-function-sort, quantity-function-context, quantity-derivative-sort, quantity-derivative-context)
+         ⇒ replace-sort-prefix(
+              replace-sort-prefix(
+                 replace-sort(
+                   replace-include(
+                     replace-include(
+                       replace-include(
+                         remove-vars(template),
+                         qf-template, quantity-function-context),
+                       dq-template, domain-quantity-context),
+                     qd-template, quantity-derivative-context),
+                   "SQD→SQI", quantity-function-sort),
+                 "SQD→SQID", quantity-derivative-sort),
+               "SQD", domain-quantity-sort)}}
