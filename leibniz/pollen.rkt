@@ -246,7 +246,8 @@
                         (format "◊+asset-ref[\"~a\"]" ref))]
         [else
          (define prefix (hash-ref (hash 'equation "=." 'rule "⇒.") (first asset) ""))
-         (leibniz-input `(@ ,prefix (b ,ref)))])]
+         (leibniz-input #:mouseover (~> asset (asset->html ref) html->text)
+                        `(@ ,prefix (b ,ref)))])]
 
      [else
       (txexpr tag

@@ -6,10 +6,12 @@
          format-op
          format-var
          format-rule format-transformation
-         asset->html)
+         asset->html
+         html->text)
 
 (require "./condd.rkt"
-         racket/exn)
+         racket/exn
+         threading)
 
 (module+ test
   (require rackunit))
@@ -36,11 +38,15 @@
 
 ;; Input and output values
 
-(define (leibniz-input . elements)
-  `(span ((class "LeibnizInput")) ,@elements))
+(define (leibniz-input #:mouseover [mouseover #f] . elements)
+  (if mouseover
+      `(span ((class "LeibnizInput") (title ,mouseover)) ,@elements)
+      `(span ((class "LeibnizInput")) ,@elements)))
 
-(define (leibniz-output . elements)
-  `(span ((class "LeibnizOutput")) ,@elements))
+(define (leibniz-output #:mouseover [mouseover #f] . elements)
+  (if mouseover
+      `(span ((class "LeibnizOutput") (title ,mouseover)) ,@elements)
+      `(span ((class "LeibnizOutput")) ,@elements)))
 
 ;; Labels
 
@@ -451,3 +457,11 @@
      (trace->html (second asset))]
     [else
      (error (format "not yet implemented: ~a" (first asset)))]))
+
+;; Plain text extraction (e.g. for mouseover texts)
+
+(define (html->text xexpr)
+  (~>> xexpr
+       flatten
+       (filter string?)
+       (apply string-append)))
