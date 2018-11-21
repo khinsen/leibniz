@@ -14,7 +14,7 @@
          threading
          xml
          txexpr
-         sha)
+         file/sha1)
 
 (module+ test
   (require rackunit))
@@ -103,7 +103,7 @@
 
 (define builtins
   (~> (document (hash) empty
-                (~> #"builtins" sha256 bytes->hex-string)
+                (~> #"builtins" sha256-bytes bytes->hex-string)
                 (hash) (hash))
       (add-context "truth"
                    (contexts:make-builtin-context
@@ -218,7 +218,7 @@
     (~> filename
         (open-input-file #:mode 'binary)
         port->bytes
-        sha256
+        sha256-bytes
         bytes->hex-string))
   (copy-file filename (library-path sha256-hex) #t)
   sha256-hex)
