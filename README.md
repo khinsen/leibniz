@@ -41,6 +41,10 @@ support for workflows. Although in principle today's Leibniz can be used for eve
 (given that it's Turing-complete), it is still insufficient to express many
 aspects of computational science in a sufficiently concise and convenient form.
 
+The master branch of this repository contains the version of Leibniz that has been described in the article [Verifiability in computer-aided research: the role of digital scientific notations at the human-computer interface](https://peerj.com/articles/cs-158/). Since then, I have been working on a major redesign on the branch [pollen](https://github.com/khinsen/leibniz/tree/pollen). As its name suggests, it uses the [Pollen](https://docs.racket-lang.org/pollen/) library rather than [Scribble](https://docs.racket-lang.org/scribble/index.html) documentation system that the master branch builds on. The main reason is finer control over the generated HTML files, with in particular the embedding of the machine-readable XML code into the human-readable HTML file. A Leibniz document is thus now a single file that can be identified by a single URL or a single hash code.
+
+A [second implementation](https://github.com/khinsen/leibniz-pharo/) of Leibniz, incomplete so far, builds on the live object programming system [Pharo](http://pharo.org/), a descendant of Smalltalk. The main reason for this development is the explore the possibilities for authoring and exploring models formulated in Leibniz interactively. Pharo serves both as an implementation substrate (I expect to be able to extend or re-use the Pharo software development tools for Leibnis) and as a source of inspiration, given the long tradition in the Smalltalk community of eliminating the developer-user dichotomy that is, in my opinion, a major obstacle in computational science.
+
 ## Required software, installation
 
 This first implementation of Leibniz is written in
