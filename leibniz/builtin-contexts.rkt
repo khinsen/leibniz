@@ -164,7 +164,7 @@
              (^ X Y) 1)
          (=> #:vars ([X ℕ.nz])
              (^ 0 X) 0)
-         (-> #:vars ([X ℤ] [Y ℤ])
+         (-> #:vars ([X ℤ] [Y ℕ.nz])
              (^ X Y) (binary-op integer? expt-with-fix-for-zero))
 
          (-> #:vars ([X ℤ])
