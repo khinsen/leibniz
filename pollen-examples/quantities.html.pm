@@ -39,7 +39,7 @@ Combine multiple numerical prefactors into one:
   ◊blockquote{◊+rule{f1 × (f2 × q) ⇒ (f1 × f2) × q
                ∀ q:Q  ∀ f1:ℝ  ∀ f2:ℝ}
               ◊+rule{f1 × ((f2 × q1) ÷ q2) ⇒ (f1 × f2) × (q1 ÷ q2)
-               ∀ q1:Q  ∀ q2:Q  ∀ f1:ℝ  ∀ f2:ℝ}}
+               ∀ q1:Q  ∀ q2:Q.nz  ∀ f1:ℝ  ∀ f2:ℝ}}
 
 Replace division by multiplication:
   ◊blockquote{◊+rule{q ÷ f ⇒ (1 ÷ f) × q
