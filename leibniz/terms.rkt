@@ -309,10 +309,11 @@
   (check-equal? (term->string "foo") "string:\"foo\"")
   (check-equal? (term->string (make-term a-signature 'a-B empty))
                 "B:a-B")
-  (check-equal? (term->string
-                 (make-term a-signature 'foo
-                            (list (make-term a-signature 'an-A empty))))
-                "[A]:(foo an-A)"))
+  (check member
+         (term->string
+          (make-term a-signature 'foo
+                     (list (make-term a-signature 'an-A empty))))
+         '("[A]:(foo an-A)" "[B]:(foo an-A)")))
 
 ;
 ; Operator-defined terms

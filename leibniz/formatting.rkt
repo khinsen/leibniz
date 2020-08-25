@@ -573,8 +573,10 @@
                              '(term _+ ((term-or-var X) (term-or-var Y)))
                              (hash) #f))
                 "a-sum: X + Y")
-  (check-equal? (plain-text (format-asset-declaration
-                             'group
-                             (list 'assets (hash 'index '(integer 2) 'value '(term-or-var X)))
-                             (hash) #f))
-                "group.index: 2\ngroup.value: X"))
+  (check member
+         (plain-text (format-asset-declaration
+                      'group
+                      (list 'assets (hash 'index '(integer 2) 'value '(term-or-var X)))
+                      (hash) #f))
+         '("group.index: 2\ngroup.value: X"
+           "group.value: X\ngroup.index: 2")))
