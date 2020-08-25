@@ -256,6 +256,23 @@
 ;
 ; IEEE binary floating-point formats
 ;
+
+(define (add-fp32-sorts sort-graph)
+  (if (single-flonum-available?)
+      (~> sort-graph
+          (add-sort 'FP32)
+          (add-sort 'FP32-number)
+          (add-sort 'FP32-NaN)
+          (add-sort 'FP32-inf)
+          (add-subsort-relation 'FP32 'FP)
+          (add-subsort-relation 'FP32-number 'FP32)
+          (add-subsort-relation 'FP32-number 'FP-number)
+          (add-subsort-relation 'FP32-NaN 'FP32)
+          (add-subsort-relation 'FP32-NaN 'FP-NaN)
+          (add-subsort-relation 'FP32-inf 'FP32)
+          (add-subsort-relation 'FP32-inf 'FP-inf))
+      sort-graph))
+
 (define IEEE-float-sorts
   (~> empty-sort-graph
       (add-sort 'FP)
@@ -266,17 +283,7 @@
       (add-subsort-relation 'FP-NaN 'FP)
       (add-subsort-relation 'FP-inf 'FP)
 
-      (add-sort 'FP32)
-      (add-sort 'FP32-number)
-      (add-sort 'FP32-NaN)
-      (add-sort 'FP32-inf)
-      (add-subsort-relation 'FP32 'FP)
-      (add-subsort-relation 'FP32-number 'FP32)
-      (add-subsort-relation 'FP32-number 'FP-number)
-      (add-subsort-relation 'FP32-NaN 'FP32)
-      (add-subsort-relation 'FP32-NaN 'FP-NaN)
-      (add-subsort-relation 'FP32-inf 'FP32)
-      (add-subsort-relation 'FP32-inf 'FP-inf)
+      (add-fp32-sorts)
 
       (add-sort 'FP64)
       (add-sort 'FP64-number)
@@ -290,23 +297,29 @@
       (add-subsort-relation 'FP64-inf 'FP64)
       (add-subsort-relation 'FP64-inf 'FP-inf)))
 
+(define (add-fp32-ops signature)
+  (if (single-flonum-available?)
+      (~> signature
+          (add-op '_+ (list 'FP32 'FP32) 'FP32)
+          (add-op '_- (list 'FP32 'FP32) 'FP32)
+          (add-op '- (list 'FP32) 'FP32)
+          (add-op '_× (list 'FP32 'FP32) 'FP32)
+          (add-op '_÷ (list 'FP32 'FP32) 'FP32)
+          (add-op '^ (list 'FP32 'FP32) 'FP32)
+          (add-op '^ (list 'FP32 'ℤ) 'FP32)
+          (add-op 'abs (list 'FP32) 'FP32)
+          (add-op '√ (list 'FP32) 'FP32)
+          (add-op '_= (list 'FP32 'FP32) 'boolean)
+          (add-op '_< (list 'FP32 'FP32) 'boolean)
+          (add-op '_> (list 'FP32 'FP32) 'boolean)
+          (add-op '_≤ (list 'FP32 'FP32) 'boolean)
+          (add-op '_≥ (list 'FP32 'FP32) 'boolean))
+      signature))
+
 (define IEEE-float-signature
   (~> (empty-signature IEEE-float-sorts #:builtins (set '*IEEE-floating-point*))
       (merge-signatures integer-signature #f)
-      (add-op '_+ (list 'FP32 'FP32) 'FP32)
-      (add-op '_- (list 'FP32 'FP32) 'FP32)
-      (add-op '- (list 'FP32) 'FP32)
-      (add-op '_× (list 'FP32 'FP32) 'FP32)
-      (add-op '_÷ (list 'FP32 'FP32) 'FP32)
-      (add-op '^ (list 'FP32 'FP32) 'FP32)
-      (add-op '^ (list 'FP32 'ℤ) 'FP32)
-      (add-op 'abs (list 'FP32) 'FP32)
-      (add-op '√ (list 'FP32) 'FP32)
-      (add-op '_= (list 'FP32 'FP32) 'boolean)
-      (add-op '_< (list 'FP32 'FP32) 'boolean)
-      (add-op '_> (list 'FP32 'FP32) 'boolean)
-      (add-op '_≤ (list 'FP32 'FP32) 'boolean)
-      (add-op '_≥ (list 'FP32 'FP32) 'boolean)
+      (add-fp32-ops)
       (add-op '_+ (list 'FP64 'FP64) 'FP64)
       (add-op '_- (list 'FP64 'FP64) 'FP64)
       (add-op '- (list 'FP64) 'FP64)
@@ -323,38 +336,53 @@
       (add-op '_≥ (list 'FP64 'FP64) 'boolean)))
 
 (module+ test
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '_+ (list #x1s1 #x3s1)) 'FP32)
+
+  (define (rsf string)
+    (parameterize ([read-single-flonum #t])
+      (read (open-input-string string))))
+
+  (when (single-flonum-available?)
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '_+ (list (rsf "#x1s1")
+                                                 (rsf "#x3s1"))) 'FP32)
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '_+ (list (rsf "#x1s1")
+                                                 (rsf "#x3l1")))
+                  (kind IEEE-float-sorts 'FP32))
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '_- (list (rsf "#x1s1")
+                                                 (rsf "#x3s1"))) 'FP32)
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '_- (list (rsf "#x1s1")
+                                                 (rsf "#x3l1")))
+                  (kind IEEE-float-sorts 'FP32))
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '_× (list (rsf "#x1s1")
+                                                 (rsf "#x3s1"))) 'FP32)
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '_÷ (list (rsf "#x1s1")
+                                                 (rsf "#x3s1"))) 'FP32)
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '_× (list (rsf "#x1s1")
+                                                 (rsf "#x3l1")))
+                  (kind IEEE-float-sorts 'FP32))
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '_÷ (list (rsf "#x1s1")
+                                                 (rsf "#x3l1")))
+                  (kind IEEE-float-sorts 'FP32))
+    (check-equal? (sort-of-numarg-term IEEE-float-signature
+                                       '- (list (rsf "#x3s1"))) 'FP32))
+
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '_+ (list #x1l1 #x3l1)) 'FP64)
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '_+ (list #x1s1 #x3l1))
-                (kind IEEE-float-sorts 'FP32))
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '_- (list #x1s1 #x3s1)) 'FP32)
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '- (list #x3s1)) 'FP32)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '_- (list #x1l1 #x3l1)) 'FP64)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '- (list #x3l1)) 'FP64)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '_- (list #x1s1 #x3l1))
-                (kind IEEE-float-sorts 'FP32))
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '_× (list #x1s1 #x3s1)) 'FP32)
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '_× (list #x1l1 #x3l1)) 'FP64)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '_× (list #x1s1 #x3l1))
-                (kind IEEE-float-sorts 'FP32))
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '_÷ (list #x1s1 #x3s1)) 'FP32)
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '_÷ (list #x1l1 #x3l1)) 'FP64)
-  (check-equal? (sort-of-numarg-term IEEE-float-signature
-                                     '_÷ (list #x1s1 #x3l1))
-                (kind IEEE-float-sorts 'FP32))
   (check-equal? (sort-of-numarg-term IEEE-float-signature
                                      '_= (list #x1s1 #x3s1)) 'boolean)
   (check-equal? (sort-of-numarg-term IEEE-float-signature
@@ -374,7 +402,7 @@
 ;
 (define (number-term.sort x)
   (cond
-    [(single-flonum? x)
+    [(and (single-flonum-available?) (single-flonum? x))
      (case x
        [(+nan.f) 'FP32-NaN]
        [(+inf.f -inf.f) 'FP32-inf]
