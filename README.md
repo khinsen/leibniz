@@ -12,8 +12,10 @@ The best way to get an impression of what Leibniz is and what
 you can do with it is to read the one-page introduction
 ["Leibniz by example"](http://khinsen.net/leibniz-examples/examples/leibniz-by-example.html).
 Then you can move on to the [other examples](http://khinsen.net/leibniz-examples/)
-and to [the manual](http://khinsen.net/leibniz/). Readers interested
-in the studying the implementation (which needs and will get
+and to [the manual](http://khinsen.net/leibniz/). You can also watch
+my [presentation at RacketCon 2020](https://youtu.be/YbznItQpALo?t=2104).
+
+Readers interested in the studying the implementation (which needs
 a serious cleanup) should start by looking at the file `notes.md` for
 an overview of the code structure.
 
