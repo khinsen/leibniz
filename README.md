@@ -15,9 +15,8 @@ them with interactive explorative computations. It is documented on
 [its own Web site](https://leibniz.khinsen.net/).
 
 The following text is the original README from the last activity on
-the first iteration, around 2020. Some of the links don't work any
-more because I stopped using GitHub pages for my personal Web site.
-I will try to fix them for future reference.
+the first iteration, around 2020, except for a few links that have
+been updated, following a reorganization of my Web site.
 
 # A digital scientific notation
 
@@ -28,9 +27,9 @@ discussed, in addition to being manipulated by software.
 
 The best way to get an impression of what Leibniz is and what
 you can do with it is to read the one-page introduction
-["Leibniz by example"](http://khinsen.net/leibniz-examples/examples/leibniz-by-example.html).
-Then you can move on to the [other examples](http://khinsen.net/leibniz-examples/)
-and to [the manual](http://khinsen.net/leibniz/). You can also watch
+["Leibniz by example"](https://leibniz.khinsen.net/leibniz1/examples/leibniz-by-example.html).
+Then you can move on to the [other examples](https://leibniz.khinsen.net/leibniz1/examples/index.html)
+and to [the manual](https://leibniz.khinsen.net/leibniz1/manual/index.html). You can also watch
 my [presentation at RacketCon 2020](https://youtu.be/YbznItQpALo?t=2104).
 
 Readers interested in the studying the implementation (which needs
