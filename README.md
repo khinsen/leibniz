@@ -1,6 +1,24 @@
 
 ![<Lᵉ>](https://github.com/khinsen/leibniz/raw/master/logo/horizontal-leibniz-logo-500-x-150-png.png)
 
+# Foreword
+
+This repository and its companion
+[leibniz-examples](https://github.com/khinsen/leibniz-examples)
+contain the first iteration of the Leibniz research project. It
+focused on designing a Digital Scientific Notation suitable for
+embedding into narratives such as scientific publications or
+university-level textbooks. Work has shifted to the [second
+iteration](https://github.com/khinsen/leibniz-pharo), which focuses on
+interactive authoring of documents embedding Leibniz and integrating
+them with interactive explorative computations. It is documented on
+[its own Web site](https://leibniz.khinsen.net/).
+
+The following text is the original README from the last activity on
+the first iteration, around 2020. Some of the links don't work any
+more because I stopped using GitHub pages for my personal Web site.
+I will try to fix them for future reference.
+
 # A digital scientific notation
 
 Leibniz is an attempt to define a digital scientific notation, i.e. a
@@ -26,7 +44,6 @@ logic, and computation, topics that are all relevant to this project.
 He invented a widely used [notation for calculus](https://en.wikipedia.org/wiki/Leibniz%27s_notation),
 laid the foundation of equational logic by his [definition of equality](https://en.wikipedia.org/wiki/Equality_(mathematics)),
 and anticipated formal logic with his ["calculus ratiocinator"](https://en.wikipedia.org/wiki/Calculus_ratiocinator).
-
 
 ## Status
 
